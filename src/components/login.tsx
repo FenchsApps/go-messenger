@@ -11,7 +11,7 @@ import { PigeonIcon } from './icons';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
 
 export function Login() {
@@ -25,11 +25,24 @@ export function Login() {
       (u) => u.phone === phone && u.password === password
     );
     if (user) {
+        // Initialize all users in Firestore if they don't exist
+        for (const u of allUsers) {
+            const userDocRef = doc(db, 'users', u.id);
+            const userDoc = await getDoc(userDocRef);
+            if (!userDoc.exists()) {
+                await setDoc(userDocRef, {
+                    ...u,
+                    status: 'Offline',
+                    lastSeen: serverTimestamp()
+                });
+            }
+        }
+        
       await setDoc(doc(db, 'users', user.id), {
-        ...user,
         status: 'Online',
         lastSeen: serverTimestamp()
       }, { merge: true });
+
       setCurrentUser(user);
     } else {
       toast({

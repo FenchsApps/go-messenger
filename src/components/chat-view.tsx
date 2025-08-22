@@ -145,12 +145,19 @@ export function ChatView({
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
     
-    await sendImage(currentUser.id, chatPartner.id, dataUrl);
+    const result = await sendImage(currentUser.id, chatPartner.id, dataUrl);
+    if (result.error) {
+        toast({ title: 'Ошибка отправки', description: result.error, variant: 'destructive'});
+        startTransition(() => {
+            setOptimisticMessages({action: 'delete', message: {id: tempId}});
+        });
+    }
   };
 
   const handleSendAudio = async (audioFile: File) => {
     const tempId = crypto.randomUUID();
     const dataUrl = await fileToDataUrl(audioFile);
+    
     startTransition(() => {
         const newMessage: Message = {
             id: tempId,
@@ -163,7 +170,14 @@ export function ChatView({
         };
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
-    await sendAudio(currentUser.id, chatPartner.id, dataUrl);
+
+    const result = await sendAudio(currentUser.id, chatPartner.id, dataUrl);
+     if (result.error) {
+        toast({ title: 'Ошибка отправки аудио', description: result.error, variant: 'destructive'});
+        startTransition(() => {
+            setOptimisticMessages({action: 'delete', message: {id: tempId}});
+        });
+    }
   };
 
 

@@ -33,35 +33,28 @@ export function ChatView({
     messages,
     (state, newMessage) => [...state, newMessage]
   );
-  const [isPending, startTransition] = useTransition();
-
+  
   const handleSendMessage = async (text: string) => {
     const newMessage: Message = {
       id: crypto.randomUUID(),
       senderId: currentUser.id,
+      recipientId: chatPartner.id,
       text: text,
       timestamp: Date.now(),
       type: 'text',
     };
-    startTransition(async () => {
-      addOptimisticMessage(newMessage);
-      const result = await getFilteredMessage(text);
-      if (result.error) {
-        toast({
-          title: "AI Error",
-          description: result.error,
-          variant: "destructive",
-        });
-      }
-      const finalMessage = { ...newMessage, text: result.data!.text };
-      setMessages((prev) => [...prev, finalMessage]);
-    });
+    addOptimisticMessage(newMessage);
+    
+    // In a real app, you'd send the message to the server here.
+    // For this demo, we just add it to the local state.
+    setMessages((prev) => [...prev, newMessage]);
   };
 
   const handleSendSticker = (stickerUrl: string) => {
     const newMessage: Message = {
       id: crypto.randomUUID(),
       senderId: currentUser.id,
+      recipientId: chatPartner.id,
       text: 'Sticker',
       timestamp: Date.now(),
       type: 'sticker',

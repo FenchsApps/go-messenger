@@ -71,11 +71,19 @@ export const messages: Message[] = [
   {
     id: 'msg-5',
     senderId: 'yesenia',
-    recipientId: 'mom',
-    text: 'Кто-нибудь видел мой синий шарф?',
+    recipientId: 'rodion',
+    text: 'Привет, пойдем гулять?',
     timestamp: Date.now() - 1000 * 60 * 10,
     type: 'text',
   },
+  {
+    id: 'msg-6',
+    senderId: 'sanya',
+    recipientId: 'rodion',
+    text: 'го в кс',
+    timestamp: Date.now() - 1000 * 60 * 15,
+    type: 'text',
+  }
 ];
 
 export const stickers = [

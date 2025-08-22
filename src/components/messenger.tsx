@@ -8,7 +8,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { ContactList } from './contact-list';
 import { ChatView } from './chat-view';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { PigeonIcon } from './icons';
 
 interface MessengerProps {
@@ -57,8 +56,7 @@ export function Messenger({ currentUser }: MessengerProps) {
               key={selectedUserId}
               initialMessages={messages.filter(msg => 
                 (msg.senderId === currentUser.id && msg.recipientId === selectedUser.id) || 
-                (msg.senderId === selectedUser.id && msg.recipientId === currentUser.id) ||
-                (users.some(u => u.id === msg.senderId) && (selectedUser.id === msg.senderId || selectedUser.id === 'mom')) // Simplified logic for demo
+                (msg.senderId === selectedUser.id && msg.recipientId === currentUser.id)
               )}
               currentUser={currentUser}
               chatPartner={selectedUser}

@@ -38,8 +38,9 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
         }
       });
       setUsers(usersData);
-      if(!selectedUserId && usersData.length > 0) {
-        setSelectedUserId(usersData[0].id)
+      // Select the first user by default if no one is selected
+      if (!selectedUserId && usersData.length > 0) {
+        setSelectedUserId(usersData[0].id);
       }
     });
 
@@ -54,7 +55,7 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
         unsubscribe();
         window.removeEventListener('beforeunload', handleBeforeUnload);
     }
-  }, [currentUser.id, selectedUserId]);
+  }, [currentUser.id]);
   
   const selectedUser = users.find((user) => user.id === selectedUserId);
 

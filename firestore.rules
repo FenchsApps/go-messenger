@@ -1,22 +1,12 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Correctly secure chats
     match /chats/{chatId}/messages/{messageId} {
-      // Helper function to check if a user is part of a chat
-      function isParticipant(userId) {
-        let parts = chatId.split('_');
-        return userId == parts[0] || userId == parts[1];
-      }
-      
-      // Allow read if the user is a participant in the chat
-      allow read: if request.auth != null && isParticipant(request.auth.uid);
-      
-      // Allow create (send) if the user is the sender and a participant
-      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid && isParticipant(request.auth.uid);
-      
-      // Allow update (edit) and delete if the user is the original sender
-      allow update, delete: if request.auth != null && resource.data.senderId == request.auth.uid;
+      // For this prototype, we are not using Firebase Auth, so we can't check request.auth.uid.
+      // This rule allows any client to read/write, which is insecure for production
+      // but acceptable for our current setup.
+      allow read, write: if true;
     }
   }
 }

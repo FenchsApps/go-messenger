@@ -1,0 +1,45 @@
+import type { User } from '@/lib/types';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Phone, ArrowLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface ChatHeaderProps {
+  user: User;
+  isMobile: boolean;
+  onBack: () => void;
+  onCall: () => void;
+}
+
+export function ChatHeader({ user, isMobile, onBack, onCall }: ChatHeaderProps) {
+  return (
+    <div className="flex items-center justify-between p-2 md:p-4 border-b">
+      <div className="flex items-center gap-3">
+        {isMobile && (
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={onBack}>
+            <ArrowLeft className="h-6 w-6" />
+          </Button>
+        )}
+        <Avatar className="h-10 w-10 border-2 border-white">
+          <AvatarImage src={user.avatar} alt={user.name} />
+          <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+        </Avatar>
+        <div className="flex flex-col">
+          <span className="font-bold text-lg">{user.name}</span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn('h-2 w-2 rounded-full', {
+                'bg-green-500': user.status === 'Online',
+                'bg-gray-400': user.status === 'Offline',
+              })}
+            />
+            <span className="text-xs text-muted-foreground">{user.status}</span>
+          </div>
+        </div>
+      </div>
+      <Button variant="ghost" size="icon" onClick={onCall}>
+        <Phone className="h-6 w-6 text-primary" />
+      </Button>
+    </div>
+  );
+}

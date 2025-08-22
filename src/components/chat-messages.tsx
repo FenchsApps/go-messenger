@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { MessageMenu } from './message-menu';
+import { stickers } from '@/lib/data';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -30,6 +31,8 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
         const isCurrentUser = message.senderId === currentUser.id;
         const sender = isCurrentUser ? currentUser : chatPartner;
         const showAvatar = !isCurrentUser && (index === 0 || messages[index - 1].senderId !== message.senderId);
+
+        const StickerComponent = message.stickerId ? stickers.find(s => s.id === message.stickerId)?.component : null;
 
         return (
           <div
@@ -63,8 +66,8 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
               className={cn(
                 'relative max-w-sm rounded-2xl px-4 py-2 transition-all duration-300 animate-in fade-in-25 slide-in-from-bottom-4',
                 {
-                  'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser,
-                  'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
+                  'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser && message.type === 'text',
+                  'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser && message.type === 'text',
                 },
                 message.type === 'sticker' && 'p-1 bg-transparent'
               )}
@@ -75,15 +78,10 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   <p>{message.forwardedFrom.text}</p>
                 </div>
               )}
-              {message.type === 'sticker' && message.stickerUrl && (
-                <Image
-                  src={message.stickerUrl}
-                  alt="sticker"
-                  width={128}
-                  height={128}
-                  className="rounded-md"
-                  data-ai-hint="sticker"
-                />
+              {message.type === 'sticker' && StickerComponent && (
+                <div className="w-32 h-32">
+                   <StickerComponent />
+                </div>
               )}
                {message.type === 'text' && message.text && (
                 <p className="whitespace-pre-wrap">{message.text}</p>

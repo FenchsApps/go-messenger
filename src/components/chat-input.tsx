@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
   onSendMessage: (text: string) => Promise<void>;
-  onSendSticker: (stickerUrl: string) => void;
+  onSendSticker: (stickerId: string) => void;
 }
 
 export function ChatInput({ onSendMessage, onSendSticker }: ChatInputProps) {

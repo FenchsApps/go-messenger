@@ -5,7 +5,7 @@ import { Smile } from 'lucide-react';
 import { stickers } from '@/lib/data';
 
 interface StickerPanelProps {
-  onStickerSelect: (stickerUrl: string) => void;
+  onStickerSelect: (stickerId: string) => void;
 }
 
 export function StickerPanel({ onStickerSelect }: StickerPanelProps) {
@@ -21,18 +21,11 @@ export function StickerPanel({ onStickerSelect }: StickerPanelProps) {
           {stickers.map((sticker) => (
             <button
               key={sticker.id}
-              onClick={() => onStickerSelect(sticker.url)}
+              onClick={() => onStickerSelect(sticker.id)}
               className="p-1 rounded-md hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
               aria-label={sticker.hint}
             >
-              <Image
-                src={sticker.url}
-                alt={sticker.hint}
-                width={50}
-                height={50}
-                className="w-full h-full object-contain"
-                data-ai-hint={sticker.hint}
-              />
+              <sticker.component />
             </button>
           ))}
         </div>

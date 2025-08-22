@@ -72,8 +72,8 @@ export function ChatView({
     }
   };
 
-  const handleSendSticker = async (stickerUrl: string) => {
-    await sendSticker(currentUser.id, chatPartner.id, stickerUrl);
+  const handleSendSticker = async (stickerId: string) => {
+    await sendSticker(currentUser.id, chatPartner.id, stickerId);
   };
 
   const handleEdit = (message: Message) => {

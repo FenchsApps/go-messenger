@@ -60,7 +60,7 @@ export async function sendMessage(senderId: string, recipientId: string, text: s
     }
 }
 
-export async function sendSticker(senderId: string, recipientId: string, stickerUrl: string) {
+export async function sendSticker(senderId: string, recipientId: string, stickerId: string) {
     const chatId = getChatId(senderId, recipientId);
     
     try {
@@ -70,9 +70,9 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
             text: '',
             timestamp: serverTimestamp(),
             type: 'sticker',
-            stickerUrl,
+            stickerId,
         });
-        return { error: null, data: { id: docRef.id, stickerUrl } };
+        return { error: null, data: { id: docRef.id, stickerId } };
     } catch (error) {
         console.error("Error sending sticker:", error);
         return { error: 'Failed to send sticker' };

@@ -16,7 +16,7 @@ export type Message = {
   text: string;
   timestamp: number;
   type: 'text' | 'sticker';
-  stickerUrl?: string;
+  stickerId?: string;
   edited?: boolean;
   forwardedFrom?: {
     name: string;

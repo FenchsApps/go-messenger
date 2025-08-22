@@ -39,6 +39,8 @@ export function Login() {
         }
       } catch (error) {
         console.error("Error checking logged in user:", error);
+        // If there's an error (e.g. offline), we still want to stop loading
+        // and show the login page. The user can try logging in manually.
       } finally {
         setIsLoading(false);
       }

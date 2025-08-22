@@ -83,16 +83,10 @@ export async function sendImage(senderId: string, recipientId: string, imageFile
     const chatId = getChatId(senderId, recipientId);
     
     try {
-        // Create a storage reference
-        const storageRef = ref(storage, `chats/${chatId}/${Date.now()}_${imageFile.name}`);
-
-        // Upload the file
+        const storageRef = ref(storage, `chats/${chatId}/images/${Date.now()}_${imageFile.name}`);
         const snapshot = await uploadBytes(storageRef, imageFile);
-
-        // Get the download URL
         const downloadURL = await getDownloadURL(snapshot.ref);
 
-        // Add message to Firestore
         await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
             recipientId,
@@ -105,6 +99,29 @@ export async function sendImage(senderId: string, recipientId: string, imageFile
     } catch (error) {
         console.error("Error sending image:", error);
         return { error: 'Failed to send image' };
+    }
+}
+
+export async function sendAudio(senderId: string, recipientId: string, audioFile: File) {
+    const chatId = getChatId(senderId, recipientId);
+    
+    try {
+        const storageRef = ref(storage, `chats/${chatId}/audio/${Date.now()}.webm`);
+        const snapshot = await uploadBytes(storageRef, audioFile);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            senderId,
+            recipientId,
+            text: 'Voice message',
+            timestamp: serverTimestamp(),
+            type: 'audio',
+            audioUrl: downloadURL,
+        });
+        return { error: null };
+    } catch (error) {
+        console.error("Error sending audio:", error);
+        return { error: 'Failed to send audio message' };
     }
 }
 

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Phone } from 'lucide-react';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendImage } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendImage, sendAudio } from '@/app/actions';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
@@ -123,7 +123,22 @@ export function ChatView({
     };
     setOptimisticMessages({ action: 'add', message: newMessage });
     sendImage(currentUser.id, chatPartner.id, imageFile);
-};
+  };
+
+  const handleSendAudio = (audioFile: File) => {
+    const tempId = crypto.randomUUID();
+    const newMessage: Message = {
+        id: tempId,
+        senderId: currentUser.id,
+        recipientId: chatPartner.id,
+        text: 'Voice Message',
+        timestamp: Date.now(),
+        type: 'audio',
+        audioUrl: URL.createObjectURL(audioFile),
+    };
+    setOptimisticMessages({ action: 'add', message: newMessage });
+    sendAudio(currentUser.id, chatPartner.id, audioFile);
+  };
 
 
   const handleCall = () => {
@@ -188,7 +203,7 @@ export function ChatView({
         onDelete={handleDelete}
         onForward={handleForward}
       />
-      <ChatInput onSendMessage={handleSendMessage} onSendSticker={handleSendSticker} onSendImage={handleSendImage} />
+      <ChatInput onSendMessage={handleSendMessage} onSendSticker={handleSendSticker} onSendImage={handleSendImage} onSendAudio={handleSendAudio} />
 
       <Dialog open={isCalling} onOpenChange={setIsCalling}>
         <DialogContent className="max-w-sm">

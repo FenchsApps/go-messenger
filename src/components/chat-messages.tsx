@@ -67,7 +67,8 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser,
                   'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
                 },
-                message.type !== 'text' && 'p-1'
+                message.type !== 'text' && 'p-1',
+                message.type === 'audio' && 'p-2'
               )}
             >
               {message.forwardedFrom && (
@@ -95,6 +96,9 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   className="rounded-md object-cover max-w-full"
                   data-ai-hint="sent image"
                 />
+               )}
+               {message.type === 'audio' && message.audioUrl && (
+                 <audio controls src={message.audioUrl} className="max-w-full" />
                )}
                {message.type === 'text' && (
                 <p className="whitespace-pre-wrap">{message.text}</p>

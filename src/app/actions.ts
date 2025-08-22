@@ -2,7 +2,7 @@
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
@@ -97,16 +97,15 @@ export async function sendImage(senderId: string, recipientId: string, dataUrl: 
             imageUrl: downloadURL,
         });
         
+        const newDoc = await getDoc(docRef);
+        const newDocData = newDoc.data();
+
         return { 
             error: null, 
             data: {
-                id: docRef.id,
-                senderId,
-                recipientId,
-                text: 'Image',
-                timestamp: Date.now(),
-                type: 'image',
-                imageUrl: downloadURL,
+                ...newDocData,
+                id: newDoc.id,
+                timestamp: newDocData.timestamp?.toDate().getTime() || Date.now(),
             } 
         };
     } catch (error) {
@@ -133,16 +132,15 @@ export async function sendAudio(senderId: string, recipientId: string, dataUrl: 
             audioUrl: downloadURL,
         });
         
+        const newDoc = await getDoc(docRef);
+        const newDocData = newDoc.data();
+        
          return { 
             error: null, 
             data: {
-                id: docRef.id,
-                senderId,
-                recipientId,
-                text: 'Voice message',
-                timestamp: Date.now(),
-                type: 'audio',
-                audioUrl: downloadURL,
+                ...newDocData,
+                id: newDoc.id,
+                timestamp: newDocData.timestamp?.toDate().getTime() || Date.now(),
             }
         };
     } catch (error) {

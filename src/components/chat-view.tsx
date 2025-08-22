@@ -99,6 +99,8 @@ export function ChatView({
         description: "Не удалось отправить изображение. Попробуйте снова.",
         variant: "destructive",
       });
+    } else if (result.data) {
+        setMessages(prev => [...prev, result.data as Message]);
     }
   };
 
@@ -113,6 +115,8 @@ export function ChatView({
         description: "Не удалось отправить аудиосообщение. Попробуйте снова.",
         variant: "destructive",
       });
+    } else if (result.data) {
+        setMessages(prev => [...prev, result.data as Message]);
     }
   };
 

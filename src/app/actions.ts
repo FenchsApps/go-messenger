@@ -95,10 +95,10 @@ export async function sendImage(senderId: string, recipientId: string, dataUrl: 
             type: 'image',
             imageUrl: downloadURL,
         });
-        return { error: null, data: { downloadURL } };
     } catch (error) {
         console.error("Error sending image:", error);
-        return { error: 'Failed to send image' };
+        // This will be caught by the client
+        throw new Error('Failed to send image');
     }
 }
 
@@ -118,10 +118,10 @@ export async function sendAudio(senderId: string, recipientId: string, dataUrl: 
             type: 'audio',
             audioUrl: downloadURL,
         });
-        return { error: null, data: { downloadURL } };
     } catch (error) {
         console.error("Error sending audio:", error);
-        return { error: 'Failed to send audio message' };
+         // This will be caught by the client
+        throw new Error('Failed to send audio message');
     }
 }
 

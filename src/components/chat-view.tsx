@@ -145,9 +145,10 @@ export function ChatView({
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
     
-    const result = await sendImage(currentUser.id, chatPartner.id, dataUrl);
-    if (result.error) {
-        toast({ title: 'Ошибка отправки', description: result.error, variant: 'destructive'});
+    try {
+        await sendImage(currentUser.id, chatPartner.id, dataUrl);
+    } catch(error: any) {
+        toast({ title: 'Ошибка отправки', description: error.message, variant: 'destructive'});
         startTransition(() => {
             setOptimisticMessages({action: 'delete', message: {id: tempId}});
         });
@@ -171,9 +172,10 @@ export function ChatView({
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
 
-    const result = await sendAudio(currentUser.id, chatPartner.id, dataUrl);
-     if (result.error) {
-        toast({ title: 'Ошибка отправки аудио', description: result.error, variant: 'destructive'});
+    try {
+      await sendAudio(currentUser.id, chatPartner.id, dataUrl);
+    } catch (error: any) {
+        toast({ title: 'Ошибка отправки аудио', description: error.message, variant: 'destructive'});
         startTransition(() => {
             setOptimisticMessages({action: 'delete', message: {id: tempId}});
         });

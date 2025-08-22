@@ -4,14 +4,17 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 // Your web app's Firebase configuration
+// IMPORTANT: Replace this with your own Firebase project configuration!
+// You can get this from the Firebase console:
+// Project settings > General > Your apps > Web app > Firebase SDK snippet > Config
 const firebaseConfig = {
-  "projectId": "coo-messenger-dut4g",
-  "appId": "1:289105120218:web:0a828e96df9dc829edcee3",
-  "storageBucket": "coo-messenger-dut4g.firebasestorage.app",
-  "apiKey": "AIzaSyCJhbJ9Hx4ZzDneeSrPE-W1Hh7ifI1Ydxw",
-  "authDomain": "coo-messenger-dut4g.firebaseapp.com",
-  "measurementId": "",
-  "messagingSenderId": "289105120218"
+  "projectId": "YOUR_PROJECT_ID",
+  "appId": "YOUR_APP_ID",
+  "storageBucket": "YOUR_STORAGE_BUCKET",
+  "apiKey": "YOUR_API_KEY",
+  "authDomain": "YOUR_AUTH_DOMAIN",
+  "measurementId": "YOUR_MEASUREMENT_ID",
+  "messagingSenderId": "YOUR_MESSAGING_SENDER_ID"
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();

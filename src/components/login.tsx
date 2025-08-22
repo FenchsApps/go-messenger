@@ -9,11 +9,12 @@ import { allUsers } from '@/lib/data';
 import { Messenger } from './messenger';
 import { PigeonIcon } from './icons';
 import { useToast } from '@/hooks/use-toast';
+import type { User } from '@/lib/types';
 
 export function Login() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const { toast } = useToast();
 
   const handleLogin = () => {
@@ -31,8 +32,14 @@ export function Login() {
     }
   };
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setPhone('');
+    setPassword('');
+  };
+
   if (currentUser) {
-    return <Messenger currentUser={currentUser} />;
+    return <Messenger currentUser={currentUser} onLogout={handleLogout} />;
   }
 
   return (

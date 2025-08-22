@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 'use client';
 
@@ -12,9 +13,10 @@ import { PigeonIcon } from './icons';
 
 interface MessengerProps {
   currentUser: User;
+  onLogout: () => void;
 }
 
-export function Messenger({ currentUser }: MessengerProps) {
+export function Messenger({ currentUser, onLogout }: MessengerProps) {
   const [users] = useState<User[]>(allUsers.filter(u => u.id !== currentUser.id));
   const [selectedUserId, setSelectedUserId] = useState<string | null>(users[0]?.id || null);
   const isMobile = useIsMobile();
@@ -42,6 +44,7 @@ export function Messenger({ currentUser }: MessengerProps) {
             users={users}
             selectedUserId={selectedUserId}
             onSelectUser={handleSelectUser}
+            onLogout={onLogout}
           />
         </div>
         <div

@@ -1,15 +1,19 @@
+
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { PigeonIcon } from './icons';
+import { Button } from './ui/button';
+import { LogOut } from 'lucide-react';
 
 interface ContactListProps {
   users: User[];
   selectedUserId: string | null;
   onSelectUser: (userId: string) => void;
+  onLogout: () => void;
 }
 
-export function ContactList({ users, selectedUserId, onSelectUser }: ContactListProps) {
+export function ContactList({ users, selectedUserId, onSelectUser, onLogout }: ContactListProps) {
   return (
     <div className="flex flex-col h-full bg-card border-r">
       <div className="p-4 border-b">
@@ -53,6 +57,12 @@ export function ContactList({ users, selectedUserId, onSelectUser }: ContactList
             </button>
           ))}
         </nav>
+      </div>
+      <div className="p-4 border-t">
+          <Button variant="outline" className="w-full" onClick={onLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Выйти
+          </Button>
       </div>
     </div>
   );

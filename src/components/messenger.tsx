@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { allUsers, messages as initialMessages } from '@/lib/data';
+import { allUsers } from '@/lib/data';
 import type { User, Message } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -16,7 +16,6 @@ interface MessengerProps {
 
 export function Messenger({ currentUser }: MessengerProps) {
   const [users] = useState<User[]>(allUsers.filter(u => u.id !== currentUser.id));
-  const [messages] = useState<Message[]>(initialMessages);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(users[0]?.id || null);
   const isMobile = useIsMobile();
 
@@ -54,10 +53,7 @@ export function Messenger({ currentUser }: MessengerProps) {
           {selectedUser ? (
             <ChatView
               key={selectedUserId}
-              initialMessages={messages.filter(msg => 
-                (msg.senderId === currentUser.id && msg.recipientId === selectedUser.id) || 
-                (msg.senderId === selectedUser.id && msg.recipientId === currentUser.id)
-              )}
+              initialMessages={[]}
               currentUser={currentUser}
               chatPartner={selectedUser}
               isMobile={isMobile}

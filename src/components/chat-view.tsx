@@ -1,5 +1,5 @@
 'use client';
-import { useOptimistic, useState } from 'react';
+import { useOptimistic, useState, useEffect } from 'react';
 import type { Message, User } from '@/lib/types';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
@@ -7,7 +7,14 @@ import { ChatInput } from './chat-input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Phone } from 'lucide-react';
+import { sendMessage, sendSticker } from '@/app/actions';
+import { db } from '@/lib/firebase';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
+
+function getChatId(userId1: string, userId2: string) {
+    return [userId1, userId2].sort().join('_');
+}
 interface ChatViewProps {
   initialMessages: Message[];
   currentUser: User;
@@ -30,6 +37,27 @@ export function ChatView({
     messages,
     (state, newMessage) => [...state, newMessage]
   );
+  
+  useEffect(() => {
+    const chatId = getChatId(currentUser.id, chatPartner.id);
+    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const newMessages: Message[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        newMessages.push({
+          id: doc.id,
+          ...data,
+          timestamp: data.timestamp?.toDate().getTime() || Date.now(),
+        } as Message);
+      });
+      setMessages(newMessages);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser.id, chatPartner.id]);
+
 
   const handleSendMessage = async (text: string) => {
     const newMessage: Message = {
@@ -41,10 +69,7 @@ export function ChatView({
       type: 'text',
     };
     addOptimisticMessage(newMessage);
-    // In a real app, you'd send the message to a server here.
-    // For this demo, we just add it to the local state.
-    // This would be replaced with a database call.
-    setMessages((prev) => [...prev, newMessage]);
+    await sendMessage(currentUser.id, chatPartner.id, text);
   };
 
   const handleSendSticker = (stickerUrl: string) => {
@@ -58,8 +83,7 @@ export function ChatView({
       stickerUrl,
     };
     addOptimisticMessage(newMessage);
-    // This would also be a server call
-    setMessages((prev) => [...prev, newMessage]);
+    sendSticker(currentUser.id, chatPartner.id, stickerUrl);
   };
 
   const handleCall = () => {

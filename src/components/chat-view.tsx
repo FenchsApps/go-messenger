@@ -99,7 +99,17 @@ export function ChatView({
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
 
-    await sendMessage(currentUser.id, chatPartner.id, text);
+    const result = await sendMessage(currentUser.id, chatPartner.id, text);
+    if(result.error) {
+        toast({
+            title: "Ошибка отправки",
+            description: result.error,
+            variant: "destructive",
+        });
+        startTransition(() => {
+            setOptimisticMessages({ action: 'delete', message: { id: tempId } });
+        });
+    }
   };
 
   const handleSendSticker = (stickerUrl: string) => {
@@ -147,8 +157,10 @@ export function ChatView({
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
     
-    sendImage(currentUser.id, chatPartner.id, dataUrl).catch((error) => {
-      console.error("Failed to send image:", error);
+    const result = await sendImage(currentUser.id, chatPartner.id, dataUrl);
+
+    if (result.error) {
+      console.error("Failed to send image:", result.error);
       toast({
         title: "Ошибка отправки изображения",
         description: "Не удалось отправить изображение. Попробуйте снова.",
@@ -157,7 +169,7 @@ export function ChatView({
       startTransition(() => {
         setOptimisticMessages({ action: 'delete', message: { id: tempId } });
       });
-    });
+    }
   };
 
   const handleSendAudio = async (audioFile: File) => {
@@ -176,9 +188,11 @@ export function ChatView({
         };
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
+    
+    const result = await sendAudio(currentUser.id, chatPartner.id, dataUrl);
 
-    sendAudio(currentUser.id, chatPartner.id, dataUrl).catch((error) => {
-      console.error("Failed to send audio:", error);
+    if(result.error) {
+      console.error("Failed to send audio:", result.error);
       toast({
         title: "Ошибка отправки аудио",
         description: "Не удалось отправить аудиосообщение. Попробуйте снова.",
@@ -187,7 +201,7 @@ export function ChatView({
       startTransition(() => {
         setOptimisticMessages({ action: 'delete', message: { id: tempId } });
       });
-    });
+    }
   };
 
 

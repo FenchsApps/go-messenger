@@ -44,7 +44,7 @@ export async function sendMessage(senderId: string, recipientId: string, text: s
     const chatId = getChatId(senderId, recipientId);
     
     try {
-        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
             recipientId,
             text,
@@ -53,7 +53,7 @@ export async function sendMessage(senderId: string, recipientId: string, text: s
             edited: false,
             forwardedFrom: forwardedFrom || null,
         });
-        return { error: null };
+        return { error: null, data: { id: docRef.id, text } };
     } catch (error) {
         console.error("Error sending message:", error);
         return { error: 'Failed to send message' };
@@ -64,7 +64,7 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
     const chatId = getChatId(senderId, recipientId);
     
     try {
-        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
             recipientId,
             text: 'Sticker',
@@ -72,7 +72,7 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
             type: 'sticker',
             stickerUrl,
         });
-        return { error: null };
+        return { error: null, data: { id: docRef.id, stickerUrl } };
     } catch (error) {
         console.error("Error sending sticker:", error);
         return { error: 'Failed to send sticker' };
@@ -87,7 +87,7 @@ export async function sendImage(senderId: string, recipientId: string, dataUrl: 
         const snapshot = await uploadString(storageRef, dataUrl, 'data_url');
         const downloadURL = await getDownloadURL(snapshot.ref);
 
-        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
             recipientId,
             text: 'Image',
@@ -95,8 +95,11 @@ export async function sendImage(senderId: string, recipientId: string, dataUrl: 
             type: 'image',
             imageUrl: downloadURL,
         });
+
+        return { error: null, data: { id: docRef.id, imageUrl: downloadURL } };
     } catch (error) {
         console.error("Error sending image:", error);
+        return { error: 'Failed to send image' };
     }
 }
 
@@ -108,7 +111,7 @@ export async function sendAudio(senderId: string, recipientId: string, dataUrl: 
         const snapshot = await uploadString(storageRef, dataUrl, 'data_url');
         const downloadURL = await getDownloadURL(snapshot.ref);
 
-        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
             recipientId,
             text: 'Voice message',
@@ -116,8 +119,11 @@ export async function sendAudio(senderId: string, recipientId: string, dataUrl: 
             type: 'audio',
             audioUrl: downloadURL,
         });
+
+        return { error: null, data: { id: docRef.id, audioUrl: downloadURL } };
     } catch (error) {
         console.error("Error sending audio:", error);
+        return { error: 'Failed to send audio' };
     }
 }
 

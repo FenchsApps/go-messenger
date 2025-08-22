@@ -1,5 +1,5 @@
 'use client';
-import { useOptimistic, useState, useEffect, useCallback } from 'react';
+import { useOptimistic, useState, useEffect, useCallback, useTransition } from 'react';
 import type { Message, User } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
@@ -40,6 +40,7 @@ export function ChatView({
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState('');
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const { toast } = useToast();
 
@@ -83,60 +84,74 @@ export function ChatView({
 
   const handleSendMessage = async (text: string) => {
     const tempId = crypto.randomUUID()
-    const newMessage: Message = {
-      id: tempId,
-      senderId: currentUser.id,
-      recipientId: chatPartner.id,
-      text: text,
-      timestamp: Date.now(),
-      type: 'text',
-    };
-    setOptimisticMessages({ action: 'add', message: newMessage });
+    
+    startTransition(() => {
+        const newMessage: Message = {
+          id: tempId,
+          senderId: currentUser.id,
+          recipientId: chatPartner.id,
+          text: text,
+          timestamp: Date.now(),
+          type: 'text',
+        };
+        setOptimisticMessages({ action: 'add', message: newMessage });
+    });
+
     await sendMessage(currentUser.id, chatPartner.id, text);
   };
 
   const handleSendSticker = (stickerUrl: string) => {
     const tempId = crypto.randomUUID();
-    const newMessage: Message = {
-      id: tempId,
-      senderId: currentUser.id,
-      recipientId: chatPartner.id,
-      text: 'Sticker',
-      timestamp: Date.now(),
-      type: 'sticker',
-      stickerUrl,
-    };
-    setOptimisticMessages({action: 'add', message: newMessage});
+    
+    startTransition(() => {
+        const newMessage: Message = {
+          id: tempId,
+          senderId: currentUser.id,
+          recipientId: chatPartner.id,
+          text: 'Sticker',
+          timestamp: Date.now(),
+          type: 'sticker',
+          stickerUrl,
+        };
+        setOptimisticMessages({action: 'add', message: newMessage});
+    });
+
     sendSticker(currentUser.id, chatPartner.id, stickerUrl);
   };
 
   const handleSendImage = (imageFile: File) => {
     const tempId = crypto.randomUUID();
-    const newMessage: Message = {
-        id: tempId,
-        senderId: currentUser.id,
-        recipientId: chatPartner.id,
-        text: 'Image',
-        timestamp: Date.now(),
-        type: 'image',
-        imageUrl: URL.createObjectURL(imageFile),
-    };
-    setOptimisticMessages({ action: 'add', message: newMessage });
+    
+    startTransition(() => {
+        const newMessage: Message = {
+            id: tempId,
+            senderId: currentUser.id,
+            recipientId: chatPartner.id,
+            text: 'Image',
+            timestamp: Date.now(),
+            type: 'image',
+            imageUrl: URL.createObjectURL(imageFile),
+        };
+        setOptimisticMessages({ action: 'add', message: newMessage });
+    });
+    
     sendImage(currentUser.id, chatPartner.id, imageFile);
   };
 
   const handleSendAudio = (audioFile: File) => {
     const tempId = crypto.randomUUID();
-    const newMessage: Message = {
-        id: tempId,
-        senderId: currentUser.id,
-        recipientId: chatPartner.id,
-        text: 'Voice Message',
-        timestamp: Date.now(),
-        type: 'audio',
-        audioUrl: URL.createObjectURL(audioFile),
-    };
-    setOptimisticMessages({ action: 'add', message: newMessage });
+    startTransition(() => {
+        const newMessage: Message = {
+            id: tempId,
+            senderId: currentUser.id,
+            recipientId: chatPartner.id,
+            text: 'Voice Message',
+            timestamp: Date.now(),
+            type: 'audio',
+            audioUrl: URL.createObjectURL(audioFile),
+        };
+        setOptimisticMessages({ action: 'add', message: newMessage });
+    });
     sendAudio(currentUser.id, chatPartner.id, audioFile);
   };
 
@@ -153,18 +168,28 @@ export function ChatView({
 
   const handleSaveEdit = async () => {
     if (!editingMessage) return;
-    setOptimisticMessages({action: 'update', message: {...editingMessage, text: editedText, edited: true}});
+
+    startTransition(() => {
+      setOptimisticMessages({action: 'update', message: {...editingMessage, text: editedText, edited: true}});
+    });
+
     const result = await editMessage(chatId, editingMessage.id, editedText);
     if(result.error){
         toast({ title: "Ошибка", description: result.error, variant: 'destructive' });
-        setOptimisticMessages({action: 'update', message: editingMessage});
+        // Revert optimistic update
+        startTransition(() => {
+            setOptimisticMessages({action: 'update', message: editingMessage});
+        });
     }
     setEditingMessage(null);
     setEditedText('');
   };
 
   const handleDelete = async (messageId: string) => {
-     setOptimisticMessages({action: 'delete', message: {id: messageId}});
+     startTransition(() => {
+        setOptimisticMessages({action: 'delete', message: {id: messageId}});
+     });
+     
      const result = await deleteMessage(chatId, messageId);
      if(result.error){
         toast({ title: "Ошибка", description: result.error, variant: 'destructive' });

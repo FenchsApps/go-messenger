@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Smile } from 'lucide-react';
@@ -25,7 +24,7 @@ export function StickerPanel({ onStickerSelect }: StickerPanelProps) {
               className="p-1 rounded-md hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
               aria-label={sticker.hint}
             >
-              <sticker.component />
+              <sticker.component className="w-10 h-10" />
             </button>
           ))}
         </div>

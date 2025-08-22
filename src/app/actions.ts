@@ -97,8 +97,6 @@ export async function sendImage(senderId: string, recipientId: string, dataUrl: 
         });
     } catch (error) {
         console.error("Error sending image:", error);
-        // This will be caught by the client
-        throw new Error('Failed to send image');
     }
 }
 
@@ -120,8 +118,6 @@ export async function sendAudio(senderId: string, recipientId: string, dataUrl: 
         });
     } catch (error) {
         console.error("Error sending audio:", error);
-         // This will be caught by the client
-        throw new Error('Failed to send audio message');
     }
 }
 

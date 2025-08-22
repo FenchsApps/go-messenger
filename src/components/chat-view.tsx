@@ -49,6 +49,8 @@ export function ChatView({
     (state, {action, message}) => {
       switch (action) {
         case 'add':
+          // Prevent adding duplicate temporary messages
+          if (state.find(m => m.id === message.id)) return state;
           return [...state, message as Message];
         case 'delete':
             return state.filter(m => m.id !== message.id);
@@ -140,19 +142,22 @@ export function ChatView({
             text: 'Image',
             timestamp: Date.now(),
             type: 'image',
-            imageUrl: dataUrl,
+            imageUrl: dataUrl, // Optimistically use data URL
         };
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
     
-    try {
-        await sendImage(currentUser.id, chatPartner.id, dataUrl);
-    } catch(error: any) {
-        toast({ title: 'Ошибка отправки', description: error.message, variant: 'destructive'});
-        startTransition(() => {
-            setOptimisticMessages({action: 'delete', message: {id: tempId}});
-        });
-    }
+    sendImage(currentUser.id, chatPartner.id, dataUrl).catch((error) => {
+      console.error("Failed to send image:", error);
+      toast({
+        title: "Ошибка отправки изображения",
+        description: "Не удалось отправить изображение. Попробуйте снова.",
+        variant: "destructive",
+      });
+      startTransition(() => {
+        setOptimisticMessages({ action: 'delete', message: { id: tempId } });
+      });
+    });
   };
 
   const handleSendAudio = async (audioFile: File) => {
@@ -172,14 +177,17 @@ export function ChatView({
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
 
-    try {
-      await sendAudio(currentUser.id, chatPartner.id, dataUrl);
-    } catch (error: any) {
-        toast({ title: 'Ошибка отправки аудио', description: error.message, variant: 'destructive'});
-        startTransition(() => {
-            setOptimisticMessages({action: 'delete', message: {id: tempId}});
-        });
-    }
+    sendAudio(currentUser.id, chatPartner.id, dataUrl).catch((error) => {
+      console.error("Failed to send audio:", error);
+      toast({
+        title: "Ошибка отправки аудио",
+        description: "Не удалось отправить аудиосообщение. Попробуйте снова.",
+        variant: "destructive",
+      });
+      startTransition(() => {
+        setOptimisticMessages({ action: 'delete', message: { id: tempId } });
+      });
+    });
   };
 
 

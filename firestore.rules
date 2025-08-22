@@ -1,23 +1,22 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if a user is part of a chat
-    function isChatParticipant(chatId) {
-      let participants = chatId.split('_');
-      return request.auth.uid in participants;
-    }
-
+    // Correctly secure chats
     match /chats/{chatId}/messages/{messageId} {
-      // Allow read if the user is a participant of the chat
-      allow read: if request.auth != null && isChatParticipant(chatId);
+      // Helper function to check if a user is part of a chat
+      function isParticipant(userId) {
+        let parts = chatId.split('_');
+        return userId == parts[0] || userId == parts[1];
+      }
       
-      // Allow create if the user is authenticated and is the sender
-      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
+      // Allow read if the user is a participant in the chat
+      allow read: if request.auth != null && isParticipant(request.auth.uid);
       
-      // No one can update or delete messages
-      allow update, delete: if false;
+      // Allow create (send) if the user is the sender and a participant
+      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid && isParticipant(request.auth.uid);
+      
+      // Allow update (edit) and delete if the user is the original sender
+      allow update, delete: if request.auth != null && resource.data.senderId == request.auth.uid;
     }
   }
 }

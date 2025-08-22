@@ -85,13 +85,13 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   data-ai-hint="sticker"
                 />
               )}
-               {message.type === 'text' && (
+               {message.type === 'text' && message.text && (
                 <p className="whitespace-pre-wrap">{message.text}</p>
               )}
               <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground/50 pt-1">
                  {message.edited && <span className="text-xs">(изм.)</span>}
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    {format(new Date(message.timestamp), 'HH:mm')}
+                    {message.timestamp && format(new Date(message.timestamp), 'HH:mm')}
                 </span>
               </div>
             </div>

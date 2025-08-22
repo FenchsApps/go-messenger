@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Phone } from 'lucide-react';
-import { sendMessage, sendSticker, editMessage, deleteMessage } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendImage } from '@/app/actions';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
@@ -110,6 +110,22 @@ export function ChatView({
     sendSticker(currentUser.id, chatPartner.id, stickerUrl);
   };
 
+  const handleSendImage = (imageFile: File) => {
+    const tempId = crypto.randomUUID();
+    const newMessage: Message = {
+        id: tempId,
+        senderId: currentUser.id,
+        recipientId: chatPartner.id,
+        text: 'Image',
+        timestamp: Date.now(),
+        type: 'image',
+        imageUrl: URL.createObjectURL(imageFile),
+    };
+    setOptimisticMessages({ action: 'add', message: newMessage });
+    sendImage(currentUser.id, chatPartner.id, imageFile);
+};
+
+
   const handleCall = () => {
     setIsCalling(true);
     setTimeout(() => setIsCalling(false), 3000); // Mock call duration
@@ -172,7 +188,7 @@ export function ChatView({
         onDelete={handleDelete}
         onForward={handleForward}
       />
-      <ChatInput onSendMessage={handleSendMessage} onSendSticker={handleSendSticker} />
+      <ChatInput onSendMessage={handleSendMessage} onSendSticker={handleSendSticker} onSendImage={handleSendImage} />
 
       <Dialog open={isCalling} onOpenChange={setIsCalling}>
         <DialogContent className="max-w-sm">

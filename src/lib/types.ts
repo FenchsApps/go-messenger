@@ -14,8 +14,9 @@ export type Message = {
   recipientId: string;
   text: string;
   timestamp: number;
-  type: 'text' | 'sticker';
+  type: 'text' | 'sticker' | 'image';
   stickerUrl?: string;
+  imageUrl?: string;
   edited?: boolean;
   forwardedFrom?: {
     name: string;

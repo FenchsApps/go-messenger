@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { MessageMenu } from './message-menu';
+import { Skeleton } from './ui/skeleton';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -65,7 +66,8 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                 {
                   'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser,
                   'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
-                }
+                },
+                message.type !== 'text' && 'p-1'
               )}
             >
               {message.forwardedFrom && (
@@ -74,16 +76,27 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   <p>{message.forwardedFrom.text}</p>
                 </div>
               )}
-              {message.type === 'sticker' ? (
+              {message.type === 'sticker' && message.stickerUrl && (
                 <Image
-                  src={message.stickerUrl!}
+                  src={message.stickerUrl}
                   alt="sticker"
                   width={128}
                   height={128}
                   className="rounded-md"
                   data-ai-hint="sticker"
                 />
-              ) : (
+              )}
+               {message.type === 'image' && message.imageUrl && (
+                 <Image
+                  src={message.imageUrl}
+                  alt="image"
+                  width={250}
+                  height={250}
+                  className="rounded-md object-cover max-w-full"
+                  data-ai-hint="sent image"
+                />
+               )}
+               {message.type === 'text' && (
                 <p className="whitespace-pre-wrap">{message.text}</p>
               )}
               <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground/50 pt-1">

@@ -1,8 +1,9 @@
 // @ts-nocheck
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
   if (!text.trim()) {
@@ -77,6 +78,36 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
         return { error: 'Failed to send sticker' };
     }
 }
+
+export async function sendImage(senderId: string, recipientId: string, imageFile: File) {
+    const chatId = getChatId(senderId, recipientId);
+    
+    try {
+        // Create a storage reference
+        const storageRef = ref(storage, `chats/${chatId}/${Date.now()}_${imageFile.name}`);
+
+        // Upload the file
+        const snapshot = await uploadBytes(storageRef, imageFile);
+
+        // Get the download URL
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        // Add message to Firestore
+        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            senderId,
+            recipientId,
+            text: 'Image',
+            timestamp: serverTimestamp(),
+            type: 'image',
+            imageUrl: downloadURL,
+        });
+        return { error: null };
+    } catch (error) {
+        console.error("Error sending image:", error);
+        return { error: 'Failed to send image' };
+    }
+}
+
 
 export async function editMessage(chatId: string, messageId: string, newText: string) {
     if (!newText.trim()) {

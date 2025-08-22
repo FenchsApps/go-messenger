@@ -3,10 +3,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { PigeonIcon } from './icons';
 import { Button } from './ui/button';
-import { LogOut } from 'lucide-react';
+import { LogOut, Crown } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Skeleton } from './ui/skeleton';
+import { Badge } from './ui/badge';
 
 
 interface ContactListProps {
@@ -64,7 +65,15 @@ export function ContactList({ users, selectedUserId, onSelectUser, onLogout, isL
                   />
                 </div>
                 <div className="flex-1">
-                  <p className="font-semibold text-base">{user.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-base">{user.name}</p>
+                    {user.isCreator && (
+                        <Badge variant="secondary" className="h-5 text-xs px-1.5">
+                            <Crown className="w-3 h-3 mr-1" />
+                            Создатель
+                        </Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground truncate">
                     {user.status === 'Online' ? 'В сети' : 
                       user.lastSeen ? `Был(а) ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети'}

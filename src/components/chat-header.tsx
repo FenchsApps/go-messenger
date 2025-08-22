@@ -1,10 +1,11 @@
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { Badge } from './ui/badge';
 
 
 interface ChatHeaderProps {
@@ -27,7 +28,15 @@ export function ChatHeader({ user, isMobile, onBack }: ChatHeaderProps) {
           <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
         </Avatar>
         <div className="flex flex-col">
-          <span className="font-bold text-lg">{user.name}</span>
+            <div className="flex items-center gap-2">
+                <span className="font-bold text-lg">{user.name}</span>
+                {user.isCreator && (
+                    <Badge variant="secondary" className="h-5 text-xs px-1.5">
+                        <Crown className="w-3 h-3 mr-1" />
+                        Создатель
+                    </Badge>
+                )}
+            </div>
           <div className="flex items-center gap-1.5">
             <span
               className={cn('h-2 w-2 rounded-full', {

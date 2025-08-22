@@ -8,6 +8,7 @@ export const allUsers: User[] = [
     status: 'Online',
     phone: '79191352804',
     password: 'GGlim0060',
+    isCreator: true,
   },
   {
     id: 'sanya',
@@ -38,10 +39,12 @@ export const allUsers: User[] = [
 export const messages: Message[] = [];
 
 export const stickers = [
-  { id: 'sticker-1', url: 'https://placehold.co/128x128/FFFFFF/000000?text=👍', hint: 'thumbs up' },
-  { id: 'sticker-2', url: 'https://placehold.co/128x128/FFFFFF/000000?text=❤️', hint: 'heart' },
-  { id: 'sticker-3', url: 'https://placehold.co/128x128/FFFFFF/000000?text=😂', hint: 'laughing emoji' },
-  { id: 'sticker-4', url: 'https://placehold.co/128x128/FFFFFF/000000?text=👋', hint: 'waving hand' },
-  { id: 'sticker-5', url: 'https://placehold.co/128x128/FFFFFF/000000?text=🕊️', hint: 'pigeon' },
-  { id: 'sticker-6', url: 'https://placehold.co/128x128/FFFFFF/000000?text=☕', hint: 'coffee' },
+  { id: 'sticker-1', url: 'https://placehold.co/128x128/FFFFFF/ff0000?text=❤️', hint: 'heart' },
+  { id: 'sticker-2', url: 'https://placehold.co/128x128/FFFFFF/000000?text=👍', hint: 'thumbs up' },
+  { id: 'sticker-3', url: 'https://placehold.co/128x128/FFFFFF/000000?text=🛍️', hint: 'shopping bag' },
+  { id: 'sticker-4', url: 'https://placehold.co/128x128/FFFFFF/000000?text=🏠', hint: 'home' },
+  { id: 'sticker-5', url: 'https://placehold.co/128x128/FFFFFF/000000?text=🏫', hint: 'school' },
+  { id: 'sticker-6', url: 'https://placehold.co/128x128/FFFFFF/000000?text=💼', hint: 'work' },
+  { id: 'sticker-7', url: 'https://placehold.co/128x128/FFFFFF/000000?text=😋', hint: 'yummy' },
+  { id: 'sticker-8', url: 'https://placehold.co/128x128/FFFFFF/000000?text=😴', hint: 'sleeping' },
 ];

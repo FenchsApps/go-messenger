@@ -6,6 +6,7 @@ export type User = {
   phone: string;
   password?: string;
   lastSeen?: number;
+  isCreator?: boolean;
 };
 
 export type Message = {

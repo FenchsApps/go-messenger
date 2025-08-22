@@ -35,9 +35,17 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
             status: data.status,
             phone: data.phone,
             lastSeen: data.lastSeen?.toDate().getTime(),
+            isCreator: data.isCreator
           });
         }
       });
+      // Ensure the creator is always at the top of the list
+      usersData.sort((a, b) => {
+        if (a.isCreator) return -1;
+        if (b.isCreator) return 1;
+        return 0;
+      })
+
       setUsers(usersData);
       if (usersData.length > 0) {
         setSelectedUserId(currentSelectedId => currentSelectedId ?? usersData[0].id)

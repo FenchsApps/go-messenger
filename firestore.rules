@@ -3,15 +3,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow any client to read/write user statuses
-    // In a real app, you'd want to restrict this to authenticated users.
-    match /users/{userId} {
-      allow read, write: if true;
-    }
-
-    // Allow any client to read/write messages
-    // In a real app, you'd want to restrict this to chat participants.
-    match /chats/{chatId}/messages/{messageId} {
+    // Разрешить полный доступ ко всем документам
+    match /{document=**} {
       allow read, write: if true;
     }
   }

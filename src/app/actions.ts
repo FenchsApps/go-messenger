@@ -79,12 +79,12 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
     }
 }
 
-export async function sendImage(senderId: string, recipientId: string, imageFile: File) {
+export async function sendImage(senderId: string, recipientId: string, fileBuffer: ArrayBuffer, fileName: string, fileType: string) {
     const chatId = getChatId(senderId, recipientId);
     
     try {
-        const storageRef = ref(storage, `chats/${chatId}/images/${Date.now()}_${imageFile.name}`);
-        const snapshot = await uploadBytes(storageRef, imageFile);
+        const storageRef = ref(storage, `chats/${chatId}/images/${Date.now()}_${fileName}`);
+        const snapshot = await uploadBytes(storageRef, fileBuffer, { contentType: fileType });
         const downloadURL = await getDownloadURL(snapshot.ref);
 
         await addDoc(collection(db, 'chats', chatId, 'messages'), {
@@ -102,12 +102,12 @@ export async function sendImage(senderId: string, recipientId: string, imageFile
     }
 }
 
-export async function sendAudio(senderId: string, recipientId: string, audioFile: File) {
+export async function sendAudio(senderId: string, recipientId: string, fileBuffer: ArrayBuffer) {
     const chatId = getChatId(senderId, recipientId);
     
     try {
         const storageRef = ref(storage, `chats/${chatId}/audio/${Date.now()}.webm`);
-        const snapshot = await uploadBytes(storageRef, audioFile);
+        const snapshot = await uploadBytes(storageRef, fileBuffer, { contentType: 'audio/webm' });
         const downloadURL = await getDownloadURL(snapshot.ref);
 
         await addDoc(collection(db, 'chats', chatId, 'messages'), {

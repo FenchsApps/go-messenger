@@ -119,7 +119,7 @@ export function ChatView({
     sendSticker(currentUser.id, chatPartner.id, stickerUrl);
   };
 
-  const handleSendImage = (imageFile: File) => {
+  const handleSendImage = async (imageFile: File) => {
     const tempId = crypto.randomUUID();
     
     startTransition(() => {
@@ -135,10 +135,11 @@ export function ChatView({
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
     
-    sendImage(currentUser.id, chatPartner.id, imageFile);
+    const fileBuffer = await imageFile.arrayBuffer();
+    await sendImage(currentUser.id, chatPartner.id, fileBuffer, imageFile.name, imageFile.type);
   };
 
-  const handleSendAudio = (audioFile: File) => {
+  const handleSendAudio = async (audioFile: File) => {
     const tempId = crypto.randomUUID();
     startTransition(() => {
         const newMessage: Message = {
@@ -152,7 +153,8 @@ export function ChatView({
         };
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
-    sendAudio(currentUser.id, chatPartner.id, audioFile);
+    const fileBuffer = await audioFile.arrayBuffer();
+    await sendAudio(currentUser.id, chatPartner.id, fileBuffer);
   };
 
 

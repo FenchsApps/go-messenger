@@ -119,8 +119,18 @@ export function ChatView({
     sendSticker(currentUser.id, chatPartner.id, stickerUrl);
   };
 
+  const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleSendImage = async (imageFile: File) => {
     const tempId = crypto.randomUUID();
+    const dataUrl = await fileToDataUrl(imageFile);
     
     startTransition(() => {
         const newMessage: Message = {
@@ -130,17 +140,17 @@ export function ChatView({
             text: 'Image',
             timestamp: Date.now(),
             type: 'image',
-            imageUrl: URL.createObjectURL(imageFile),
+            imageUrl: dataUrl,
         };
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
     
-    const fileBuffer = await imageFile.arrayBuffer();
-    await sendImage(currentUser.id, chatPartner.id, fileBuffer, imageFile.name, imageFile.type);
+    await sendImage(currentUser.id, chatPartner.id, dataUrl);
   };
 
   const handleSendAudio = async (audioFile: File) => {
     const tempId = crypto.randomUUID();
+    const dataUrl = await fileToDataUrl(audioFile);
     startTransition(() => {
         const newMessage: Message = {
             id: tempId,
@@ -149,12 +159,11 @@ export function ChatView({
             text: 'Voice Message',
             timestamp: Date.now(),
             type: 'audio',
-            audioUrl: URL.createObjectURL(audioFile),
+            audioUrl: dataUrl,
         };
         setOptimisticMessages({ action: 'add', message: newMessage });
     });
-    const fileBuffer = await audioFile.arrayBuffer();
-    await sendAudio(currentUser.id, chatPartner.id, fileBuffer);
+    await sendAudio(currentUser.id, chatPartner.id, dataUrl);
   };
 
 

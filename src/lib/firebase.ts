@@ -10,19 +10,21 @@ import { getStorage } from 'firebase/storage';
 // Project settings > General > Your apps > Web app > Firebase SDK snippet > Config
 const firebaseConfig = {
 
-  apiKey: "YOUR_API_KEY",
+  apiKey: "AIzaSyCJhbJ9Hx4ZzDneeSrPE-W1Hh7ifI1Ydxw",
 
-  authDomain: "YOUR_AUTH_DOMAIN",
+  authDomain: "coo-messenger-dut4g.firebaseapp.com",
 
-  projectId: "YOUR_PROJECT_ID",
+  projectId: "coo-messenger-dut4g",
 
-  storageBucket: "YOUR_STORAGE_BUCKET",
+  storageBucket: "coo-messenger-dut4g.firebasestorage.app",
 
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  messagingSenderId: "289105120218",
 
-  appId: "YOUR_APP_ID"
+  appId: "1:289105120218:web:0a828e96df9dc829edcee3"
 
 };
+
+
 
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();

@@ -3,7 +3,7 @@
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
   if (!text.trim()) {
@@ -79,12 +79,12 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
     }
 }
 
-export async function sendImage(senderId: string, recipientId: string, fileBuffer: ArrayBuffer, fileName: string, fileType: string) {
+export async function sendImage(senderId: string, recipientId: string, dataUrl: string) {
     const chatId = getChatId(senderId, recipientId);
     
     try {
-        const storageRef = ref(storage, `chats/${chatId}/images/${Date.now()}_${fileName}`);
-        const snapshot = await uploadBytes(storageRef, fileBuffer, { contentType: fileType });
+        const storageRef = ref(storage, `chats/${chatId}/images/${Date.now()}`);
+        const snapshot = await uploadString(storageRef, dataUrl, 'data_url');
         const downloadURL = await getDownloadURL(snapshot.ref);
 
         await addDoc(collection(db, 'chats', chatId, 'messages'), {
@@ -102,12 +102,12 @@ export async function sendImage(senderId: string, recipientId: string, fileBuffe
     }
 }
 
-export async function sendAudio(senderId: string, recipientId: string, fileBuffer: ArrayBuffer) {
+export async function sendAudio(senderId: string, recipientId: string, dataUrl: string) {
     const chatId = getChatId(senderId, recipientId);
     
     try {
         const storageRef = ref(storage, `chats/${chatId}/audio/${Date.now()}.webm`);
-        const snapshot = await uploadBytes(storageRef, fileBuffer, { contentType: 'audio/webm' });
+        const snapshot = await uploadString(storageRef, dataUrl, 'data_url');
         const downloadURL = await getDownloadURL(snapshot.ref);
 
         await addDoc(collection(db, 'chats', chatId, 'messages'), {

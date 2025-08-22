@@ -1,5 +1,5 @@
-import { Messenger } from '@/components/messenger';
+import { Login } from '@/components/login';
 
 export default function Home() {
-  return <Messenger />;
+  return <Login />;
 }

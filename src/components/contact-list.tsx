@@ -15,7 +15,7 @@ export function ContactList({ users, selectedUserId, onSelectUser }: ContactList
       <div className="p-4 border-b">
         <div className="flex items-center gap-3">
           <PigeonIcon className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">Coo Messenger</h1>
+          <h1 className="text-2xl font-bold">Go Messenger</h1>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'Coo Messenger',
+  title: 'Go Messenger',
   description: 'A messenger for your family.',
 };
 

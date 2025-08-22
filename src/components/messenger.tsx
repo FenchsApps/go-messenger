@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { users as initialUsers, messages as initialMessages, currentUser } from '@/lib/data';
+import { allUsers, messages as initialMessages } from '@/lib/data';
 import type { User, Message } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -11,19 +11,17 @@ import { ChatView } from './chat-view';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { PigeonIcon } from './icons';
 
-export function Messenger() {
-  const [users] = useState<User[]>(initialUsers);
+interface MessengerProps {
+  currentUser: User;
+}
+
+export function Messenger({ currentUser }: MessengerProps) {
+  const [users] = useState<User[]>(allUsers.filter(u => u.id !== currentUser.id));
   const [messages] = useState<Message[]>(initialMessages);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(users[0]?.id || null);
   const isMobile = useIsMobile();
 
   const selectedUser = users.find((user) => user.id === selectedUserId);
-
-  const chatMessages = messages.filter(
-    (msg) =>
-      (msg.senderId === currentUser.id && msg.recipientId === selectedUserId) ||
-      (msg.senderId === selectedUserId && msg.recipientId === currentUser.id)
-  );
 
   const handleSelectUser = (userId: string) => {
     setSelectedUserId(userId);
@@ -70,7 +68,7 @@ export function Messenger() {
           ) : (
             <div className="hidden md:flex flex-col items-center justify-center h-full gap-4 text-center">
               <PigeonIcon className="h-24 w-24 text-muted-foreground/50" />
-              <h2 className="text-2xl font-semibold">Добро пожаловать в Coo Messenger</h2>
+              <h2 className="text-2xl font-semibold">Добро пожаловать в Go Messenger</h2>
               <p className="text-muted-foreground">Выберите чат, чтобы начать общение.</p>
             </div>
           )}

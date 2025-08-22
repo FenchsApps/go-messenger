@@ -66,7 +66,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser,
                   'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
                 },
-                message.type !== 'text' && 'p-1'
+                message.type === 'sticker' && 'p-1 bg-transparent'
               )}
             >
               {message.forwardedFrom && (

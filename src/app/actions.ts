@@ -67,7 +67,7 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
         const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
             recipientId,
-            text: 'Sticker',
+            text: '',
             timestamp: serverTimestamp(),
             type: 'sticker',
             stickerUrl,

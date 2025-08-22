@@ -1,5 +1,3 @@
-
-
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -33,7 +31,7 @@ export function ContactList({ users, selectedUserId, onSelectUser, onLogout, isL
           {isLoading ? (
             Array.from({length: 5}).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 p-3">
-                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <Skeleton className="h-10 w-10 rounded-full" />
                     <div className="flex-1 space-y-2">
                         <Skeleton className="h-4 w-3/4" />
                         <Skeleton className="h-3 w-1/2" />
@@ -46,18 +44,18 @@ export function ContactList({ users, selectedUserId, onSelectUser, onLogout, isL
                 key={user.id}
                 onClick={() => onSelectUser(user.id)}
                 className={cn(
-                  'flex items-center w-full gap-3 p-3 rounded-lg text-left transition-colors',
+                  'flex items-center w-full gap-3 p-2 rounded-lg text-left transition-colors',
                   selectedUserId === user.id ? 'bg-accent' : 'hover:bg-accent/50'
                 )}
               >
                 <div className="relative">
-                  <Avatar className="h-12 w-12 border-2 border-background">
+                  <Avatar className="h-10 w-10 border-2 border-background">
                     <AvatarImage src={user.avatar} alt={user.name} />
                     <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <span
                     className={cn(
-                      'absolute bottom-0 right-0 block h-3 w-3 rounded-full border-2 border-card',
+                      'absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full border-2 border-card',
                       {
                         'bg-green-500': user.status === 'Online',
                         'bg-gray-400': user.status === 'Offline',
@@ -67,9 +65,9 @@ export function ContactList({ users, selectedUserId, onSelectUser, onLogout, isL
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-base">{user.name}</p>
-                  <p className="text-sm text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground truncate">
                     {user.status === 'Online' ? 'В сети' : 
-                      user.lastSeen ? `Был(а) в сети ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети'}
+                      user.lastSeen ? `Был(а) ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети'}
                   </p>
                 </div>
               </button>

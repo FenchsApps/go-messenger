@@ -1,11 +1,10 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import type { Message, User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { MessageMenu } from './message-menu';
-import { Skeleton } from './ui/skeleton';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -67,8 +66,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser,
                   'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
                 },
-                message.type !== 'text' && 'p-1',
-                message.type === 'audio' && 'p-2'
+                message.type !== 'text' && 'p-1'
               )}
             >
               {message.forwardedFrom && (
@@ -87,19 +85,6 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   data-ai-hint="sticker"
                 />
               )}
-               {message.type === 'image' && message.imageUrl && (
-                 <Image
-                  src={message.imageUrl}
-                  alt="image"
-                  width={250}
-                  height={250}
-                  className="rounded-md object-cover max-w-full"
-                  data-ai-hint="sent image"
-                />
-               )}
-               {message.type === 'audio' && message.audioUrl && (
-                 <audio controls src={message.audioUrl} className="max-w-full" />
-               )}
                {message.type === 'text' && (
                 <p className="whitespace-pre-wrap">{message.text}</p>
               )}

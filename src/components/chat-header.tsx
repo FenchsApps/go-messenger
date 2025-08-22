@@ -1,7 +1,7 @@
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Phone, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -11,10 +11,9 @@ interface ChatHeaderProps {
   user: User;
   isMobile: boolean;
   onBack: () => void;
-  onCall: () => void;
 }
 
-export function ChatHeader({ user, isMobile, onBack, onCall }: ChatHeaderProps) {
+export function ChatHeader({ user, isMobile, onBack }: ChatHeaderProps) {
   return (
     <div className="flex items-center justify-between p-2 md:p-4 border-b">
       <div className="flex items-center gap-3">
@@ -43,9 +42,6 @@ export function ChatHeader({ user, isMobile, onBack, onCall }: ChatHeaderProps) 
           </div>
         </div>
       </div>
-      <Button variant="ghost" size="icon" onClick={onCall}>
-        <Phone className="h-6 w-6 text-primary" />
-      </Button>
     </div>
   );
 }

@@ -46,8 +46,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendImage, onSendAud
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], 'voice-message.webm', { type: 'audio/webm' });
+        const audioFile = new File(audioChunks, 'voice-message.webm', { type: 'audio/webm' });
         onSendAudio(audioFile);
          // Clean up stream
         stream.getTracks().forEach(track => track.stop());

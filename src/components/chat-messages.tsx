@@ -1,17 +1,21 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { Message, User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Image from 'next/image';
 import { format } from 'date-fns';
+import { MessageMenu } from './message-menu';
 
 interface ChatMessagesProps {
   messages: Message[];
   currentUser: User;
   chatPartner: User;
+  onEdit: (message: Message) => void;
+  onDelete: (messageId: string) => void;
+  onForward: (message: Message) => void;
 }
 
-export function ChatMessages({ messages, currentUser, chatPartner }: ChatMessagesProps) {
+export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDelete, onForward }: ChatMessagesProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,11 +34,21 @@ export function ChatMessages({ messages, currentUser, chatPartner }: ChatMessage
         return (
           <div
             key={message.id}
-            className={cn('flex items-end gap-2', {
+            className={cn('group flex items-end gap-2', {
               'justify-end': isCurrentUser,
               'justify-start': !isCurrentUser,
             })}
           >
+             {isCurrentUser && (
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <MessageMenu
+                  message={message}
+                  onEdit={() => onEdit(message)}
+                  onDelete={() => onDelete(message.id)}
+                  onForward={() => onForward(message)}
+                />
+              </div>
+            )}
             {!isCurrentUser && (
               <div className="w-8">
                 {showAvatar && (
@@ -47,13 +61,19 @@ export function ChatMessages({ messages, currentUser, chatPartner }: ChatMessage
             )}
             <div
               className={cn(
-                'group relative max-w-sm rounded-2xl px-4 py-2 transition-all duration-300 animate-in fade-in-25 slide-in-from-bottom-4',
+                'relative max-w-sm rounded-2xl px-4 py-2 transition-all duration-300 animate-in fade-in-25 slide-in-from-bottom-4',
                 {
                   'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser,
                   'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
                 }
               )}
             >
+              {message.forwardedFrom && (
+                <div className="border-l-2 border-blue-300 pl-2 mb-1 text-xs opacity-80">
+                  <p className="font-bold">Переслано от {message.forwardedFrom.name}</p>
+                  <p>{message.forwardedFrom.text}</p>
+                </div>
+              )}
               {message.type === 'sticker' ? (
                 <Image
                   src={message.stickerUrl!}
@@ -66,10 +86,22 @@ export function ChatMessages({ messages, currentUser, chatPartner }: ChatMessage
               ) : (
                 <p className="whitespace-pre-wrap">{message.text}</p>
               )}
-              <div className="absolute bottom-1 right-2 hidden group-hover:block text-xs text-muted-foreground/50">
-                {format(new Date(message.timestamp), 'HH:mm')}
+              <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground/50 pt-1">
+                 {message.edited && <span className="text-xs">(изм.)</span>}
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    {format(new Date(message.timestamp), 'HH:mm')}
+                </span>
               </div>
             </div>
+             {!isCurrentUser && (
+               <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <MessageMenu
+                  message={message}
+                  isOtherUser={true}
+                  onForward={() => onForward(message)}
+                />
+              </div>
+            )}
           </div>
         );
       })}

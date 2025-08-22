@@ -15,4 +15,9 @@ export type Message = {
   timestamp: number;
   type: 'text' | 'sticker';
   stickerUrl?: string;
+  edited?: boolean;
+  forwardedFrom?: {
+    name: string;
+    text: string;
+  } | null;
 };

@@ -2,7 +2,7 @@
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export async function getFilteredMessage(text: string) {
   if (!text.trim()) {
@@ -35,7 +35,7 @@ function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
 }
 
-export async function sendMessage(senderId: string, recipientId: string, text: string) {
+export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }) {
     if (!text.trim()) {
         return { error: 'Message cannot be empty' };
     }
@@ -49,6 +49,8 @@ export async function sendMessage(senderId: string, recipientId: string, text: s
             text,
             timestamp: serverTimestamp(),
             type: 'text',
+            edited: false,
+            forwardedFrom: forwardedFrom || null,
         });
         return { error: null };
     } catch (error) {
@@ -73,5 +75,33 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
     } catch (error) {
         console.error("Error sending sticker:", error);
         return { error: 'Failed to send sticker' };
+    }
+}
+
+export async function editMessage(chatId: string, messageId: string, newText: string) {
+    if (!newText.trim()) {
+        return { error: "Message can't be empty" };
+    }
+    try {
+        const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+        await updateDoc(messageRef, {
+            text: newText,
+            edited: true,
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("Error editing message:", error);
+        return { error: 'Failed to edit message' };
+    }
+}
+
+export async function deleteMessage(chatId: string, messageId: string) {
+    try {
+        const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+        await deleteDoc(messageRef);
+        return { success: true };
+    } catch (error) {
+        console.error("Error deleting message:", error);
+        return { error: 'Failed to delete message' };
     }
 }

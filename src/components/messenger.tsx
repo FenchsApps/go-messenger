@@ -1,15 +1,15 @@
 
-// @ts-nocheck
 'use client';
 
-import { useState } from 'react';
-import { allUsers } from '@/lib/data';
-import type { User, Message } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import type { User } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { ContactList } from './contact-list';
 import { ChatView } from './chat-view';
 import { PigeonIcon } from './icons';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface MessengerProps {
   currentUser: User;
@@ -17,10 +17,45 @@ interface MessengerProps {
 }
 
 export function Messenger({ currentUser, onLogout }: MessengerProps) {
-  const [users] = useState<User[]>(allUsers.filter(u => u.id !== currentUser.id));
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(users[0]?.id || null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const usersData: User[] = [];
+      snapshot.forEach((doc) => {
+        if (doc.id !== currentUser.id) {
+          const data = doc.data();
+          usersData.push({
+            id: doc.id,
+            name: data.name,
+            avatar: data.avatar,
+            status: data.status,
+            phone: data.phone,
+            lastSeen: data.lastSeen?.toDate().getTime(),
+          });
+        }
+      });
+      setUsers(usersData);
+      if(!selectedUserId && usersData.length > 0) {
+        setSelectedUserId(usersData[0].id)
+      }
+    });
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        if(currentUser) {
+            setDoc(doc(db, 'users', currentUser.id), { status: 'Offline', lastSeen: serverTimestamp() }, { merge: true });
+        }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+        unsubscribe();
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+  }, [currentUser.id, selectedUserId]);
+  
   const selectedUser = users.find((user) => user.id === selectedUserId);
 
   const handleSelectUser = (userId: string) => {

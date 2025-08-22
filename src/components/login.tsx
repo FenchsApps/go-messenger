@@ -10,6 +10,9 @@ import { Messenger } from './messenger';
 import { PigeonIcon } from './icons';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+
 
 export function Login() {
   const [phone, setPhone] = useState('');
@@ -17,11 +20,16 @@ export function Login() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const { toast } = useToast();
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const user = allUsers.find(
       (u) => u.phone === phone && u.password === password
     );
     if (user) {
+      await setDoc(doc(db, 'users', user.id), {
+        ...user,
+        status: 'Online',
+        lastSeen: serverTimestamp()
+      }, { merge: true });
       setCurrentUser(user);
     } else {
       toast({
@@ -32,7 +40,13 @@ export function Login() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if(currentUser) {
+        await setDoc(doc(db, 'users', currentUser.id), {
+            status: 'Offline',
+            lastSeen: serverTimestamp()
+        }, { merge: true });
+    }
     setCurrentUser(null);
     setPhone('');
     setPassword('');

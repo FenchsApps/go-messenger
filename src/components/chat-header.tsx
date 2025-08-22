@@ -3,6 +3,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Phone, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { ru } from 'date-fns/locale';
+
 
 interface ChatHeaderProps {
   user: User;
@@ -33,7 +36,10 @@ export function ChatHeader({ user, isMobile, onBack, onCall }: ChatHeaderProps) 
                 'bg-gray-400': user.status === 'Offline',
               })}
             />
-            <span className="text-xs text-muted-foreground">{user.status}</span>
+            <span className="text-xs text-muted-foreground">
+               {user.status === 'Online' ? 'В сети' : 
+                    user.lastSeen ? `Был(а) в сети ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети'}
+            </span>
           </div>
         </div>
       </div>

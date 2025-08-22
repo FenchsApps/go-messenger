@@ -5,6 +5,7 @@ export type User = {
   status: 'Online' | 'Offline';
   phone: string;
   password?: string;
+  lastSeen?: number;
 };
 
 export type Message = {

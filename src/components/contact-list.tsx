@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils';
 import { PigeonIcon } from './icons';
 import { Button } from './ui/button';
 import { LogOut } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { ru } from 'date-fns/locale';
+
 
 interface ContactListProps {
   users: User[];
@@ -51,7 +54,8 @@ export function ContactList({ users, selectedUserId, onSelectUser, onLogout }: C
               <div className="flex-1">
                 <p className="font-semibold text-base">{user.name}</p>
                 <p className="text-sm text-muted-foreground truncate">
-                  {user.status === 'Online' ? 'В сети' : 'Не в сети'}
+                  {user.status === 'Online' ? 'В сети' : 
+                    user.lastSeen ? `Был(а) в сети ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети'}
                 </p>
               </div>
             </button>

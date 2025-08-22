@@ -1,11 +1,9 @@
 'use client';
-import { useOptimistic, useState, useTransition } from 'react';
+import { useOptimistic, useState } from 'react';
 import type { Message, User } from '@/lib/types';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
 import { ChatInput } from './chat-input';
-import { getFilteredMessage } from '@/app/actions';
-import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Phone } from 'lucide-react';
@@ -25,7 +23,6 @@ export function ChatView({
   isMobile,
   onBack,
 }: ChatViewProps) {
-  const { toast } = useToast();
   const [messages, setMessages] = useState(initialMessages);
   const [isCalling, setIsCalling] = useState(false);
 
@@ -33,7 +30,7 @@ export function ChatView({
     messages,
     (state, newMessage) => [...state, newMessage]
   );
-  
+
   const handleSendMessage = async (text: string) => {
     const newMessage: Message = {
       id: crypto.randomUUID(),
@@ -44,9 +41,9 @@ export function ChatView({
       type: 'text',
     };
     addOptimisticMessage(newMessage);
-    
-    // In a real app, you'd send the message to the server here.
+    // In a real app, you'd send the message to a server here.
     // For this demo, we just add it to the local state.
+    // This would be replaced with a database call.
     setMessages((prev) => [...prev, newMessage]);
   };
 
@@ -61,9 +58,10 @@ export function ChatView({
       stickerUrl,
     };
     addOptimisticMessage(newMessage);
+    // This would also be a server call
     setMessages((prev) => [...prev, newMessage]);
   };
-  
+
   const handleCall = () => {
     setIsCalling(true);
     setTimeout(() => setIsCalling(false), 3000); // Mock call duration

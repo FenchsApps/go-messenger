@@ -35,56 +35,7 @@ export const allUsers: User[] = [
   },
 ];
 
-export const messages: Message[] = [
-  {
-    id: 'msg-1',
-    senderId: 'mom',
-    recipientId: 'rodion',
-    text: 'Привет! Как дела?',
-    timestamp: Date.now() - 1000 * 60 * 5,
-    type: 'text',
-  },
-  {
-    id: 'msg-2',
-    senderId: 'rodion',
-    recipientId: 'mom',
-    text: 'Привет, мам! Все хорошо, спасибо!',
-    timestamp: Date.now() - 1000 * 60 * 4,
-    type: 'text',
-  },
-  {
-    id: 'msg-3',
-    senderId: 'mom',
-    recipientId: 'rodion',
-    text: 'Отлично! Не забудь купить хлеб по дороге домой.',
-    timestamp: Date.now() - 1000 * 60 * 3,
-    type: 'text',
-  },
-  {
-    id: 'msg-4',
-    senderId: 'rodion',
-    recipientId: 'mom',
-    text: 'Хорошо, куплю!',
-    timestamp: Date.now() - 1000 * 60 * 2,
-    type: 'text',
-  },
-  {
-    id: 'msg-5',
-    senderId: 'yesenia',
-    recipientId: 'rodion',
-    text: 'Привет, пойдем гулять?',
-    timestamp: Date.now() - 1000 * 60 * 10,
-    type: 'text',
-  },
-  {
-    id: 'msg-6',
-    senderId: 'sanya',
-    recipientId: 'rodion',
-    text: 'го в кс',
-    timestamp: Date.now() - 1000 * 60 * 15,
-    type: 'text',
-  }
-];
+export const messages: Message[] = [];
 
 export const stickers = [
   { id: 'sticker-1', url: 'https://placehold.co/128x128/FFFFFF/000000?text=👍', hint: 'thumbs up' },

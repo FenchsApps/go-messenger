@@ -1,5 +1,5 @@
 'use client';
-import { useOptimistic, useState, useEffect, useCallback, useTransition } from 'react';
+import { useState, useEffect, useCallback, useTransition } from 'react';
 import type { Message, User } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
@@ -40,28 +40,8 @@ export function ChatView({
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState('');
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
-  const [isPending, startTransition] = useTransition();
-
   const { toast } = useToast();
-
-  const [optimisticMessages, setOptimisticMessages] = useOptimistic<Message[], {action: 'add' | 'delete' | 'update', message: Message | {id: string}}>(
-    messages,
-    (state, {action, message}) => {
-      switch (action) {
-        case 'add':
-          // Prevent adding duplicate temporary messages
-          if (state.find(m => m.id === message.id)) return state;
-          return [...state, message as Message];
-        case 'delete':
-            return state.filter(m => m.id !== message.id);
-        case 'update':
-            return state.map(m => m.id === message.id ? {...m, ...message} : m);
-        default:
-          return state;
-      }
-    }
-  );
-
+  
   const chatId = getChatId(currentUser.id, chatPartner.id);
   
   useEffect(() => {
@@ -81,24 +61,10 @@ export function ChatView({
     });
 
     return () => unsubscribe();
-  }, [currentUser.id, chatPartner.id, chatId]);
+  }, [chatId]);
 
 
   const handleSendMessage = async (text: string) => {
-    const tempId = crypto.randomUUID()
-    
-    startTransition(() => {
-        const newMessage: Message = {
-          id: tempId,
-          senderId: currentUser.id,
-          recipientId: chatPartner.id,
-          text: text,
-          timestamp: Date.now(),
-          type: 'text',
-        };
-        setOptimisticMessages({ action: 'add', message: newMessage });
-    });
-
     const result = await sendMessage(currentUser.id, chatPartner.id, text);
     if(result.error) {
         toast({
@@ -106,29 +72,11 @@ export function ChatView({
             description: result.error,
             variant: "destructive",
         });
-        startTransition(() => {
-            setOptimisticMessages({ action: 'delete', message: { id: tempId } });
-        });
     }
   };
 
-  const handleSendSticker = (stickerUrl: string) => {
-    const tempId = crypto.randomUUID();
-    
-    startTransition(() => {
-        const newMessage: Message = {
-          id: tempId,
-          senderId: currentUser.id,
-          recipientId: chatPartner.id,
-          text: 'Sticker',
-          timestamp: Date.now(),
-          type: 'sticker',
-          stickerUrl,
-        };
-        setOptimisticMessages({action: 'add', message: newMessage});
-    });
-
-    sendSticker(currentUser.id, chatPartner.id, stickerUrl);
+  const handleSendSticker = async (stickerUrl: string) => {
+    await sendSticker(currentUser.id, chatPartner.id, stickerUrl);
   };
 
   const fileToDataUrl = (file: File): Promise<string> => {
@@ -141,22 +89,7 @@ export function ChatView({
   };
 
   const handleSendImage = async (imageFile: File) => {
-    const tempId = crypto.randomUUID();
     const dataUrl = await fileToDataUrl(imageFile);
-    
-    startTransition(() => {
-        const newMessage: Message = {
-            id: tempId,
-            senderId: currentUser.id,
-            recipientId: chatPartner.id,
-            text: 'Image',
-            timestamp: Date.now(),
-            type: 'image',
-            imageUrl: dataUrl, // Optimistically use data URL
-        };
-        setOptimisticMessages({ action: 'add', message: newMessage });
-    });
-    
     const result = await sendImage(currentUser.id, chatPartner.id, dataUrl);
 
     if (result.error) {
@@ -166,29 +99,11 @@ export function ChatView({
         description: "Не удалось отправить изображение. Попробуйте снова.",
         variant: "destructive",
       });
-      startTransition(() => {
-        setOptimisticMessages({ action: 'delete', message: { id: tempId } });
-      });
     }
   };
 
   const handleSendAudio = async (audioFile: File) => {
-    const tempId = crypto.randomUUID();
     const dataUrl = await fileToDataUrl(audioFile);
-    
-    startTransition(() => {
-        const newMessage: Message = {
-            id: tempId,
-            senderId: currentUser.id,
-            recipientId: chatPartner.id,
-            text: 'Voice Message',
-            timestamp: Date.now(),
-            type: 'audio',
-            audioUrl: dataUrl,
-        };
-        setOptimisticMessages({ action: 'add', message: newMessage });
-    });
-    
     const result = await sendAudio(currentUser.id, chatPartner.id, dataUrl);
 
     if(result.error) {
@@ -197,9 +112,6 @@ export function ChatView({
         title: "Ошибка отправки аудио",
         description: "Не удалось отправить аудиосообщение. Попробуйте снова.",
         variant: "destructive",
-      });
-      startTransition(() => {
-        setOptimisticMessages({ action: 'delete', message: { id: tempId } });
       });
     }
   };
@@ -218,31 +130,18 @@ export function ChatView({
   const handleSaveEdit = async () => {
     if (!editingMessage) return;
 
-    startTransition(() => {
-      setOptimisticMessages({action: 'update', message: {...editingMessage, text: editedText, edited: true}});
-    });
-
     const result = await editMessage(chatId, editingMessage.id, editedText);
     if(result.error){
         toast({ title: "Ошибка", description: result.error, variant: 'destructive' });
-        // Revert optimistic update
-        startTransition(() => {
-            setOptimisticMessages({action: 'update', message: editingMessage});
-        });
     }
     setEditingMessage(null);
     setEditedText('');
   };
 
   const handleDelete = async (messageId: string) => {
-     startTransition(() => {
-        setOptimisticMessages({action: 'delete', message: {id: messageId}});
-     });
-     
      const result = await deleteMessage(chatId, messageId);
      if(result.error){
         toast({ title: "Ошибка", description: result.error, variant: 'destructive' });
-        // Revert optimistic update might be complex, refetching or smarter state management is needed
      }
   };
 
@@ -270,7 +169,7 @@ export function ChatView({
     <div className="flex flex-col h-full bg-background">
       <ChatHeader user={chatPartner} isMobile={isMobile} onBack={onBack} onCall={handleCall} />
       <ChatMessages
-        messages={optimisticMessages}
+        messages={messages}
         currentUser={currentUser}
         chatPartner={chatPartner}
         onEdit={handleEdit}

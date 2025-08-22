@@ -84,10 +84,9 @@ export async function sendImage(senderId: string, recipientId: string, dataUrl: 
     
     try {
         const storageRef = ref(storage, `chats/${chatId}/images/${Date.now()}`);
-        // Remove the data URL prefix
         const base64Data = dataUrl.split(',')[1];
-        const snapshot = await uploadString(storageRef, base64Data, 'base64');
-        const downloadURL = await getDownloadURL(snapshot.ref);
+        await uploadString(storageRef, base64Data, 'base64');
+        const downloadURL = await getDownloadURL(storageRef);
 
         const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
@@ -98,17 +97,18 @@ export async function sendImage(senderId: string, recipientId: string, dataUrl: 
             imageUrl: downloadURL,
         });
         
-        const messageData = {
-          id: docRef.id,
-          senderId,
-          recipientId,
-          text: 'Image',
-          timestamp: Date.now(),
-          type: 'image',
-          imageUrl: downloadURL,
+        return { 
+            error: null, 
+            data: {
+                id: docRef.id,
+                senderId,
+                recipientId,
+                text: 'Image',
+                timestamp: Date.now(),
+                type: 'image',
+                imageUrl: downloadURL,
+            } 
         };
-
-        return { error: null, data: messageData };
     } catch (error) {
         console.error("Error sending image:", error);
         return { error: 'Failed to send image' };
@@ -121,8 +121,8 @@ export async function sendAudio(senderId: string, recipientId: string, dataUrl: 
     try {
         const storageRef = ref(storage, `chats/${chatId}/audio/${Date.now()}.webm`);
         const base64Data = dataUrl.split(',')[1];
-        const snapshot = await uploadString(storageRef, base64Data, 'base64');
-        const downloadURL = await getDownloadURL(snapshot.ref);
+        await uploadString(storageRef, base64Data, 'base64');
+        const downloadURL = await getDownloadURL(storageRef);
 
         const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
@@ -133,17 +133,18 @@ export async function sendAudio(senderId: string, recipientId: string, dataUrl: 
             audioUrl: downloadURL,
         });
         
-        const messageData = {
-          id: docRef.id,
-          senderId,
-          recipientId,
-          text: 'Voice message',
-          timestamp: Date.now(),
-          type: 'audio',
-          audioUrl: downloadURL,
+         return { 
+            error: null, 
+            data: {
+                id: docRef.id,
+                senderId,
+                recipientId,
+                text: 'Voice message',
+                timestamp: Date.now(),
+                type: 'audio',
+                audioUrl: downloadURL,
+            }
         };
-
-        return { error: null, data: messageData };
     } catch (error) {
         console.error("Error sending audio:", error);
         return { error: 'Failed to send audio' };

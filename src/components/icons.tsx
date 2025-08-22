@@ -14,22 +14,23 @@ export function PigeonIcon(props: SVGProps<SVGSVGElement>) {
       strokeLinejoin="round"
       {...props}
     >
-      {/* Pigeon Body */}
-      <path d="M10.2,3.2A2.47,2.47,0,0,1,12.6,3a2.38,2.38,0,0,1,2.3,1.9" />
-      <path d="M9.2,12.7A2.35,2.35,0,0,0,4,13.6a2,2,0,0,0-1.2.5,2.2,2.2,0,0,0-.8,1.6,2.35,2.35,0,0,0,1.1,2.2,2.5,2.5,0,0,0,2.1.2l6.2-2.1" />
-      <path d="M13,22a2,2,0,0,0,2-2" />
-      <path d="M10,18a2,2,0,0,1-2,2" />
-      <path d="M14.7,5.5a2.12,2.12,0,0,1-1.9-1.3" />
-      
+      {/* Pigeon Body & Head */}
+      <path d="M22 8.6c0-1.4-1.2-2.6-2.6-2.6H14" />
+      <path d="M15.4 12.4c-1.8-1.8-3.6-1.8-5.4 0" />
+      <path d="M11 18.6c-1.7 0-3.3-.8-4.3-2.2" />
+      <path d="M15.2 21.6c-2.4 0-4.8-1.6-4.8-4.2 0-2.8 2.2-4.8 4.6-5" />
+      <path d="M5.4 15c-1.2 0-2.3.7-2.7 1.8" />
+      <path d="M11.6 6.2c0-2.4-1.4-4.2-3.6-4.2s-3.6 1.8-3.6 4.2c0 2.4 1.6 4.2 3.6 4.2" />
+
       {/* Postcard with "Go" */}
-      <g transform="rotate(25 16 9)">
-        <rect x="13" y="7" width="10" height="7" rx="1" fill="hsl(var(--card))" stroke="currentColor" />
+      <g>
+        <rect x="13" y="3" width="7" height="5" rx="1" fill="hsl(var(--card))" stroke="currentColor" strokeWidth="1"/>
         <text
-          x="18"
-          y="12.5"
+          x="16.5"
+          y="6"
           textAnchor="middle"
           dominantBaseline="middle"
-          fontSize="5"
+          fontSize="3"
           fontWeight="bold"
           fill="currentColor"
           stroke="none"
@@ -37,9 +38,6 @@ export function PigeonIcon(props: SVGProps<SVGSVGElement>) {
           Go
         </text>
       </g>
-      
-      {/* Pigeon Head and Wing */}
-      <path d="M20,9.3l-2,2.5a2.27,2.27,0,0,1-3.6-1L13,9.2a4.47,4.47,0,0,0-6.6-1.9" />
     </svg>
   );
 }

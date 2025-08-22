@@ -25,18 +25,23 @@ export function Login() {
 
   useEffect(() => {
     const checkLoggedInUser = async () => {
-      const userId = getCookie(LOGGED_IN_USER_COOKIE);
-      if (userId) {
-        const user = allUsers.find((u) => u.id === userId);
-        if (user) {
-          await setDoc(doc(db, 'users', user.id), {
-            status: 'Online',
-            lastSeen: serverTimestamp()
-          }, { merge: true });
-          setCurrentUser(user);
+      try {
+        const userId = getCookie(LOGGED_IN_USER_COOKIE);
+        if (userId) {
+          const user = allUsers.find((u) => u.id === userId);
+          if (user) {
+            await setDoc(doc(db, 'users', user.id), {
+              status: 'Online',
+              lastSeen: serverTimestamp()
+            }, { merge: true });
+            setCurrentUser(user);
+          }
         }
+      } catch (error) {
+        console.error("Error checking logged in user:", error);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     checkLoggedInUser();
   }, []);

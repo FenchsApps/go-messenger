@@ -131,7 +131,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
           title: 'Ошибка доступа',
           description: 'Не удалось получить доступ к камере и микрофону. Пожалуйста, проверьте разрешения и выбранные устройства в настройках.',
         });
-        // Can't use handleHangup here as callId might not be set
         onEndCall();
       }
     };
@@ -153,14 +152,15 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             pcRef.current = null;
         }
     };
-  }, [videoDeviceId, audioDeviceId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!callId) return;
 
     const unsubscribe = onSnapshot(doc(db, 'calls', callId), async (docSnapshot) => {
         const data = docSnapshot.data();
-        if (!data) { // Document was deleted, call has ended.
+        if (!data) { 
              handleHangUp(false, callStatus === 'connected' ? 'ended' : 'missed');
              return;
         }
@@ -168,7 +168,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         const pc = pcRef.current;
         if (!pc) return;
         
-        // Ensure remote description is set only once
         if (data.answer && pc.remoteDescription === null) {
             await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
         }
@@ -185,7 +184,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         snapshot.docChanges().forEach((change) => {
             if (change.type === 'added') {
                 const candidate = new RTCIceCandidate(change.doc.data());
-                if(pcRef.current?.remoteDescription) { // Only add candidates after remote description is set
+                if(pcRef.current?.remoteDescription) { 
                     pcRef.current?.addIceCandidate(candidate);
                 }
             }
@@ -196,6 +195,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         unsubscribe();
         unsubscribeCandidates();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callId, isReceivingCall]);
 
 
@@ -213,12 +213,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     if(callId) {
         await updateCallStatus(callId, 'declined');
     }
-    // End the call immediately on the client-side to prevent UI loops
     onEndCall(); 
   };
 
   const handleHangUp = async (isInitiator: boolean, status: 'ended' | 'declined' | 'missed') => {
-      // Prevent multiple hangup calls
       if (callStatus === 'ended' || callStatus === 'declined') return;
 
       if (!callId) {
@@ -226,15 +224,13 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
           return;
       };
 
-      // To prevent multiple logs, only the initiator of the hangup action deletes the document.
       if (isInitiator) {
          await hangUp(callId);
       }
       
       const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
       
-      // Log the call only once per client.
-      if(callStatus !== 'ended' && callStatus !== 'declined') { // Avoid duplicate logs
+      if(callStatus !== 'ended' && callStatus !== 'declined') {
         logCall({
             senderId: currentUser.id,
             recipientId: chatPartner.id,
@@ -243,7 +239,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             callerId: initialCallState?.callerId || currentUser.id,
         });
       }
-      setCallStatus('ended'); // Update local state to prevent re-entry
+      setCallStatus('ended'); 
       onEndCall();
   };
 

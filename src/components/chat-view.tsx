@@ -112,18 +112,19 @@ export function ChatView({
         .map(change => change.doc.data() as Message)
         .filter(msg => msg.senderId !== currentUser.id && !msg.read);
       
-      if (!isWindowFocused && newUnreadMessages.length > 0) {
+      if (newUnreadMessages.length > 0) {
         const lastMessage = newUnreadMessages[newUnreadMessages.length - 1];
-        if (lastMessage.read) return;
-
         const sender = allUsers.find(u => u.id === lastMessage.senderId);
+
         if (sender && lastMessage.type !== 'call') {
             const notificationText = lastMessage.type === 'text' ? lastMessage.text : (lastMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
             
+            // Send notification to WebView immediately if available
             if (window.Android?.showNewMessageNotification) {
                window.Android.showNewMessageNotification(sender.name, notificationText, sender.avatar);
             } 
-            else if (Notification.permission === 'granted') {
+            // Send browser notification only if window is not focused
+            else if (!isWindowFocused && Notification.permission === 'granted') {
                new Notification(`Новое сообщение от ${sender.name}`, {
                    body: notificationText,
                    icon: sender.avatar

@@ -598,7 +598,6 @@ async function updateCallStatus(chatId, status, duration, callerId, calleeId) {
     if (callDoc.exists()) {
         const callData = callDoc.data();
         if (status === 'ended' || status === 'declined') {
-            await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["deleteDoc"])(callDocRef);
             if (callerId && calleeId) {
                 // Determine the correct call status for the message
                 // If callData.status is not 'answered', it was missed (if not declined)
@@ -619,6 +618,7 @@ async function updateCallStatus(chatId, status, duration, callerId, calleeId) {
                     duration: duration
                 });
             }
+            await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["deleteDoc"])(callDocRef);
         } else if (status === 'answered') {
             await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateDoc"])(callDocRef, {
                 status

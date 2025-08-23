@@ -199,7 +199,6 @@ export async function updateCallStatus(
     if (callDoc.exists()) {
         const callData = callDoc.data();
         if (status === 'ended' || status === 'declined') {
-            await deleteDoc(callDocRef);
             
             if(callerId && calleeId) {
                 // Determine the correct call status for the message
@@ -223,6 +222,7 @@ export async function updateCallStatus(
                     duration: duration,
                 })
             }
+            await deleteDoc(callDocRef);
         } else if (status === 'answered') {
             await updateDoc(callDocRef, { status });
         }

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, getDocs, limit } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 import { CallView } from './call-view';
 
@@ -52,6 +52,7 @@ export function ChatView({
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
+  const isInitialLoadRef = useRef(true);
   
   useEffect(() => {
     const handleFocus = () => setIsWindowFocused(true);
@@ -71,8 +72,7 @@ export function ChatView({
 
     const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
       const newMessages: Message[] = [];
-      let isInitialLoad = messages.length === 0;
-
+      
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const newMessage = {
@@ -83,7 +83,7 @@ export function ChatView({
         newMessages.push(newMessage);
         
         // Show notification for new messages
-        if (!isInitialLoad && newMessage.senderId !== currentUser.id && !isWindowFocused && Notification.permission === 'granted') {
+        if (!isInitialLoadRef.current && newMessage.senderId !== currentUser.id && !isWindowFocused && Notification.permission === 'granted') {
              const sender = allUsers.find(u => u.id === newMessage.senderId);
              const notificationText = newMessage.type === 'text' ? newMessage.text : (newMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
              new Notification(`Новое сообщение от ${sender?.name || 'Unknown'}`, {
@@ -93,7 +93,12 @@ export function ChatView({
         }
       });
       setMessages(newMessages);
-      isInitialLoad = false;
+
+      if (isInitialLoadRef.current) {
+        setTimeout(() => {
+          isInitialLoadRef.current = false;
+        }, 1000); // Mark as not initial load after a short delay
+      }
     });
 
     const callDocRef = doc(db, 'calls', chatId);
@@ -116,7 +121,7 @@ export function ChatView({
         unsubscribeMessages();
         unsubscribeCalls();
     }
-  }, [chatId, currentUser.id, isWindowFocused, messages.length, isCalling, chatPartner.name, chatPartner.avatar]);
+  }, [chatId, currentUser.id, isWindowFocused, isCalling, chatPartner.name, chatPartner.avatar]);
 
 
   const handleSendMessage = async (text: string) => {
@@ -246,5 +251,3 @@ export function ChatView({
     </div>
   );
 }
-
-    

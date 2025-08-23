@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { MessageMenu } from './message-menu';
 import { stickers } from '@/lib/data';
 import { Check, CheckCheck } from 'lucide-react';
+import { useSettings } from '@/context/settings-provider';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -19,6 +20,7 @@ interface ChatMessagesProps {
 
 export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDelete, onForward }: ChatMessagesProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { textSize } = useSettings();
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -96,7 +98,14 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                 </div>
               )}
                {message.type === 'text' && message.text && (
-                <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                <p className={cn(
+                  "whitespace-pre-wrap break-words",
+                  {
+                    'text-sm': textSize === 'sm',
+                    'text-base': textSize === 'md',
+                    'text-lg': textSize === 'lg',
+                  }
+                  )}>{message.text}</p>
               )}
               <div className={cn(
                   "flex items-center justify-end gap-1.5 text-xs text-muted-foreground/80 pt-1",
@@ -106,7 +115,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity">
                     {message.timestamp && format(new Date(message.timestamp), 'HH:mm')}
                 </span>
-                {isCurrentUser && (
+                 {isCurrentUser && (
                    message.read ? <CheckCheck className="h-4 w-4 text-blue-400" /> : <Check className="h-4 w-4" />
                 )}
               </div>

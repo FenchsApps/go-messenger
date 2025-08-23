@@ -5,6 +5,7 @@ import { Send } from 'lucide-react';
 import { StickerPanel } from './sticker-panel';
 import { cn } from '@/lib/utils';
 import { GifPanel } from './gif-panel';
+import { useSettings } from '@/context/settings-provider';
 
 interface ChatInputProps {
   onSendMessage: (text: string) => Promise<void>;
@@ -15,6 +16,7 @@ interface ChatInputProps {
 export function ChatInput({ onSendMessage, onSendSticker, onSendGif }: ChatInputProps) {
   const [text, setText] = useState('');
   const [isPending, startTransition] = useTransition();
+  const { textSize } = useSettings();
 
   const handleSendMessage = async () => {
     if (!text.trim() || isPending) return;
@@ -34,7 +36,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif }: ChatInput
   return (
     <div className="p-2 md:p-4 border-t bg-card">
       <form
-        action={handleSendMessage}
+        onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
         className="relative flex items-center gap-2"
       >
         <StickerPanel onStickerSelect={onSendSticker} />
@@ -44,7 +46,14 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif }: ChatInput
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Написать сообщение..."
-          className="min-h-[44px] max-h-40 flex-1 resize-none rounded-2xl bg-background p-3 pr-12 text-base focus-visible:ring-0 focus-visible:ring-offset-0"
+          className={cn(
+            'min-h-[44px] max-h-40 flex-1 resize-none rounded-2xl bg-background p-3 pr-12 focus-visible:ring-0 focus-visible:ring-offset-0',
+            {
+              'text-sm': textSize === 'sm',
+              'text-base': textSize === 'md',
+              'text-lg': textSize === 'lg',
+            }
+            )}
           rows={1}
           disabled={isPending}
         />

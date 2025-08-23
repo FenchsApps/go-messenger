@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Skeleton } from './ui/skeleton';
 import { Badge } from './ui/badge';
+import { SettingsDialog } from './settings-dialog';
 
 
 interface ContactListProps {
@@ -22,9 +23,12 @@ export function ContactList({ users, selectedUserId, onSelectUser, onLogout, isL
   return (
     <div className="flex flex-col h-full bg-card border-r">
       <div className="p-4 border-b">
-        <div className="flex items-center gap-3">
-          <PigeonIcon className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">Go Messenger</h1>
+        <div className="flex items-center justify-between">
+            <div className='flex items-center gap-3'>
+                <PigeonIcon className="h-8 w-8 text-primary" />
+                <h1 className="text-2xl font-bold">Go Messenger</h1>
+            </div>
+            <SettingsDialog />
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">

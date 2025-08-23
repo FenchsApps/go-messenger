@@ -11,7 +11,6 @@ import { doc, onSnapshot, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useSettings } from '@/context/settings-provider';
-import { cn } from '@/lib/utils';
 
 const servers = {
   iceServers: [
@@ -30,9 +29,12 @@ interface CallViewProps {
   onEndCall: () => void;
 }
 
+type CallStatus = 'ringing' | 'connecting' | 'connected' | 'declined' | 'ended' | 'missed';
+
+
 export function CallView({ currentUser, chatPartner, isReceivingCall, initialCallState, onEndCall }: CallViewProps) {
   const [callId, setCallId] = useState<string | null>(initialCallState?.id || null);
-  const [callStatus, setCallStatus] = useState<'ringing' | 'connecting' | 'connected' | 'declined' | 'ended'>('connecting');
+  const [callStatus, setCallStatus] = useState<CallStatus>('connecting');
   
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isMicOn, setIsMicOn] = useState(true);
@@ -122,6 +124,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
           await pc.setLocalDescription(offerDescription);
           const newCallId = await startCall(currentUser.id, chatPartner.id, offerDescription);
           setCallId(newCallId);
+          setCallStatus('ringing');
         }
       } catch (error) {
         console.error("Error accessing media devices.", error);
@@ -144,13 +147,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close();
         }
-        if (localStreamRef.current) {
-            localStreamRef.current.getTracks().forEach(track => track.stop());
-        }
-        if (pcRef.current) {
-            pcRef.current.close();
-            pcRef.current = null;
-        }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -161,7 +157,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     const unsubscribe = onSnapshot(doc(db, 'calls', callId), async (docSnapshot) => {
         const data = docSnapshot.data();
         if (!data) { 
-             handleHangUp(false, callStatus === 'connected' ? 'ended' : 'missed');
+             handleHangUp(false, callStatus === 'ringing' ? 'missed' : 'ended');
              return;
         }
 
@@ -172,7 +168,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
         }
         
-        if (['declined', 'ended', 'missed'].includes(data.status)) {
+        if (data.status && ['declined', 'ended', 'missed'].includes(data.status)) {
              handleHangUp(false, data.status);
         }
     });
@@ -216,30 +212,55 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     onEndCall(); 
   };
 
-  const handleHangUp = async (isInitiator: boolean, status: 'ended' | 'declined' | 'missed') => {
-      if (callStatus === 'ended' || callStatus === 'declined') return;
-
-      if (!callId) {
-          onEndCall();
+  const handleHangUp = async (isInitiator: boolean, finalStatus: CallStatus) => {
+      // Prevent multiple hangup calls
+      if (callStatus === 'ended' || callStatus === 'declined' || callStatus === 'missed') {
+        return;
+      }
+      
+      const currentCallId = callId;
+      if (!currentCallId) {
+          if(callStatus !== 'ended') onEndCall();
+          setCallStatus('ended');
           return;
       };
 
-      if (isInitiator) {
-         await hangUp(callId);
-      }
+      // Set local status immediately to prevent re-triggers
+      setCallStatus(finalStatus); 
       
       const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
       
-      if(callStatus !== 'ended' && callStatus !== 'declined') {
-        logCall({
+      // The person who hangs up is responsible for cleaning up and logging the call
+      if (isInitiator) {
+         await hangUp(currentCallId);
+         await logCall({
             senderId: currentUser.id,
             recipientId: chatPartner.id,
-            status,
+            status: finalStatus,
             duration,
             callerId: initialCallState?.callerId || currentUser.id,
         });
+      } else {
+        // The other party might need to log the call if the initiator just disappeared (e.g. closed browser)
+        if(finalStatus !== 'declined'){
+             await logCall({
+                senderId: currentUser.id,
+                recipientId: chatPartner.id,
+                status: finalStatus,
+                duration,
+                callerId: initialCallState?.callerId || currentUser.id,
+            });
+        }
       }
-      setCallStatus('ended'); 
+      
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (pcRef.current) {
+          pcRef.current.close();
+          pcRef.current = null;
+      }
+      
       onEndCall();
   };
 
@@ -270,7 +291,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                 Пожалуйста, предоставьте доступ в настройках вашего браузера или выберите другие устройства в настройках приложения.
               </AlertDescription>
             </Alert>
-            <Button onClick={() => onEndCall()} variant="secondary" className="mt-4">Назад к чату</Button>
+            <Button onClick={() => handleHangUp(true, 'ended')} variant="secondary" className="mt-4">Назад к чату</Button>
         </div>
     )
   }
@@ -337,3 +358,5 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
+
+    

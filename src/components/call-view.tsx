@@ -146,6 +146,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         const signalsCollection = collection(db, 'calls', currentCallId, 'signals');
         // Firestore requires a composite index for this query. 
         // The error provides a link to create it in the Firebase console.
+        // If you see a 'failed-precondition' error, you MUST create this index.
         const q = query(signalsCollection, where('to', '==', currentUser.id), orderBy('createdAt', 'asc'));
 
         unsubSignals = onSnapshot(q, async (snapshot) => {
@@ -218,7 +219,9 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     setupAndStartCall();
     
     return () => {
+      if (isCleaningUp.current) return;
       isCleaningUp.current = true;
+      
       unsubCallDoc?.();
       unsubSignals?.();
       console.log("Cleaning up call view...");
@@ -244,7 +247,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once on mount
+  }, []);
 
   const handleAcceptCall = () => {
     // This button just changes the UI state.
@@ -350,5 +353,3 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
-
-    

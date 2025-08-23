@@ -100,7 +100,7 @@ export function ChatView({
         } as Message;
         newMessages.push(newMessage);
         
-        if (newMessage.senderId !== currentUser.id && !isWindowFocused) {
+        if (newMessage.senderId !== currentUser.id && !isWindowFocused && !newMessage.read) {
              const sender = allUsers.find(u => u.id === newMessage.senderId);
              if (sender) {
                  const notificationText = newMessage.type === 'text' ? newMessage.text : (newMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
@@ -123,7 +123,7 @@ export function ChatView({
       const prevMessages = messages;
       setMessages(newMessages);
 
-      if (newMessages.length > prevMessages.length && isWindowFocused) {
+      if (isWindowFocused) {
           markMessagesAsRead(chatId, currentUser.id);
       }
     });
@@ -131,7 +131,7 @@ export function ChatView({
     return () => {
         unsubscribeMessages();
     }
-  }, [chatId, currentUser.id, isWindowFocused, messages]);
+  }, [chatId, currentUser.id, isWindowFocused]);
 
 
   const handleSendMessage = async (text: string) => {
@@ -201,6 +201,7 @@ export function ChatView({
     if (result.error) {
         toast({ title: 'Ошибка', description: result.error, variant: 'destructive' });
     } else {
+        setMessages([]); // Visually clear the chat immediately
         toast({ title: 'Успех', description: 'История чата была очищена.' });
     }
     setIsClearingChat(false);

@@ -198,7 +198,7 @@ export function SchoolSticker(props: SVGProps<SVGSVGElement>) {
               <g>
                 <path
                   style={{ fill: '#5E2A41' }}
-                  d="M10.001,265.603c-2.478,0-4.958-0.914-6.892-2.756c-3.769-3.589-4.127-9.413-0.969-13.418      l51.639-68.64c1.89-2.511,4.849-3.988,7.991-3.988h39.96c5.522,0,10,4.477,10,10c0,5.523-4.478,10-10,10H66.76l-48.759,64.811      c-0.232,0.309-0.483,0.604-0.75,0.885C15.284,264.561,12.644,265.603,10.001,265.603z"
+                  d="M10.001,265.603c-2.478,0-4.958-0.914-6.892-2.756c-3.769-3.589-4.127-9.413-0.969-13.418      l51.639-68.64c1.89-2.511,4.849-3.988,7.991-3.988h39.96c5.522,0,10,4.477,10,10c0-5.523-4.478-10-10-10H66.76l-48.759,64.811      c-0.232,0.309-0.483,0.604-0.75,0.885C15.284,264.561,12.644,265.603,10.001,265.603z"
                 />
               </g>
               <g>
@@ -234,36 +234,47 @@ export function SchoolSticker(props: SVGProps<SVGSVGElement>) {
             </g>
           </g>
         </g>
-      </svg>
-    )
+</svg>
+    );
 }
 
 export function WorkSticker(props: SVGProps<SVGSVGElement>) {
     return (
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-            <rect x="2" y="7" width="20" height="14" rx="2" ry="2" fill="#B0C4DE" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M16 7V5a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4v2" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2" fill="#D4A5A5" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
     )
 }
 
 export function YummySticker(props: SVGProps<SVGSVGElement>) {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-            <circle cx="12" cy="12" r="10" fill="#FFD24B" stroke="#000000" strokeWidth="2"/>
-            <path d="M8 14s1.5 2 4 2 4-2 4-2" stroke="#000000" strokeWidth="2" strokeLinecap="round"/>
-            <circle cx="9" cy="10" r="1" fill="#000000"/>
-            <circle cx="15" cy="10" r="1" fill="#000000"/>
-        </svg>
-    )
+  return (
+    <svg
+      viewBox="0 0 512 512"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M256 512c141.4 0 256-114.6 256-256S397.4 0 256 0S0 114.6 0 256s114.6 256 256 256zM136.5 192.9c-11.2-1.6-21.7 6.1-24.3 16.9s3.1 22.4 14.3 24.1c32.4 4.6 60.5 15.6 83.2 30.8 2.6 1.8 6-1.5 4.8-4.2-13.1-28.9-38.3-51.5-72.1-66.3c-2.3-1-4.8-1.5-7.3-1.8-2.6-.3-5.2-.2-7.7.2zm12.3 84.4c-4.4-1.1-8.9 1.1-11.1 5.1-4.4 7.6-3.1 17.1 3.2 22.9 29.5 27.2 69.8 42.9 112.9 42.9s83.4-15.7 112.9-42.9c6.3-5.8 7.6-15.3 3.2-22.9-2.2-4-6.7-6.2-11.1-5.1-53.2 13.4-110.8 13.4-163.2 0zM383.5 193c-2.6-.3-5.2-.2-7.7.2-2.5.3-4.9.8-7.3 1.8-33.8 14.8-59 37.4-72.1 66.3-1.2 2.7 2.2 6 4.8 4.2 22.7-15.2 50.8-26.2 83.2-30.8 11.2-1.6 18.2-13.3 14.3-24.1-2.6-10.8-13.1-18.4-24.3-16.9-.1 0 0 0-.1 0z"
+        fill="#FFDE33"
+      />
+    </svg>
+  );
 }
 
 export function SleepSticker(props: SVGProps<SVGSVGElement>) {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-            <path d="M10 19s2 1 4 0" fill="none" stroke="#000000" strokeWidth="2" strokeLinecap="round"/>
-            <path d="M6 15s2 1 4 0" fill="none" stroke="#000000" strokeWidth="2" strokeLinecap="round"/>
-            <path d="M2 11s2 1 4 0" fill="none" stroke="#000000" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
-    )
+  return (
+    <svg
+      viewBox="0 0 512 512"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M256 512A256 256 0 10256 0a256 256 0 100 512zm-32-159.2l-87.3-56.7a16.1 16.1 0 01-6.7-14.2c0-5.5 2.7-10.7 7.2-13.8l87.3-56.7c11-7.1 25.3 1.2 25.3 14.2V339c0 13-14.3 21.3-25.3 14.2zM448 240H320a16 16 0 00-16 16v32a16 16 0 0016 16h128a16 16 0 0016-16v-32a16 16 0 00-16-16z"
+        fill="#89B8FF"
+      />
+    </svg>
+  );
 }

@@ -35,7 +35,6 @@ type CallStatus = 'initializing' | 'ringing' | 'connecting' | 'connected' | 'end
 export function CallView({ currentUser, chatPartner, isReceivingCall, initialCallState, onEndCall }: CallViewProps) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteStreamRef = useRef<MediaStream | null>(null);
   
   const [callId, setCallId] = useState<string | null>(initialCallState?.id || null);
   const [callStatus, setCallStatus] = useState<CallStatus>(isReceivingCall ? 'ringing' : 'initializing');
@@ -57,11 +56,15 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const { toast } = useToast();
   const { videoDeviceId, audioDeviceId } = useSettings();
 
-  const cleanup = useCallback(() => {
+  const hangUp = useCallback(async () => {
     if (isCleaningUp.current) return;
     isCleaningUp.current = true;
-    console.log("Cleaning up call resources...");
+    console.log(`Hanging up call ${callId}.`);
 
+    if (callId) {
+        await endCall(callId);
+    }
+    
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
@@ -81,20 +84,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     }
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-  }, []);
 
-
-  const hangUp = useCallback(async () => {
-    const currentCallId = callId;
-    console.log(`Hanging up call ${currentCallId}.`);
-
-    if (currentCallId) {
-        await endCall(currentCallId);
-    }
-    
-    cleanup();
+    setCallStatus('ended');
     onEndCall();
-  }, [callId, cleanup, onEndCall]);
+  }, [callId, onEndCall]);
 
 
   useEffect(() => {
@@ -115,7 +108,15 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         }
         setHasPermission(true);
 
-        // Mic volume visualizer setup
+        const pc = new RTCPeerConnection(servers);
+        pcRef.current = pc;
+
+        // Add local tracks to the peer connection
+        stream.getTracks().forEach(track => {
+          pc.addTrack(track, stream);
+        });
+
+        // Setup Mic visualizer
         if (stream.getAudioTracks().length > 0) {
             const audioContext = new AudioContext();
             audioContextRef.current = audioContext;
@@ -137,33 +138,50 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             visualize();
         }
 
-        const pc = new RTCPeerConnection(servers);
-        pcRef.current = pc;
-
-        localStreamRef.current.getTracks().forEach(track => {
-            pc.addTrack(track, localStreamRef.current!);
-        });
-
+        // Handle remote stream
         pc.ontrack = (event) => {
-            remoteStreamRef.current = event.streams[0];
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = remoteStreamRef.current;
+            if (remoteVideoRef.current && event.streams[0]) {
+                remoteVideoRef.current.srcObject = event.streams[0];
             }
-             setCallStatus('connected');
         };
 
+        // Handle connection state changes
+        pc.onconnectionstatechange = () => {
+             if (pc.connectionState === 'connected') {
+                 setCallStatus('connected');
+             }
+             if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+                 hangUp();
+             }
+        }
+
+        // Handle ICE candidates
         pc.onicecandidate = (event) => {
             if (event.candidate && callId) {
                 addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
             }
         };
 
-        pc.onconnectionstatechange = () => {
-             if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed' || pc.connectionState === 'failed') {
-                 hangUp();
-             }
+      } catch (error) {
+        console.error("Error setting up call foundation:", error);
+        setHasPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Ошибка звонка',
+          description: 'Не удалось получить доступ к камере/микрофону. Проверьте разрешения и попробуйте снова.',
+        });
+        hangUp();
+      }
+    };
+    
+    // Function to start the signaling process
+    const startSignaling = async () => {
+        const pc = pcRef.current;
+        if (!pc) {
+          console.error("PeerConnection not initialized.");
+          return;
         }
-        
+
         if (!isReceivingCall) { // Caller logic
             setCallStatus('ringing');
             const offer = await pc.createOffer();
@@ -180,20 +198,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                 setCallStatus('connecting');
             }
         }
-      } catch (error) {
-        console.error("Error setting up call:", error);
-        setHasPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Ошибка звонка',
-          description: 'Не удалось получить доступ к камере/микрофону. Проверьте разрешения и попробуйте снова.',
-        });
-        hangUp();
-      }
     };
 
     const setupSignalingListeners = (currentCallId: string) => {
-        // Listen to the main call document
+        // Listen to the main call document for the answer
         unsubCall = onSnapshot(doc(db, 'calls', currentCallId), (docSnapshot) => {
             const pc = pcRef.current;
             if (!docSnapshot.exists()) {
@@ -214,57 +222,47 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         unsubCallerCandidates = onSnapshot(collection(db, 'calls', currentCallId, candidatesCollection), (snapshot) => {
             snapshot.docChanges().forEach((change) => {
                 if (change.type === 'added') {
-                    candidateQueue.current.push(change.doc.data());
-                    processCandidateQueue();
+                   const pc = pcRef.current;
+                   if (pc && pc.remoteDescription && pc.signalingState !== 'closed') {
+                       pc.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(e => console.error("Error adding received ICE candidate", e));
+                   }
                 }
             });
         });
     };
     
-    const processCandidateQueue = () => {
-        const pc = pcRef.current;
-        if (pc && pc.remoteDescription && candidateQueue.current.length > 0) {
-             if (pc.signalingState === 'closed') {
-                console.warn("PeerConnection is closed, ignoring queued ICE candidates.");
-                candidateQueue.current = [];
-                return;
-            }
-            candidateQueue.current.forEach(candidate => {
-                pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding received ICE candidate", e));
-            });
-            candidateQueue.current = []; // Clear the queue
+    // Main logic flow
+    const runCallFlow = async () => {
+      await setupCall();
+      // Only start signaling if setupCall was successful
+      if (pcRef.current) {
+        if(callStatus === 'connecting' || callStatus === 'initializing') {
+            await startSignaling();
         }
+      }
     };
-    
-    if (callStatus === 'initializing' || callStatus === 'connecting') {
-        setupCall();
+
+    if (callStatus !== 'ringing' && callStatus !== 'ended') {
+        runCallFlow();
     }
     
     if (callId) {
         setupSignalingListeners(callId);
     }
     
-    // Process queue on remote description set
-    if (pcRef.current?.remoteDescription) {
-        processCandidateQueue();
-    }
-    
     return () => {
-        console.log("Main useEffect cleanup running.");
         unsubCall?.();
         unsubCallerCandidates?.();
         unsubRecipientCandidates?.();
-        cleanup();
     };
-  }, [callId, callStatus]); // Main effect should depend on when callId is set or status changes to connecting
+  }, [callId, callStatus]); // Rerun logic if callId changes or status changes to connecting
 
 
   const handleAcceptCall = () => {
-    setCallStatus('connecting');
+    setCallStatus('connecting'); // This will trigger the useEffect to run the call flow
   };
 
   const handleDeclineCall = () => {
-    setCallStatus('declined');
     hangUp();
   };
 
@@ -340,7 +338,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       <video ref={localVideoRef} autoPlay playsInline muted className="absolute bottom-28 md:bottom-4 right-4 h-40 w-32 object-cover rounded-md border-2 border-white/50" />
       
       {/* Overlay for ringing/connecting status */}
-      {(callStatus === 'ringing' || callStatus === 'connecting') && (
+      {(callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'initializing') && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white">
             <Avatar className="h-24 w-24 border-4 border-white">
                 <AvatarImage src={chatPartner.avatar} />
@@ -369,3 +367,5 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
+
+    

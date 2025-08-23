@@ -108,6 +108,7 @@
 ```kotlin
 package com.example.gomessenger // <-- Убедитесь, что ваш package name правильный!
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -274,7 +275,7 @@ class WebViewService : Service() {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
 
-            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                 with(NotificationManagerCompat.from(context)) {
                     notify(notificationIdCounter++, builder.build())
                 }
@@ -313,6 +314,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.content.Context
+import android.app.ActivityManager
 
 class MainActivity : AppCompatActivity() {
 
@@ -372,6 +375,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == OVERLAY_PERMISSION_REQ_CODE) {
@@ -409,7 +413,7 @@ class MainActivity : AppCompatActivity() {
     
     @Suppress("DEPRECATION")
     private fun isServiceRunning(serviceClass: Class<*>): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         for (service in manager.getRunningServices(Integer.MAX_VALUE)) {
             if (serviceClass.name == service.service.className) {
                 return true

@@ -25,9 +25,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, startCall, hangUp, updateCallStatus, addIceCandidate } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, where, getDocs, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, doc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 import { CallView } from './call-view';
 
@@ -67,7 +67,7 @@ export function ChatView({
   const [isWindowFocused, setIsWindowFocused] = useState(true);
   const [isCalling, setIsCalling] = useState(false);
   const [isReceivingCall, setIsReceivingCall] = useState(false);
-  const [callState, setCallState] = useState<any>(null);
+  const [callState, setCallState] = useState<any | null>(null);
 
   const { toast } = useToast();
   
@@ -114,6 +114,8 @@ export function ChatView({
       
       if (!isWindowFocused && newUnreadMessages.length > 0) {
         const lastMessage = newUnreadMessages[newUnreadMessages.length - 1];
+        if (lastMessage.read) return;
+
         const sender = allUsers.find(u => u.id === lastMessage.senderId);
         if (sender) {
             const notificationText = lastMessage.type === 'text' ? lastMessage.text : (lastMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
@@ -151,8 +153,9 @@ export function ChatView({
              const caller = allUsers.find(u => u.id === callData.callerId);
              
              if (caller) {
-                 setCallState({ id: callDoc.id, ...callData });
+                 setIsCalling(true);
                  setIsReceivingCall(true);
+                 setCallState({ id: callDoc.id, ...callData });
 
                  if (window.Android?.showCallNotification) {
                     window.Android.showCallNotification(caller.name, caller.avatar);
@@ -164,8 +167,8 @@ export function ChatView({
                  }
              }
          } else {
-            setIsReceivingCall(false);
-            setCallState(null);
+            // This part might cause issues if a call document is deleted upon hanging up
+            // It could prematurely end a new outgoing call.
          }
      });
 
@@ -248,6 +251,8 @@ export function ChatView({
 
   const handleStartCall = () => {
     setIsCalling(true);
+    setIsReceivingCall(false);
+    setCallState(null);
   };
 
   const handleEndCall = () => {
@@ -256,7 +261,7 @@ export function ChatView({
     setCallState(null);
   };
 
-  if (isCalling || isReceivingCall) {
+  if (isCalling) {
     return (
         <CallView
             currentUser={currentUser}

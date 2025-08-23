@@ -52,8 +52,9 @@ export function ChatView({
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
-  const isInitialLoadRef = useRef(true);
-  
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   useEffect(() => {
     const handleFocus = () => setIsWindowFocused(true);
     const handleBlur = () => setIsWindowFocused(false);
@@ -72,7 +73,8 @@ export function ChatView({
 
     const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
       const newMessages: Message[] = [];
-      
+      const isFirstLoad = messagesRef.current.length === 0;
+
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const newMessage = {
@@ -83,7 +85,7 @@ export function ChatView({
         newMessages.push(newMessage);
         
         // Show notification for new messages
-        if (!isInitialLoadRef.current && newMessage.senderId !== currentUser.id && !isWindowFocused && Notification.permission === 'granted') {
+        if (!isFirstLoad && newMessage.senderId !== currentUser.id && !isWindowFocused && Notification.permission === 'granted') {
              const sender = allUsers.find(u => u.id === newMessage.senderId);
              const notificationText = newMessage.type === 'text' ? newMessage.text : (newMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
              new Notification(`Новое сообщение от ${sender?.name || 'Unknown'}`, {
@@ -93,16 +95,17 @@ export function ChatView({
         }
       });
       setMessages(newMessages);
-
-      if (isInitialLoadRef.current) {
-        setTimeout(() => {
-          isInitialLoadRef.current = false;
-        }, 1000); // Mark as not initial load after a short delay
-      }
     });
 
     const callDocRef = doc(db, 'calls', chatId);
     const unsubscribeCalls = onSnapshot(callDocRef, (doc) => {
+       if (!doc.exists()) {
+            if(isCalling) {
+                handleEndCall();
+            }
+            return;
+        }
+
         const callData = doc.data() as CallState | null;
         setCallState(callData);
 

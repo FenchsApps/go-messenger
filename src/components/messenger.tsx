@@ -23,6 +23,11 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
   const isMobile = useIsMobile();
 
   useEffect(() => {
+    // Request notification permission on component mount
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission();
+    }
+
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData: User[] = [];
       snapshot.forEach((doc) => {

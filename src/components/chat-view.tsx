@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Message, User, CallState } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
@@ -39,24 +39,52 @@ export function ChatView({
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [callState, setCallState] = useState<CallState | null>(null);
   const [isCalling, setIsCalling] = useState(false);
+  const [isWindowFocused, setIsWindowFocused] = useState(true);
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
+  
+  useEffect(() => {
+    const handleFocus = () => setIsWindowFocused(true);
+    const handleBlur = () => setIsWindowFocused(false);
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
   
   useEffect(() => {
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
     const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
       const newMessages: Message[] = [];
+      let isInitialLoad = messages.length === 0;
+
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        newMessages.push({
+        const newMessage = {
           id: doc.id,
           ...data,
           timestamp: data.timestamp?.toDate().getTime() || Date.now(),
-        } as Message);
+        } as Message;
+        newMessages.push(newMessage);
+        
+        // Show notification for new messages
+        if (!isInitialLoad && newMessage.senderId !== currentUser.id && !isWindowFocused && Notification.permission === 'granted') {
+             const sender = allUsers.find(u => u.id === newMessage.senderId);
+             const notificationText = newMessage.type === 'text' ? newMessage.text : (newMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
+             new Notification(`Новое сообщение от ${sender?.name || 'Unknown'}`, {
+                body: notificationText,
+                icon: sender?.avatar
+             });
+        }
       });
       setMessages(newMessages);
+      isInitialLoad = false;
     });
 
     const callDocRef = doc(db, 'calls', chatId);
@@ -79,7 +107,7 @@ export function ChatView({
         unsubscribeMessages();
         unsubscribeCalls();
     }
-  }, [chatId]);
+  }, [chatId, currentUser.id, isWindowFocused]);
 
 
   const handleSendMessage = async (text: string) => {

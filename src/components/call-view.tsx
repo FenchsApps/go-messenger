@@ -31,6 +31,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
   const { toast } = useToast();
   const [callStatus, setCallStatus] = useState(initialCallState?.status || 'calling');
   const [isCallEnded, setIsCallEnded] = useState(false);
+  const [queuedCandidates, setQueuedCandidates] = useState<RTCIceCandidateInit[]>([]);
 
 
   useEffect(() => {
@@ -54,7 +55,6 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         const { pc } = createPeerConnection(chatId, stream, setRemoteStream);
         pcRef.current = pc;
         
-        // If we are the caller (no offer in initial state)
         if (!initialCallState?.offer) {
              const offer = await pc.createOffer();
              await pc.setLocalDescription(offer);
@@ -71,13 +71,25 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     return () => {
         const pc = pcRef.current;
         const ls = localStream;
-        // Use a timeout to allow the 'ended' status to propagate before cleanup
         setTimeout(() => hangUp(pc, ls, chatId), 500);
     };
   }, [chatId, toast]);
 
 
-  // Listen for changes on the call document
+  useEffect(() => {
+    if (!pcRef.current) return;
+    
+    if (pcRef.current.remoteDescription && queuedCandidates.length > 0) {
+      queuedCandidates.forEach(candidate => {
+        if(pcRef.current) {
+            pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding queued ICE candidate:", e));
+        }
+      });
+      setQueuedCandidates([]);
+    }
+  }, [pcRef.current?.remoteDescription, queuedCandidates]);
+
+
   useEffect(() => {
     const callDocRef = doc(db, 'calls', chatId);
     const unsubscribe = onSnapshot(callDocRef, async (snapshot) => {
@@ -85,7 +97,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         if (!snapshot.exists()) {
             setIsCallEnded(true);
             setCallStatus('ended');
-            setTimeout(() => onEndCall(), 2000); // Wait 2s before closing
+            setTimeout(() => onEndCall(), 2000); 
             return;
         }
 
@@ -93,8 +105,17 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         setCallStatus(callData.status);
 
         if (!pc) return;
+        
+        const processCandidates = (candidates: RTCIceCandidateInit[]) => {
+            if (pc.currentRemoteDescription) {
+                candidates.forEach(candidate => {
+                    if (candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
+                });
+            } else {
+                setQueuedCandidates(prev => [...prev, ...candidates]);
+            }
+        }
 
-        // Callee receives offer and creates answer
         if (callData.offer && !pc.currentRemoteDescription && pc.signalingState !== 'stable') {
           await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
           const answer = await pc.createAnswer();
@@ -103,16 +124,12 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
           await updateCallStatus(chatId, 'answered');
         }
 
-        // Caller receives answer
         if (callData.answer && !pc.currentRemoteDescription && pc.signalingState === 'have-local-offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
         }
 
-        // Both parties add ICE candidates
         if (callData.iceCandidates) {
-             callData.iceCandidates.forEach(candidate => {
-                if(candidate) pc.addIceCandidate(new RTCIceCandidate(candidate));
-             });
+             processCandidates(callData.iceCandidates);
         }
     });
 

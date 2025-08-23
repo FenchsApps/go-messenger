@@ -43,14 +43,11 @@
 <!-- РАЗРЕШЕНИЕ ДЛЯ РАБОТЫ В ФОНЕ (КЛЮЧЕВОЕ!) -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
-<!-- КЛЮЧЕВОЕ РАЗРЕШЕНИЕ ДЛЯ ОТОБРАЖЕНИЯ ПОВЕРХ ДРУГИХ ОКОН -->
-<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
 <!-- Для Android 14+ требуется указывать тип службы -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 ```
 
-3.  Теперь **полностью замените** ваш тег `<application>` на этот код. Он содержит правильную регистрацию `MainActivity` (чтобы приложение было видно в лаунчере) и фоновой службы.
+3.  Теперь **полностью замените** ваш тег `<application>` на этот код. Он содержит правильную регистрацию `MainActivity`, фоновой службы и отключает аппаратное ускорение для `MainActivity`, чтобы избежать проблем с `WebView` на некоторых устройствах.
 
 ```xml
 <application
@@ -61,11 +58,14 @@
     android:label="@string/app_name"
     android:roundIcon="@mipmap/ic_launcher_round"
     android:supportsRtl="true"
+    android:usesCleartextTraffic="true"
     android:theme="@style/Theme.GoMessenger"
     tools:targetApi="31">
 
     <activity
         android:name=".MainActivity"
+        android:configChanges="orientation|screenSize"
+        android:hardwareAccelerated="false"
         android:exported="true">
         <!-- Этот intent-filter делает приложение видимым в лаунчере -->
         <intent-filter>
@@ -86,7 +86,7 @@
 
 ## Шаг 3: Макет `activity_main.xml`
 
-Здесь ничего не меняется. Нам по-прежнему нужен только WebView.
+Нам нужен контейнер для `WebView`.
 Откройте `app > res > layout > activity_main.xml` и замените его содержимое:
 
 ```xml
@@ -95,6 +95,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity">
@@ -103,7 +104,7 @@
         android:id="@+id/loading_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Запуск фоновой службы..."
+        android:text="Загрузка..."
         android:textSize="18sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -112,11 +113,10 @@
 
 </androidx.constraintlayout.widget.ConstraintLayout>
 ```
-*Примечание: Мы убрали WebView отсюда. Он будет создаваться программно в фоновой службе, чтобы обеспечить его работу вне зависимости от активити.*
 
 ## Шаг 4: Создание фоновой службы `WebViewService.kt`
 
-Это самый важный компонент. Он будет "хозяином" для нашего WebView.
+Это самый важный компонент. Он будет "хозяином" для нашего `WebView` и обеспечивать его жизнь в фоне.
 
 1.  В Android Studio, в панели навигации проекта, кликните правой кнопкой мыши по вашему пакету (например, `app > java > com.example.gomessenger`).
 2.  Выберите **New > Kotlin Class/File**.
@@ -124,7 +124,7 @@
 4.  Замените содержимое этого файла на следующий код:
 
 ```kotlin
-package com.example.gomessenger // <-- Убедитесь, что ваш package name правильный!
+package com.example.gomessenger // <-- УБЕДИТЕСЬ, ЧТО ВАШ PACKAGE NAME ПРАВИЛЬНЫЙ!
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -136,11 +136,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.PixelFormat
+import android.os.Binder
 import android.os.Build
 import android.os.IBinder
-import android.view.Gravity
-import android.view.WindowManager
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -153,73 +152,69 @@ import androidx.core.app.NotificationManagerCompat
 class WebViewService : Service() {
 
     private lateinit var webView: WebView
-    private lateinit var windowManager: WindowManager
+    private val binder = LocalBinder()
 
     private val NOTIFICATION_CHANNEL_ID = "go_messenger_service_channel"
     private val NOTIFICATION_ID = 1
     private val NEW_MESSAGE_CHANNEL_ID = "new_message_channel"
-    private var notificationIdCounter = 2 // Начинаем с 2, чтобы не пересекаться с ID службы
+    private var notificationIdCounter = 2
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
+    // Флаг, чтобы знать, загружен ли URL
+    private var isUrlLoaded = false
+
+    inner class LocalBinder : Binder() {
+        fun getWebView(): WebView = webView
     }
+
+    override fun onBind(intent: Intent): IBinder = binder
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate() {
         super.onCreate()
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         setupWebView()
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createServiceNotificationChannel()
         val notification = createServiceNotification()
         startForeground(NOTIFICATION_ID, notification)
+    }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // ЗАМЕНИТЕ ЭТОТ URL НА АДРЕС ВАШЕГО ПРИЛОЖЕНИЯ
         val webUrl = "https://your-deployed-app-url.com" // <-- ВАЖНО!
-        webView.loadUrl(webUrl)
-
-        return START_STICKY // Служба будет перезапущена, если система ее убьет
+        if (!isUrlLoaded) {
+            webView.loadUrl(webUrl)
+            isUrlLoaded = true
+        }
+        return START_STICKY
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         webView = WebView(this).apply {
+            // Важно: отключаем аппаратное ускорение для WebView, чтобы он мог быть передан между Activity и Service
+            setLayerType(WebView.LAYER_TYPE_SOFTWARE, null)
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 mediaPlaybackRequiresUserGesture = false
                 javaScriptCanOpenWindowsAutomatically = true
-                setAppCacheEnabled(false) // Отключаем кэш для свежести данных
+                setAppCacheEnabled(false)
             }
             webViewClient = WebViewClient()
             webChromeClient = object : WebChromeClient() {
-                // Запрос разрешений на камеру/микрофон
                 override fun onPermissionRequest(request: PermissionRequest) {
-                    request.grant(request.resources)
+                    // Проверяем, что разрешения уже выданы в MainActivity
+                    val permissions = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+                    if (permissions.all { ActivityCompat.checkSelfPermission(this@WebViewService, it) == PackageManager.PERMISSION_GRANTED }) {
+                        request.grant(request.resources)
+                    } else {
+                        // В идеале, здесь нужно запросить разрешения снова или уведомить пользователя
+                        request.deny()
+                    }
                 }
             }
             addJavascriptInterface(WebAppInterface(this@WebViewService), "Android")
-
-            // Добавляем WebView на экран как системное окно.
-            // Оно будет невидимым (0x0), но это позволит ему работать в фоне.
-            val params = WindowManager.LayoutParams(
-                0, 0, // Невидимый размер
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSPARENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = 0
-                y = 0
-            }
-            windowManager.addView(this, params)
         }
     }
-
 
     private fun createServiceNotification(): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
@@ -238,14 +233,12 @@ class WebViewService : Service() {
             val channel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
                 "Служба Go Messenger",
-                NotificationManager.IMPORTANCE_LOW // Низкий приоритет, чтобы не мешало
+                NotificationManager.IMPORTANCE_LOW
             )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
     
-    // Этот канал будет для реальных уведомлений о сообщениях
     private fun createMessageNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Новые сообщения и звонки"
@@ -254,17 +247,12 @@ class WebViewService : Service() {
             val channel = NotificationChannel(NEW_MESSAGE_CHANNEL_ID, name, importance).apply {
                 description = descriptionText
             }
-            val notificationManager: NotificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
         }
     }
 
-
     inner class WebAppInterface(private val context: Context) {
-        
         init {
-            // Создаем канал для сообщений при инициализации интерфейса
             createMessageNotificationChannel()
         }
 
@@ -293,7 +281,7 @@ class WebViewService : Service() {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
 
-            if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                 with(NotificationManagerCompat.from(context)) {
                     notify(notificationIdCounter++, builder.build())
                 }
@@ -303,157 +291,170 @@ class WebViewService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Убираем WebView при уничтожении службы
-        if (::webView.isInitialized) {
-            windowManager.removeView(webView)
-        }
+        webView.destroy()
     }
 }
 ```
 
 ## Шаг 5: Обновление `MainActivity.kt`
 
-`MainActivity` теперь будет намного проще. Ее задача — запросить разрешения и запустить нашу фоновую службу.
+`MainActivity` теперь будет запрашивать разрешения, запускать службу и отображать `WebView`, полученный от службы.
 
 Откройте `app > java > com.example.gomessenger > MainActivity.kt` и замените его содержимое:
 
 ```kotlin
-package com.example.gomessenger // <-- Убедитесь, что ваш package name правильный!
+package com.example.gomessenger // <-- УБЕДИТЕСЬ, ЧТО ВАШ PACKAGE NAME ПРАВИЛЬНЫЙ!
 
 import android.Manifest
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
+import android.os.IBinder
+import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebView
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import android.content.Context
-import android.app.ActivityManager
 
 class MainActivity : AppCompatActivity() {
 
     private val PERMISSIONS_REQUEST_CODE = 123
-    private val OVERLAY_PERMISSION_REQ_CODE = 124
+    private var webView: WebView? = null
+    private lateinit var container: ViewGroup
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as WebViewService.LocalBinder
+            webView = binder.getWebView()
+            attachWebView()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            detachWebView()
+            webView = null
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        container = findViewById(R.id.main_container)
 
-        // Сначала проверяем все разрешения
+        // Обработка кнопки "Назад"
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView?.canGoBack() == true) {
+                    webView?.goBack()
+                } else {
+                    // Если некуда идти назад, то стандартное поведение
+                    // (обычно закрытие приложения, если это корень)
+                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        finishAndRemoveTask()
+                    } else {
+                        finish()
+                    }
+                }
+            }
+        })
+
         checkAndRequestPermissions()
     }
 
     private fun checkAndRequestPermissions() {
-        val permissionsToRequest = mutableListOf<String>()
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            permissionsToRequest.add(Manifest.permission.CAMERA)
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+        val permissionsToRequest = mutableListOf<String>().apply {
+            add(Manifest.permission.CAMERA)
+            add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        
+
         if (permissionsToRequest.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), PERMISSIONS_REQUEST_CODE)
         } else {
-            // Если все обычные разрешения есть, проверяем разрешение наложения
-            checkOverlayPermission()
-        }
-    }
-    
-    private fun checkOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                // Если разрешения нет, отправляем пользователя в настройки
-                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-                startActivityForResult(intent, OVERLAY_PERMISSION_REQ_CODE)
-            } else {
-                startWebViewService()
-            }
-        } else {
-            startWebViewService()
+            startAndBindService()
         }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSIONS_REQUEST_CODE) {
-             // После запроса обычных разрешений, снова проверяем разрешение наложения
-             checkOverlayPermission()
-        }
-    }
-    
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == OVERLAY_PERMISSION_REQ_CODE) {
-            // После возвращения из настроек разрешений наложения,
-            // снова проверяем, было ли оно выдано.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (Settings.canDrawOverlays(this)) {
-                    startWebViewService()
-                } else {
-                    // Пользователь не предоставил разрешение. Можно показать сообщение.
-                }
+            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                startAndBindService()
+            } else {
+                // Пользователь не предоставил разрешения. Можно показать сообщение.
+                findViewById<TextView>(R.id.loading_text).text = "Необходимые разрешения не были предоставлены. Приложение не может работать."
             }
         }
     }
 
-    private fun startWebViewService() {
-        // Проверяем, запущена ли служба, чтобы не запускать ее дважды
-        // (Это простая проверка, в реальном приложении можно сделать надежнее)
-        if (!isServiceRunning(WebViewService::class.java)) {
-            val serviceIntent = Intent(this, WebViewService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-            } else {
-                startService(serviceIntent)
-            }
+    private fun startAndBindService() {
+        val serviceIntent = Intent(this, WebViewService::class.java)
+        // Запускаем службу как foreground, чтобы она не была убита системой
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
         }
-        
-        // Открываем URL напрямую в браузере, чтобы пользователь видел интерфейс
-        // ЗАМЕНИТЕ ЭТОТ URL НА АДРЕС ВАШЕГО ПРИЛОЖЕНИЯ
-        val webUrl = "https://your-deployed-app-url.com" // <-- ВАЖНО!
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUrl))
-        startActivity(browserIntent)
-        finish() // Закрываем активити, остается только служба и браузер
+        // Привязываемся к службе, чтобы получить WebView
+        bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
-    
-    @Suppress("DEPRECATION")
-    private fun isServiceRunning(serviceClass: Class<*>): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        for (service in manager.getRunningServices(Integer.MAX_VALUE)) {
-            if (serviceClass.name == service.service.className) {
-                return true
-            }
+
+    private fun attachWebView() {
+        val loadingText = findViewById<TextView>(R.id.loading_text)
+        loadingText.visibility = View.GONE
+
+        // Отсоединяем WebView от предыдущего родителя, если он есть
+        (webView?.parent as? ViewGroup)?.removeView(webView)
+        
+        container.addView(webView, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+    }
+
+    private fun detachWebView() {
+         (webView?.parent as? ViewGroup)?.removeView(webView)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Отвязываемся от службы при сворачивании, но не останавливаем ее
+        // Это позволяет службе продолжать работать в фоне
+        detachWebView()
+        unbindService(serviceConnection)
+    }
+
+     override fun onRestart() {
+        super.onRestart()
+        // При возвращении в приложение снова привязываемся к службе
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            val serviceIntent = Intent(this, WebViewService::class.java)
+            bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
-        return false
     }
 }
-
 ```
-*Важное примечание: Метод `getRunningServices` является устаревшим на новых версиях Android, но для нашей цели это самое простое и рабочее решение.*
 
 ## Шаг 6: Сборка и запуск
 
-1.  **Замените URL:** Дважды проверьте, что вы заменили `"https://your-deployed-app-url.com"` на реальный URL вашего мессенджера в файлах `WebViewService.kt` и `MainActivity.kt`.
+1.  **Замените URL:** Дважды проверьте, что вы заменили `"https://your-deployed-app-url.com"` на реальный URL вашего мессенджера в файле `WebViewService.kt`.
 2.  **Сборка APK:** В меню Android Studio выберите **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
 3.  **Установка:** Установите APK на устройство.
 
 **Как это будет работать:**
-1.  При первом запуске приложение запросит все необходимые разрешения, включая **разрешение на отображение поверх других окон**. Это необходимо, чтобы наш невидимый WebView мог работать в фоне.
-2.  После выдачи разрешений, `MainActivity` запустит фоновую службу `WebViewService` и откроет ваш сайт в системном браузере.
-3.  Сама `MainActivity` закроется. Фоновая служба останется работать, и вы увидите постоянное уведомление об этом.
-4.  Теперь, даже если вы свернете браузер или заблокируете телефон, служба с WebView будет продолжать работать, слушать события из Firestore и присылать вам нативные уведомления о новых сообщениях и звонках.
-
-Это компромиссное решение, но оно обеспечивает ключевую функциональность — получение уведомлений в фоновом режиме.
+1.  При первом запуске приложение запросит все необходимые разрешения.
+2.  После выдачи разрешений, `MainActivity` запустит фоновую службу `WebViewService` и привяжется к ней.
+3.  `WebViewService` создаст `WebView`, загрузит в него ваш сайт и отдаст его `MainActivity` для отображения.
+4.  Вы будете пользоваться мессенджером внутри приложения.
+5.  Когда вы свернете приложение, `MainActivity` отсоединится от `WebView`, но сам `WebView` продолжит жить в фоновой службе. Служба будет показывать постоянное уведомление, а `WebView` продолжит слушать события и сможет присылать вам нативные уведомления о новых сообщениях и звонках.
+6.  Когда вы вернетесь в приложение, `MainActivity` снова "заберет" `WebView` у службы и покажет его вам.

@@ -209,14 +209,18 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     await updateCallStatus(callId, 'answered', answerDescription);
   };
 
-  const handleDeclineCall = () => {
+  const handleDeclineCall = async () => {
     if(callId) {
-        updateCallStatus(callId, 'declined');
+        await updateCallStatus(callId, 'declined');
     }
-    handleHangUp(true, 'declined');
+    // End the call immediately on the client-side to prevent UI loops
+    onEndCall(); 
   };
 
   const handleHangUp = async (isInitiator: boolean, status: 'ended' | 'declined' | 'missed') => {
+      // Prevent multiple hangup calls
+      if (callStatus === 'ended' || callStatus === 'declined') return;
+
       if (!callId) {
           onEndCall();
           return;
@@ -239,7 +243,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             callerId: initialCallState?.callerId || currentUser.id,
         });
       }
-
+      setCallStatus('ended'); // Update local state to prevent re-entry
       onEndCall();
   };
 
@@ -337,5 +341,3 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
-
-    

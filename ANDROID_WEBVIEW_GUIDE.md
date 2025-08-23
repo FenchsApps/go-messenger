@@ -1,6 +1,6 @@
 # Руководство по созданию Android-приложения с WebView
 
-Это руководство поможет вам "обернуть" ваш веб-сайт (Go Messenger) в простое Android-приложение с помощью `WebView`, а также настроить нативные уведомления о новых сообщениях.
+Это руководство поможет вам "обернуть" ваш веб-сайт (Go Messenger) в простое Android-приложение с помощью `WebView`, а также настроить нативные уведомления о новых сообщениях и корректно запрашивать разрешения на доступ к камере и микрофону.
 
 ## Необходимые инструменты
 
@@ -49,7 +49,7 @@
 
 ## Шаг 3: Настройка разрешений в манифесте
 
-Чтобы ваше приложение могло выходить в интернет и отправлять уведомления, ему нужны соответствующие разрешения.
+Чтобы ваше приложение могло выходить в интернет, отправлять уведомления и использовать камеру/микрофон, ему нужны соответствующие разрешения.
 
 1.  Откройте `app > manifests > AndroidManifest.xml`.
 2.  Добавьте следующие разрешения прямо перед тегом `<application>`:
@@ -57,6 +57,12 @@
 ```xml
 <!-- Разрешение на доступ в интернет -->
 <uses-permission android:name="android.permission.INTERNET" />
+
+<!-- Разрешения для звонков -->
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<!-- Это разрешение нужно, чтобы изменять настройки звука (например, включать громкую связь) -->
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
 <!-- Разрешение для отправки уведомлений (необходимо для Android 13 и выше) -->
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
@@ -68,7 +74,7 @@
 
 ## Шаг 4: Настройка MainActivity и WebView
 
-Теперь самое главное — напишем код, который загрузит ваш сайт, настроит `WebView` и создаст "мост" между JavaScript и Kotlin для показа уведомлений.
+Теперь самое главное — напишем код, который загрузит ваш сайт, настроит `WebView`, создаст "мост" между JavaScript и Kotlin, а также запросит все необходимые разрешения при запуске.
 
 1.  Откройте `app > java > com.example.gomessenger > MainActivity.kt`. (Путь может немного отличаться, если вы указали другой package name).
 2.  Замените содержимое этого файла на следующий код:
@@ -84,6 +90,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -103,13 +110,12 @@ class MainActivity : AppCompatActivity() {
     private val NOTIFICATION_CHANNEL_ID = "new_message_channel"
     private var notificationIdCounter = 1
 
-    // Запрос разрешений
-    private val requestPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
-            if (isGranted) {
-                // Разрешение получено
-            } else {
-                // Пользователь отказал в разрешении
+    // --- ОБРАБОТЧИК ЗАПРОСА НЕСКОЛЬКИХ РАЗРЕШЕНИЙ ---
+    private val requestMultiplePermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            permissions.entries.forEach {
+                // Здесь можно обработать результат для каждого разрешения, если нужно
+                // Log.d("PERMISSIONS", "${it.key} = ${it.value}")
             }
         }
 
@@ -117,20 +123,20 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Создаем канал уведомлений при запуске
+        // Создаем канал уведомлений и запрашиваем все разрешения при запуске
         createNotificationChannel()
-        askNotificationPermission()
+        askForPermissions()
 
         webView = findViewById(R.id.webView)
 
         // --- НАСТРОЙКИ WEBVIEW ---
         webView.settings.apply {
-            // Включить JavaScript (ОБЯЗАТЕЛЬНО!)
             javaScriptEnabled = true
-            // Позволяет DOM-хранилищу (localStorage) работать
             domStorageEnabled = true
             // Позволяет JS открывать окна (необязательно, но может быть полезно)
             javaScriptCanOpenWindowsAutomatically = true
+            // Разрешает доступ к медиа (камера, микрофон)
+            mediaPlaybackRequiresUserGesture = false
             // Отключить кэширование, чтобы всегда загружалась свежая версия сайта
             setAppCacheEnabled(false)
         }
@@ -142,8 +148,15 @@ class MainActivity : AppCompatActivity() {
         // Обрабатывать переходы внутри WebView, а не в браузере
         webView.webViewClient = WebViewClient()
 
-        // Это нужно, чтобы console.log() из JS отображался в Logcat Android Studio. Полезно для отладки.
-        webView.webChromeClient = WebChromeClient()
+        // --- ОБРАБОТКА РАЗРЕШЕНИЙ ДЛЯ WEBVIEW (КАМЕРА, МИКРОФОН) ---
+        // Это КЛЮЧЕВОЙ момент, чтобы WebView мог запрашивать доступ к камере
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                // Предоставляем запрошенные разрешения
+                // В реальном приложении здесь можно было бы показать диалог выбора
+                request.grant(request.resources)
+            }
+        }
 
         // --- Обработка кнопки "Назад" ---
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -151,9 +164,8 @@ class MainActivity : AppCompatActivity() {
                 if (webView.canGoBack()) {
                     webView.goBack()
                 } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                    isEnabled = true
+                    // Если в истории WebView нет страниц, закрываем приложение
+                    finish()
                 }
             }
         })
@@ -167,7 +179,6 @@ class MainActivity : AppCompatActivity() {
     inner class WebAppInterface(private val mContext: Context) {
         /**
          * Этот метод будет вызываться из JavaScript для показа уведомления о новом сообщении.
-         * Убедитесь, что у вас есть разрешение POST_NOTIFICATIONS в манифесте.
          */
         @JavascriptInterface
         fun showNewMessageNotification(senderName: String, messageText: String, senderAvatar: String) {
@@ -185,13 +196,33 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        /**
+         * Этот метод будет вызываться из JavaScript для показа уведомления о входящем звонке.
+         */
+        @JavascriptInterface
+        fun showCallNotification(callerName: String, callerAvatar: String) {
+            val builder = NotificationCompat.Builder(mContext, NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground) // Замените на свою иконку
+                .setContentTitle("Входящий звонок")
+                .setContentText("$callerName звонит вам")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_CALL) // Категория "Звонок"
+                .setAutoCancel(true) // Уведомление закроется по тапу
+
+            if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                with(NotificationManagerCompat.from(mContext)) {
+                    notify(notificationIdCounter++, builder.build())
+                }
+            }
+        }
     }
 
     // --- Создание канала для уведомлений ---
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Новые сообщения"
-            val descriptionText = "Уведомления о новых сообщениях в чате"
+            val name = "Новые сообщения и звонки"
+            val descriptionText = "Уведомления о новых сообщениях и звонках"
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
                 description = descriptionText
@@ -202,12 +233,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- Запрос разрешения на уведомления для Android 13+ ---
-    private fun askNotificationPermission() {
+    // --- Запрос всех необходимых разрешений ---
+    private fun askForPermissions() {
+        val permissionsToRequest = mutableListOf<String>()
+
+        // Добавляем разрешение на камеру, если оно не выдано
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.CAMERA)
+        }
+        // Добавляем разрешение на микрофон, если оно не выдано
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+        }
+        // Добавляем разрешение на уведомления для Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+
+        // Если есть что запрашивать, показываем системный диалог
+        if (permissionsToRequest.isNotEmpty()) {
+            requestMultiplePermissionsLauncher.launch(permissionsToRequest.toTypedArray())
         }
     }
 }
@@ -215,7 +262,8 @@ class MainActivity : AppCompatActivity() {
 
 **Важно**:
 1.  Не забудьте заменить `"https://your-deployed-app-url.com"` на реальный URL вашего мессенджера.
-2.  Код уведомлений использует стандартную иконку `ic_launcher_foreground`. Вы можете заменить её на свою.
+2.  `onPermissionRequest` в `WebChromeClient` очень важен. Без него ваш сайт внутри `WebView` не сможет запросить доступ к камере или микрофону.
+3.  Код уведомлений использует стандартную иконку `ic_launcher_foreground`. Вы можете заменить её на свою.
 
 ## Шаг 5: Решение ошибки "Unresolved reference: R"
 
@@ -230,4 +278,6 @@ class MainActivity : AppCompatActivity() {
 1.  В верхнем меню Android Studio выберите **"Build" > "Build Bundle(s) / APK(s)" > "Build APK(s)"**.
 2.  После завершения сборки Android Studio покажет уведомление со ссылкой на APK-файл. Обычно он находится в `app/build/outputs/apk/debug/app-debug.apk`.
 
-Теперь этот APK-файл можно установить на Android-устройство для тестирования.
+Теперь этот APK-файл можно установить на Android-устройство для тестирования. При первом запуске приложение запросит все необходимые разрешения.
+
+    

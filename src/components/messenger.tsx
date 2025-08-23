@@ -19,9 +19,15 @@ interface MessengerProps {
 export function Messenger({ currentUser, onLogout }: MessengerProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
 
   useEffect(() => {
+    // Request notification permission on component mount
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission();
+    }
+
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData: User[] = [];
       snapshot.forEach((doc) => {
@@ -34,13 +40,22 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
             status: data.status,
             phone: data.phone,
             lastSeen: data.lastSeen?.toDate().getTime(),
+            isCreator: data.isCreator
           });
         }
       });
+      // Ensure the creator is always at the top of the list
+      usersData.sort((a, b) => {
+        if (a.isCreator) return -1;
+        if (b.isCreator) return 1;
+        return 0;
+      })
+
       setUsers(usersData);
-      if(!selectedUserId && usersData.length > 0) {
-        setSelectedUserId(usersData[0].id)
+      if (usersData.length > 0) {
+        setSelectedUserId(currentSelectedId => currentSelectedId ?? usersData[0].id)
       }
+      setIsLoading(false);
     });
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -54,7 +69,7 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
         unsubscribe();
         window.removeEventListener('beforeunload', handleBeforeUnload);
     }
-  }, [currentUser.id, selectedUserId]);
+  }, [currentUser.id]);
   
   const selectedUser = users.find((user) => user.id === selectedUserId);
 
@@ -80,6 +95,7 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
             selectedUserId={selectedUserId}
             onSelectUser={handleSelectUser}
             onLogout={onLogout}
+            isLoading={isLoading}
           />
         </div>
         <div
@@ -99,9 +115,15 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
             />
           ) : (
             <div className="hidden md:flex flex-col items-center justify-center h-full gap-4 text-center">
-              <PigeonIcon className="h-24 w-24 text-muted-foreground/50" />
-              <h2 className="text-2xl font-semibold">Добро пожаловать в Go Messenger</h2>
-              <p className="text-muted-foreground">Выберите чат, чтобы начать общение.</p>
+                {isLoading ? (
+                    <p>Загрузка чатов...</p>
+                ) : (
+                    <>
+                        <PigeonIcon className="h-24 w-24 text-muted-foreground/50" />
+                        <h2 className="text-2xl font-semibold">Добро пожаловать в Go Messenger</h2>
+                        <p className="text-muted-foreground">Выберите чат, чтобы начать общение.</p>
+                    </>
+                )}
             </div>
           )}
         </div>

@@ -1,21 +1,19 @@
 'use client';
-import { useOptimistic, useState, useEffect, useCallback } from 'react';
-import type { Message, User } from '@/lib/types';
+import { useState, useEffect, useRef } from 'react';
+import type { Message, User, CallState } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
 import { ChatInput } from './chat-input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Phone } from 'lucide-react';
-import { sendMessage, sendSticker, editMessage, deleteMessage } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, createCallOffer, updateCallStatus } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
-
+import { CallView } from './call-view';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -36,83 +34,94 @@ export function ChatView({
   onBack,
 }: ChatViewProps) {
   const [messages, setMessages] = useState(initialMessages);
-  const [isCalling, setIsCalling] = useState(false);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState('');
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
-
+  const [callState, setCallState] = useState<CallState | null>(null);
+  const [isCalling, setIsCalling] = useState(false);
+  const [isWindowFocused, setIsWindowFocused] = useState(true);
   const { toast } = useToast();
-
-  const [optimisticMessages, setOptimisticMessages] = useOptimistic<Message[], {action: 'add' | 'delete' | 'update', message: Message | {id: string}}>(
-    messages,
-    (state, {action, message}) => {
-      switch (action) {
-        case 'add':
-          return [...state, message as Message];
-        case 'delete':
-            return state.filter(m => m.id !== message.id);
-        case 'update':
-            return state.map(m => m.id === message.id ? {...m, ...message} : m);
-        default:
-          return state;
-      }
-    }
-  );
-
+  
   const chatId = getChatId(currentUser.id, chatPartner.id);
+  
+  useEffect(() => {
+    const handleFocus = () => setIsWindowFocused(true);
+    const handleBlur = () => setIsWindowFocused(false);
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
   
   useEffect(() => {
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
       const newMessages: Message[] = [];
+      let isInitialLoad = messages.length === 0;
+
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        newMessages.push({
+        const newMessage = {
           id: doc.id,
           ...data,
           timestamp: data.timestamp?.toDate().getTime() || Date.now(),
-        } as Message);
+        } as Message;
+        newMessages.push(newMessage);
+        
+        // Show notification for new messages
+        if (!isInitialLoad && newMessage.senderId !== currentUser.id && !isWindowFocused && Notification.permission === 'granted') {
+             const sender = allUsers.find(u => u.id === newMessage.senderId);
+             const notificationText = newMessage.type === 'text' ? newMessage.text : (newMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
+             new Notification(`Новое сообщение от ${sender?.name || 'Unknown'}`, {
+                body: notificationText,
+                icon: sender?.avatar
+             });
+        }
       });
       setMessages(newMessages);
+      isInitialLoad = false;
     });
 
-    return () => unsubscribe();
-  }, [currentUser.id, chatPartner.id, chatId]);
+    const callDocRef = doc(db, 'calls', chatId);
+    const unsubscribeCalls = onSnapshot(callDocRef, (doc) => {
+        const callData = doc.data() as CallState | null;
+        setCallState(callData);
+
+        // If there's an incoming call for us, start the call view
+        if (callData?.status === 'ringing' && callData?.offer) {
+            setIsCalling(true);
+        }
+    });
+
+    return () => {
+        unsubscribeMessages();
+        unsubscribeCalls();
+    }
+  }, [chatId, currentUser.id, isWindowFocused]);
 
 
   const handleSendMessage = async (text: string) => {
-    const tempId = crypto.randomUUID()
-    const newMessage: Message = {
-      id: tempId,
-      senderId: currentUser.id,
-      recipientId: chatPartner.id,
-      text: text,
-      timestamp: Date.now(),
-      type: 'text',
-    };
-    setOptimisticMessages({ action: 'add', message: newMessage });
-    await sendMessage(currentUser.id, chatPartner.id, text);
+    const result = await sendMessage(currentUser.id, chatPartner.id, text);
+    if(result.error) {
+        toast({
+            title: "Ошибка отправки",
+            description: result.error,
+            variant: "destructive",
+        });
+    }
   };
 
-  const handleSendSticker = (stickerUrl: string) => {
-    const tempId = crypto.randomUUID();
-    const newMessage: Message = {
-      id: tempId,
-      senderId: currentUser.id,
-      recipientId: chatPartner.id,
-      text: 'Sticker',
-      timestamp: Date.now(),
-      type: 'sticker',
-      stickerUrl,
-    };
-    setOptimisticMessages({action: 'add', message: newMessage});
-    sendSticker(currentUser.id, chatPartner.id, stickerUrl);
+  const handleSendSticker = async (stickerId: string) => {
+    await sendSticker(currentUser.id, chatPartner.id, stickerId);
   };
-
-  const handleCall = () => {
-    setIsCalling(true);
-    setTimeout(() => setIsCalling(false), 3000); // Mock call duration
+  
+  const handleSendGif = async (gifUrl: string) => {
+    await sendGif(currentUser.id, chatPartner.id, gifUrl);
   };
 
   const handleEdit = (message: Message) => {
@@ -122,22 +131,19 @@ export function ChatView({
 
   const handleSaveEdit = async () => {
     if (!editingMessage) return;
-    setOptimisticMessages({action: 'update', message: {...editingMessage, text: editedText, edited: true}});
+
     const result = await editMessage(chatId, editingMessage.id, editedText);
     if(result.error){
         toast({ title: "Ошибка", description: result.error, variant: 'destructive' });
-        setOptimisticMessages({action: 'update', message: editingMessage});
     }
     setEditingMessage(null);
     setEditedText('');
   };
 
   const handleDelete = async (messageId: string) => {
-     setOptimisticMessages({action: 'delete', message: {id: messageId}});
      const result = await deleteMessage(chatId, messageId);
      if(result.error){
         toast({ title: "Ошибка", description: result.error, variant: 'destructive' });
-        // Revert optimistic update might be complex, refetching or smarter state management is needed
      }
   };
 
@@ -161,42 +167,50 @@ export function ChatView({
     setForwardingMessage(null);
   }
 
+  const handleInitiateCall = () => {
+    // We set isCalling to true immediately for the caller
+    setIsCalling(true);
+  }
+  
+  const handleEndCall = () => {
+      setIsCalling(false);
+      setCallState(null); // Clear the call state locally
+  }
+
+  if (isCalling) {
+      return (
+          <CallView 
+              chatId={chatId}
+              currentUser={currentUser}
+              chatPartner={chatPartner}
+              initialCallState={callState}
+              onEndCall={handleEndCall}
+          />
+      )
+  }
+
   return (
     <div className="flex flex-col h-full bg-background">
-      <ChatHeader user={chatPartner} isMobile={isMobile} onBack={onBack} onCall={handleCall} />
+      <ChatHeader 
+        user={chatPartner} 
+        isMobile={isMobile} 
+        onBack={onBack}
+        onCall={handleInitiateCall}
+      />
       <ChatMessages
-        messages={optimisticMessages}
+        messages={messages}
         currentUser={currentUser}
         chatPartner={chatPartner}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onForward={handleForward}
       />
-      <ChatInput onSendMessage={handleSendMessage} onSendSticker={handleSendSticker} />
+      <ChatInput 
+        onSendMessage={handleSendMessage} 
+        onSendSticker={handleSendSticker}
+        onSendGif={handleSendGif}
+       />
 
-      <Dialog open={isCalling} onOpenChange={setIsCalling}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-center text-xl">Calling...</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4 py-8">
-            <Avatar className="h-24 w-24 border-4 border-primary/50">
-              <AvatarImage src={chatPartner.avatar} alt={chatPartner.name} />
-              <AvatarFallback>{chatPartner.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <p className="text-2xl font-bold">{chatPartner.name}</p>
-            <p className="text-muted-foreground">Ringing</p>
-            <div className="mt-8">
-              <button
-                onClick={() => setIsCalling(false)}
-                className="bg-red-500 text-white rounded-full p-4"
-              >
-                <Phone className="h-6 w-6" />
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
       <Dialog open={!!editingMessage} onOpenChange={() => setEditingMessage(null)}>
         <DialogContent>
             <DialogHeader>

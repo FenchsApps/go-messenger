@@ -1,8 +1,9 @@
 // @ts-nocheck
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
-import { db } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
   if (!text.trim()) {
@@ -35,48 +36,98 @@ function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
 }
 
-export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }) {
-    if (!text.trim()) {
+export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }, callInfo?: { status: 'answered' | 'declined' | 'missed', duration?: number }) {
+    if (!text.trim() && !callInfo) {
         return { error: 'Message cannot be empty' };
     }
     
     const chatId = getChatId(senderId, recipientId);
     
     try {
-        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
             recipientId,
             text,
             timestamp: serverTimestamp(),
-            type: 'text',
+            type: callInfo ? 'call' : 'text',
             edited: false,
             forwardedFrom: forwardedFrom || null,
+            callInfo: callInfo || null,
         });
-        return { error: null };
+        return { error: null, data: { id: docRef.id, text } };
     } catch (error) {
         console.error("Error sending message:", error);
         return { error: 'Failed to send message' };
     }
 }
 
-export async function sendSticker(senderId: string, recipientId: string, stickerUrl: string) {
+export async function sendSticker(senderId: string, recipientId: string, stickerId: string) {
     const chatId = getChatId(senderId, recipientId);
     
     try {
-        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
             senderId,
             recipientId,
-            text: 'Sticker',
+            text: '',
             timestamp: serverTimestamp(),
             type: 'sticker',
-            stickerUrl,
+            stickerId,
         });
-        return { error: null };
+        return { error: null, data: { id: docRef.id, stickerId } };
     } catch (error) {
         console.error("Error sending sticker:", error);
         return { error: 'Failed to send sticker' };
     }
 }
+
+export async function sendGif(senderId: string, recipientId: string, gifUrl: string) {
+    const chatId = getChatId(senderId, recipientId);
+    
+    try {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            senderId,
+            recipientId,
+            text: '',
+            timestamp: serverTimestamp(),
+            type: 'gif',
+            gifUrl,
+        });
+        return { error: null, data: { id: docRef.id, gifUrl } };
+    } catch (error) {
+        console.error("Error sending GIF:", error);
+        return { error: 'Failed to send GIF' };
+    }
+}
+
+export async function searchGifs(query: string) {
+  const apiKey = process.env.GIPHY_API_KEY;
+  if (!apiKey) {
+    console.error('GIPHY API key not found.');
+    return { error: 'GIF service is not configured.' };
+  }
+  
+  const url = `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=21&offset=0&rating=g&lang=en`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('GIPHY API error:', response.status, errorText);
+      return { error: 'Failed to fetch GIFs from GIPHY.' };
+    }
+    const data = await response.json();
+    const gifs = data.data.map((r: any) => ({
+      id: r.id,
+      url: r.images.fixed_height.url,
+      preview: r.images.fixed_height_small.url,
+    }));
+    return { data: gifs };
+  } catch (error) {
+    console.error('Error fetching GIFs from GIPHY:', error);
+    return { error: 'Failed to fetch GIFs.' };
+  }
+}
+
 
 export async function editMessage(chatId: string, messageId: string, newText: string) {
     if (!newText.trim()) {
@@ -103,5 +154,70 @@ export async function deleteMessage(chatId: string, messageId: string) {
     } catch (error) {
         console.error("Error deleting message:", error);
         return { error: 'Failed to delete message' };
+    }
+}
+
+
+// WebRTC Signaling Actions
+export async function createCallOffer(chatId: string, offer: RTCSessionDescriptionInit) {
+  const callDocRef = doc(db, 'calls', chatId);
+  await setDoc(callDocRef, {
+    offer,
+    status: 'ringing',
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function createCallAnswer(chatId: string, answer: RTCSessionDescriptionInit) {
+  const callDocRef = doc(db, 'calls', chatId);
+  await updateDoc(callDocRef, { answer, status: 'answered' });
+}
+
+export async function addIceCandidate(chatId: string, candidate: RTCIceCandidateInit) {
+  const callDocRef = doc(db, 'calls', chatId);
+  const callDoc = await getDoc(callDocRef);
+  if (callDoc.exists()) {
+    const data = callDoc.data();
+    const candidates = data.iceCandidates || [];
+    await updateDoc(callDocRef, {
+      iceCandidates: [...candidates, candidate],
+    });
+  }
+}
+
+export async function updateCallStatus(
+    chatId: string, 
+    status: 'declined' | 'ended' | 'answered', 
+    duration?: number,
+    callerId?: string,
+    calleeId?: string,
+) {
+    const callDocRef = doc(db, 'calls', chatId);
+    const callDoc = await getDoc(callDocRef);
+
+    if (callDoc.exists()) {
+        const callData = callDoc.data();
+        if (status === 'ended' || status === 'declined') {
+            await deleteDoc(callDocRef);
+            
+            if(callerId && calleeId) {
+                let callStatus = callData.status === 'answered' ? 'answered' : (status === 'declined' ? 'declined' : 'missed');
+                let messageText = 'Звонок';
+                 if(callStatus === 'answered') {
+                    messageText = `Звонок длительностью ${duration} сек.`
+                 } else if (callStatus === 'declined') {
+                    messageText = 'Звонок отклонен'
+                 } else if (callStatus === 'missed') {
+                    messageText = 'Пропущенный звонок'
+                 }
+
+                await sendMessage(callerId, calleeId, messageText, undefined, {
+                    status: callStatus,
+                    duration: duration,
+                })
+            }
+        }
+    } else if(status === 'answered') {
+        await setDoc(callDocRef, { status }, { merge: true });
     }
 }

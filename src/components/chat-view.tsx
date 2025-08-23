@@ -120,7 +120,6 @@ export function ChatView({
         }
       });
       
-      const prevMessages = messages;
       setMessages(newMessages);
 
       if (isWindowFocused) {

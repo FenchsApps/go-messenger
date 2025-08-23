@@ -119,12 +119,13 @@ export function ChatView({
         if (sender && lastMessage.type !== 'call') {
             const notificationText = lastMessage.type === 'text' ? lastMessage.text : (lastMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
             
-            // Send notification to WebView immediately if available
+            // Send notification to WebView if available
             if (window.Android?.showNewMessageNotification) {
                window.Android.showNewMessageNotification(sender.name, notificationText, sender.avatar);
             } 
-            // Send browser notification only if window is not focused
-            else if (!isWindowFocused && Notification.permission === 'granted') {
+            
+            // Send browser notification if window is not focused
+            if (!isWindowFocused && Notification.permission === 'granted') {
                new Notification(`Новое сообщение от ${sender.name}`, {
                    body: notificationText,
                    icon: sender.avatar
@@ -158,9 +159,13 @@ export function ChatView({
                  setCallState({ id: callDoc.id, ...callData });
                  setIsCalling(true);
 
+                 // Send notification to WebView if available
                  if (window.Android?.showCallNotification) {
                     window.Android.showCallNotification(caller.name, caller.avatar);
-                 } else if (Notification.permission === 'granted' && !isWindowFocused) {
+                 } 
+                 
+                 // Send browser notification if window is not focused
+                 if (Notification.permission === 'granted' && !isWindowFocused) {
                     new Notification('Входящий звонок', {
                         body: `${caller.name} звонит вам...`,
                         icon: caller.avatar,

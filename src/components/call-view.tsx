@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { User, CallState } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
@@ -31,51 +31,68 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
   const [callStatus, setCallStatus] = useState(initialCallState?.status || 'calling');
-  const [isCallEnded, setIsCallEnded] = useState(false);
-  const [queuedCandidates, setQueuedCandidates] = useState<RTCIceCandidateInit[]>([]);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isConnecting, setIsConnecting] = useState(true);
+  
+  const callInitialized = useRef(false);
+
   const isCaller = !initialCallState?.offer;
+
+  const handleHangUp = useCallback((status: 'ended' | 'declined' | 'missed' = 'ended') => {
+      const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
+      updateCallStatus(chatId, status, duration, currentUser.id, chatPartner.id);
+      // onEndCall will be triggered by the snapshot listener when the doc is deleted
+  }, [chatId, currentUser.id, chatPartner.id, callStartTime]);
+
 
   // 1. Get user media
   useEffect(() => {
     const startMedia = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setLocalStream(stream);
-        setHasPermission(true);
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
         }
+        setLocalStream(stream);
+        setHasPermission(true);
       } catch (error) {
         console.error("Error starting media:", error);
         setHasPermission(false);
         toast({ title: "Ошибка медиа", description: "Не удалось получить доступ к камере или микрофону. Проверьте разрешения в браузере.", variant: "destructive"});
-        // Give user time to see the error before ending the call
-        setTimeout(() => handleHangUp('declined'), 3000);
+        // Avoid hanging up if we are already in the process of connecting/ending
+        if(isConnecting) {
+          handleHangUp('declined');
+        }
       }
     };
 
     startMedia();
-    
-    // This effect should only run once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  // 2. Create peer connection and handle call logic
+  // 2. Initialize peer connection and signaling listener
   useEffect(() => {
-    // Wait for media stream and permission before initializing WebRTC
-    if (!localStream || hasPermission !== true) return;
-    
-    const pc = new RTCPeerConnection( { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] });
+    // Only run this once
+    if (!localStream || pcRef.current) {
+        return;
+    }
+
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     pcRef.current = pc;
+    setIsConnecting(false);
 
     localStream.getTracks().forEach((track) => {
         pc.addTrack(track, localStream);
     });
 
     pc.ontrack = (event) => {
-        setRemoteStream(event.streams[0]);
+        if (event.streams && event.streams[0]) {
+             if (remoteVideoRef.current) {
+                remoteVideoRef.current.srcObject = event.streams[0];
+            }
+            setRemoteStream(event.streams[0]);
+        }
     };
 
     pc.onicecandidate = (event) => {
@@ -83,9 +100,46 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
             addIceCandidate(chatId, event.candidate.toJSON());
         }
     };
-    
-    const initializeCall = async () => {
-       if (isCaller) { 
+
+    const unsubscribe = onSnapshot(doc(db, 'calls', chatId), async (snapshot) => {
+      if (!snapshot.exists()) {
+          onEndCall();
+          return;
+      }
+
+      const callData = snapshot.data() as CallState;
+      const pcInstance = pcRef.current;
+
+      if (!pcInstance) return;
+
+      if (callData.status && callData.status !== callStatus) {
+          setCallStatus(callData.status);
+      }
+      if (callData.status === 'answered' && !callStartTime) {
+          setCallStartTime(Date.now());
+      }
+      
+      // Set remote description if not set yet
+      if (callData.answer && pcInstance.signalingState !== 'stable') {
+          await pcInstance.setRemoteDescription(new RTCSessionDescription(callData.answer));
+      }
+
+      // Add ICE candidates
+      if (callData.iceCandidates) {
+          callData.iceCandidates.forEach(candidate => {
+              if (candidate && pcInstance.remoteDescription) {
+                  pcInstance.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
+              }
+          });
+      }
+    });
+
+    // Create offer or answer
+    const initialize = async () => {
+      if(callInitialized.current) return;
+      callInitialized.current = true;
+      
+      if (isCaller) { 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await createCallOffer(chatId, offer);
@@ -98,94 +152,17 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
       }
     };
 
-    initializeCall();
-    
-    const hangupCleanup = () => {
-      if (pcRef.current) {
-        const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
-        hangUp(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
+    initialize();
+
+    return () => {
+        unsubscribe();
+        hangUp(pcRef.current, localStream, chatId, 0, currentUser.id, chatPartner.id);
         pcRef.current = null;
-      }
-    }
-
-    return () => {
-        hangupCleanup();
     }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localStream, hasPermission, chatId]);
+  }, [localStream, chatId]);
 
-
-  // 3. Listen for signaling changes
-  useEffect(() => {
-    const callDocRef = doc(db, 'calls', chatId);
-    const unsubscribe = onSnapshot(callDocRef, async (snapshot) => {
-        const pc = pcRef.current;
-
-        if (!snapshot.exists()) {
-            if (!isCallEnded && callStatus !== 'calling') { // Don't end if it hasn't started
-                setIsCallEnded(true);
-                setCallStatus('ended');
-                setTimeout(() => onEndCall(), 2000);
-            }
-            return;
-        }
-
-        const callData = snapshot.data() as CallState;
-        
-        if (callData.status && callData.status !== callStatus) {
-            setCallStatus(callData.status);
-        }
-
-        if(callData.status === 'answered' && !callStartTime) {
-            setCallStartTime(Date.now());
-        }
-
-        if (!pc) return;
-        
-        if (isCaller && callData.answer && pc.signalingState !== 'stable') {
-            await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
-        }
-
-        if (callData.iceCandidates) {
-             callData.iceCandidates.forEach(candidate => {
-                if (candidate) {
-                    if (pc.remoteDescription) {
-                        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
-                    } else {
-                        // Queue candidates if remote description is not set yet
-                        setQueuedCandidates(prev => [...prev, candidate]);
-                    }
-                }
-            });
-        }
-    });
-
-    return () => {
-      unsubscribe();
-      setIsCallEnded(true); // Ensure ended state on unmount
-    }
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, onEndCall, callStartTime, isCaller, isCallEnded, callStatus]);
-
-  // 4. Process queued ICE candidates
-  useEffect(() => {
-    if (pcRef.current?.remoteDescription && queuedCandidates.length > 0) {
-      queuedCandidates.forEach(candidate => {
-        pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding queued ICE candidate:", e));
-      });
-      setQueuedCandidates([]);
-    }
-  }, [pcRef.current?.remoteDescription, queuedCandidates]);
-
-
-  const handleHangUp = (status: 'ended' | 'declined' = 'ended') => {
-      if(!isCallEnded) {
-         const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
-         updateCallStatus(chatId, status, duration, currentUser.id, chatPartner.id);
-      }
-  };
 
   const toggleMute = () => {
     if (localStream) {
@@ -202,21 +179,6 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
   }
 
   const renderCallStatus = () => {
-    if (hasPermission === false) {
-      return (
-        <Alert variant="destructive" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white border-0">
-          <AlertTitle>Доступ к камере/микрофону запрещен</AlertTitle>
-          <AlertDescription>Пожалуйста, разрешите доступ в настройках браузера.</AlertDescription>
-        </Alert>
-      )
-    }
-    if (isCallEnded) {
-        return (
-             <Alert className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white border-0">
-                <AlertTitle>Звонок завершен</AlertTitle>
-             </Alert>
-        )
-    }
     if (callStatus === 'ringing' || callStatus === 'calling') {
         return (
              <Alert className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white border-0">
@@ -281,3 +243,5 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     </div>
   );
 }
+
+    

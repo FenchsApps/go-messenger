@@ -26,6 +26,15 @@ interface ChatViewProps {
   onBack: () => void;
 }
 
+// Android WebView JavaScript Interface
+declare global {
+    interface Window {
+        Android?: {
+            showCallNotification(callerName: string, callerAvatar: string): void;
+        };
+    }
+}
+
 export function ChatView({
   initialMessages,
   currentUser,
@@ -95,6 +104,11 @@ export function ChatView({
         // If there's an incoming call for us, start the call view
         if (callData?.status === 'ringing' && callData?.offer && !isCalling) {
             setIsCalling(true);
+            
+            // For WebView: Trigger native notification
+            if (window.Android && typeof window.Android.showCallNotification === 'function') {
+                window.Android.showCallNotification(chatPartner.name, chatPartner.avatar);
+            }
         }
     });
 
@@ -102,7 +116,7 @@ export function ChatView({
         unsubscribeMessages();
         unsubscribeCalls();
     }
-  }, [chatId, currentUser.id, isWindowFocused, messages.length, isCalling]);
+  }, [chatId, currentUser.id, isWindowFocused, messages.length, isCalling, chatPartner.name, chatPartner.avatar]);
 
 
   const handleSendMessage = async (text: string) => {
@@ -232,3 +246,5 @@ export function ChatView({
     </div>
   );
 }
+
+    

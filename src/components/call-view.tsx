@@ -56,11 +56,11 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const { videoDeviceId, audioDeviceId } = useSettings();
 
   const hangUp = useCallback(async () => {
+    if (isCleaningUp.current) return;
+    
     if (callId) {
       await endCall(callId);
     }
-    // onEndCall is now the single source of truth for exiting the call view
-    // It will trigger the cleanup in the final useEffect return statement.
     onEndCall(); 
   }, [callId, onEndCall]);
 
@@ -108,8 +108,8 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       pc.ontrack = (event) => {
         if (remoteVideoRef.current && event.streams[0]) {
           remoteVideoRef.current.srcObject = event.streams[0];
-          setCallStatus('connected');
         }
+        setCallStatus('connected');
       };
       
       // Handle connection state
@@ -144,9 +144,17 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     
     const listenForSignals = (currentCallId: string) => {
         const signalsCollection = collection(db, 'calls', currentCallId, 'signals');
-        // Firestore requires a composite index for this query. 
-        // The error provides a link to create it in the Firebase console.
-        // If you see a 'failed-precondition' error, you MUST create this index.
+        
+        // =================================================================================
+        //  CRITICAL STEP FOR FIRESTORE
+        // =================================================================================
+        // This query requires a composite index in Firestore. If you see a 'failed-precondition'
+        // error in your console, it means the index is missing.
+        // 
+        // PLEASE CLICK THE LINK IN THE ERROR MESSAGE to go to the Firebase Console and
+        // create the required index. This is a one-time setup step. The app will not
+        // function correctly without it.
+        // =================================================================================
         const q = query(signalsCollection, where('to', '==', currentUser.id), orderBy('createdAt', 'asc'));
 
         unsubSignals = onSnapshot(q, async (snapshot) => {
@@ -158,11 +166,11 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                     const signal = change.doc.data().data;
                     
                     if (signal.sdp) {
-                         if (pc.signalingState !== 'stable') { // Already has a remote offer
-                            if (signal.sdp.type === 'answer') { // Caller receives answer
+                         if (pc.signalingState !== 'stable' && pc.signalingState !== 'have-local-offer') { 
+                            if (signal.sdp.type === 'answer') { 
                                 await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                             }
-                         } else if (signal.sdp.type === 'offer') { // Callee receives offer
+                         } else if (signal.sdp.type === 'offer') { 
                              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                              
                              pc.onicecandidate = async (event) => {
@@ -178,7 +186,13 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                          }
                     } else if (signal.candidate) {
                         if (pc.remoteDescription && pc.signalingState !== 'closed') {
-                            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                            try {
+                              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                            } catch (e) {
+                               if (pc.signalingState !== 'closed') {
+                                 console.error('Error adding received ICE candidate', e);
+                               }
+                            }
                         }
                     }
                 }
@@ -240,7 +254,9 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         pcRef.current.onicecandidate = null;
         pcRef.current.ontrack = null;
         pcRef.current.onconnectionstatechange = null;
-        pcRef.current.close();
+        if(pcRef.current.signalingState !== 'closed') {
+            pcRef.current.close();
+        }
         pcRef.current = null;
       }
       if (localVideoRef.current) localVideoRef.current.srcObject = null;
@@ -250,8 +266,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   }, []);
 
   const handleAcceptCall = () => {
-    // This button just changes the UI state.
-    // The connection logic is handled automatically when the offer is received.
     setCallStatus('connecting');
   };
 

@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback }from 'react';
 import type { User } from '@/lib/types';
 import { Button } from './ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { createCallOffer, createCallAnswer, addIceCandidate, endCall } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, collection } from 'firebase/firestore';
+import { doc, onSnapshot, collection, getDocs, writeBatch, query } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useSettings } from '@/context/settings-provider';
@@ -49,6 +49,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>();
   const isCleaningUpRef = useRef(false);
+  const [remoteIceCandidates, setRemoteIceCandidates] = useState<RTCIceCandidateInit[]>([]);
   
   const { toast } = useToast();
   const { videoDeviceId, audioDeviceId } = useSettings();
@@ -56,20 +57,22 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const cleanup = useCallback(() => {
     if (isCleaningUpRef.current) return;
     isCleaningUpRef.current = true;
+    
+    console.log("Cleaning up call resources...");
 
     if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      cancelAnimationFrame(animationFrameRef.current);
     }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
+      audioContextRef.current.close().catch(e => console.error("Error closing AudioContext", e));
     }
     if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-        localStreamRef.current = null;
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
     }
     if (pcRef.current) {
-        pcRef.current.close();
-        pcRef.current = null;
+      pcRef.current.close();
+      pcRef.current = null;
     }
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
@@ -77,12 +80,22 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
 
   const handleHangUp = useCallback(async () => {
     const currentCallId = callId;
+    console.log(`Hanging up call ${currentCallId}. Current status: ${callStatus}`);
+    
+    if (callStatus === 'ended' || callStatus === 'declined') {
+        cleanup();
+        onEndCall();
+        return;
+    }
+
+    setCallStatus('ended');
+
     if (currentCallId) {
       await endCall(currentCallId);
     }
     cleanup();
     onEndCall();
-  }, [callId, cleanup, onEndCall]);
+  }, [callId, cleanup, onEndCall, callStatus]);
 
   // Main effect for media and call setup
   useEffect(() => {
@@ -90,6 +103,8 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     let callerCandidatesUnsubscribe: (() => void) | null = null;
     let recipientCandidatesUnsubscribe: (() => void) | null = null;
     
+    isCleaningUpRef.current = false;
+
     const setupCall = async () => {
         try {
             // 1. Get Media
@@ -105,23 +120,26 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             setHasPermission(true);
 
             // Mic volume visualizer setup
-            const audioContext = new AudioContext();
-            audioContextRef.current = audioContext;
-            const source = audioContext.createMediaStreamSource(stream);
-            const analyser = audioContext.createAnalyser();
-            analyser.fftSize = 32;
-            source.connect(analyser);
-            analyserRef.current = analyser;
-            const visualize = () => {
-                if (!analyserRef.current) return;
-                const bufferLength = analyserRef.current.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-                analyserRef.current.getByteFrequencyData(dataArray);
-                const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
-                setMicVolume(average / 128);
-                animationFrameRef.current = requestAnimationFrame(visualize);
-            };
-            visualize();
+            if (!audioContextRef.current) {
+                const audioContext = new AudioContext();
+                audioContextRef.current = audioContext;
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 32;
+                source.connect(analyser);
+                analyserRef.current = analyser;
+
+                const visualize = () => {
+                    if (!analyserRef.current) return;
+                    const bufferLength = analyserRef.current.frequencyBinCount;
+                    const dataArray = new Uint8Array(bufferLength);
+                    analyserRef.current.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
+                    setMicVolume(average / 128);
+                    animationFrameRef.current = requestAnimationFrame(visualize);
+                };
+                visualize();
+            }
 
             // 2. Create Peer Connection
             const pc = new RTCPeerConnection(servers);
@@ -138,69 +156,38 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                 }
             };
             
-            // Handle connection state changes
             pc.onconnectionstatechange = () => {
                 if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) {
-                    handleHangUp();
+                   handleHangUp();
                 }
             };
             
-            // Handle ICE candidates
-            const queuedCandidates: RTCIceCandidateInit[] = [];
             pc.onicecandidate = async (event) => {
-                if (event.candidate) {
+                if (event.candidate && callId) {
                     await addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
                 }
             };
             
             // 3. Signaling Logic
-            let currentCallId = callId;
             if (!isReceivingCall) { // Caller logic
+                setCallStatus('ringing');
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 const newCallId = await createCallOffer(currentUser.id, chatPartner.id, offer);
                 setCallId(newCallId);
-                currentCallId = newCallId;
-            } else if (initialCallState) { // Recipient logic
-                setCallStatus('connecting');
-                await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                await createCallAnswer(currentCallId, answer);
+            } else if (initialCallState) { // Recipient logic (accepting call)
+                 if (callStatus === 'ringing') {
+                    // This block is entered when user clicks "accept"
+                    // The actual logic is handled by handleAcceptCall which changes the status
+                 } else {
+                    // This is for when the component re-renders after accepting
+                    await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    await createCallAnswer(callId, answer);
+                 }
             }
             
-            if (!currentCallId) return;
-
-            // 4. Listen to Firestore for signaling
-            callUnsubscribe = onSnapshot(doc(db, 'calls', currentCallId), (docSnapshot) => {
-                if (!docSnapshot.exists()) {
-                    handleHangUp();
-                    return;
-                }
-                const data = docSnapshot.data();
-                if (data.answer && pc.signalingState !== 'stable') {
-                    pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-                }
-            });
-            
-            const setupCandidateListener = (type: 'caller' | 'recipient') => {
-                return onSnapshot(collection(db, 'calls', currentCallId, `${type}Candidates`), (snapshot) => {
-                    snapshot.docChanges().forEach(async (change) => {
-                        if (change.type === 'added') {
-                            const candidate = new RTCIceCandidate(change.doc.data());
-                            if (pc.remoteDescription) {
-                                await pc.addIceCandidate(candidate);
-                            } else {
-                                queuedCandidates.push(candidate);
-                            }
-                        }
-                    });
-                });
-            };
-
-            callerCandidatesUnsubscribe = setupCandidateListener('caller');
-            recipientCandidatesUnsubscribe = setupCandidateListener('recipient');
-
         } catch (error: any) {
             console.error("Error setting up call:", error);
             setHasPermission(false);
@@ -212,22 +199,69 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             handleHangUp();
         }
     };
-
-    setupCall();
+    
+    // Only setup if we have permissions or are initializing
+    if (callStatus !== 'ringing' || !isReceivingCall) {
+        setupCall();
+    }
 
     return () => {
-      isCleaningUpRef.current = false;
       cleanup();
       if (callUnsubscribe) callUnsubscribe();
       if (callerCandidatesUnsubscribe) callerCandidatesUnsubscribe();
       if (recipientCandidatesUnsubscribe) recipientCandidatesUnsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [callStatus, isReceivingCall]); // Rerun when we accept the call
+  
+    // Effect to listen for signaling changes from Firestore
+  useEffect(() => {
+    if (!callId) return;
+
+    // Listen to the main call document for answer/offer
+    const callUnsubscribe = onSnapshot(doc(db, 'calls', callId), (docSnapshot) => {
+      if (!docSnapshot.exists()) {
+        handleHangUp();
+        return;
+      }
+      const data = docSnapshot.data();
+      const pc = pcRef.current;
+      if (pc && data.answer && pc.signalingState !== 'stable') {
+        pc.setRemoteDescription(new RTCSessionDescription(data.answer)).catch(e => console.error("Error setting remote description", e));
+      }
+    });
+
+    // Listen for ICE candidates from the other peer
+    const listenToCandidates = (type: 'caller' | 'recipient') => {
+        return onSnapshot(collection(db, 'calls', callId, `${type}Candidates`), (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === 'added') {
+                    setRemoteIceCandidates(prev => [...prev, change.doc.data()]);
+                }
+            });
+        });
+    };
+    
+    const candidatesToListen = isReceivingCall ? 'caller' : 'recipient';
+    const candidatesUnsubscribe = listenToCandidates(candidatesToListen);
+    
+    return () => {
+        callUnsubscribe();
+        candidatesUnsubscribe();
+    }
+  }, [callId, isReceivingCall, handleHangUp]);
+  
+  // Effect to process the ICE candidate queue
+  useEffect(() => {
+    const pc = pcRef.current;
+    if (pc && pc.remoteDescription && remoteIceCandidates.length > 0) {
+        remoteIceCandidates.forEach(candidate => {
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding received ICE candidate", e));
+        });
+        setRemoteIceCandidates([]); // Clear the queue
+    }
+  }, [remoteIceCandidates, pcRef.current?.remoteDescription]);
 
   const handleAcceptCall = () => {
-    // The setupCall effect will handle the logic when isReceivingCall is true
-    // This just updates the UI state
     setCallStatus('connecting');
   };
 
@@ -299,10 +333,8 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
 
   return (
     <div className="relative h-full w-full bg-black flex flex-col">
-      {/* Remote video fills the background */}
       <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
       
-      {/* Local video is the small picture-in-picture */}
       <video ref={localVideoRef} autoPlay playsInline muted className="absolute bottom-28 md:bottom-4 right-4 h-40 w-32 object-cover rounded-md border-2 border-white/50" />
       
       {(callStatus === 'connecting' || callStatus === 'ringing') && !isReceivingCall &&(

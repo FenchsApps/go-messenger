@@ -11,6 +11,7 @@ import { createCallAnswer, updateCallStatus, createCallOffer } from '@/app/actio
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 
 interface CallViewProps {
   chatId: string;

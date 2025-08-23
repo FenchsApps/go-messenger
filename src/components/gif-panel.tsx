@@ -3,7 +3,7 @@ import { useState, useTransition } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { GitCommit, Loader2 } from 'lucide-react';
+import { FileImage, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { searchGifs } from '@/app/actions';
 import Image from 'next/image';
@@ -51,13 +51,13 @@ export function GifPanel({ onGifSelect }: GifPanelProps) {
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon">
-          <GitCommit className="h-6 w-6 text-muted-foreground" />
+          <FileImage className="h-6 w-6 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full max-w-sm p-2 border-0 bg-background/80 backdrop-blur-sm">
         <div className="flex gap-2 mb-2">
           <Input
-            placeholder="Поиск GIF..."
+            placeholder="Поиск GIF в GIPHY..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}

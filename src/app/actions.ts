@@ -99,31 +99,30 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
 }
 
 export async function searchGifs(query: string) {
-  const apiKey = process.env.TENOR_API_KEY;
+  const apiKey = process.env.GIPHY_API_KEY;
   if (!apiKey) {
-    console.error('Tenor API key not found.');
+    console.error('GIPHY API key not found.');
     return { error: 'GIF service is not configured.' };
   }
   
-  const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(
-    query
-  )}&key=${apiKey}&client_key=my-project&limit=20`;
+  const url = `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=21&offset=0&rating=g&lang=en`;
 
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error('Tenor API error:', response.statusText);
-      return { error: 'Failed to fetch GIFs.' };
+      const errorText = await response.text();
+      console.error('GIPHY API error:', response.status, errorText);
+      return { error: 'Failed to fetch GIFs from GIPHY.' };
     }
     const data = await response.json();
-    const gifs = data.results.map((r: any) => ({
+    const gifs = data.data.map((r: any) => ({
       id: r.id,
-      url: r.media_formats.gif.url,
-      preview: r.media_formats.tinygif.url,
+      url: r.images.fixed_height.url,
+      preview: r.images.fixed_height_small.url,
     }));
     return { data: gifs };
   } catch (error) {
-    console.error('Error fetching GIFs:', error);
+    console.error('Error fetching GIFs from GIPHY:', error);
     return { error: 'Failed to fetch GIFs.' };
   }
 }

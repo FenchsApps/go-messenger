@@ -49,5 +49,7 @@ export const hangUp = async (pc: RTCPeerConnection | null, localStream: MediaStr
     localStream.getTracks().forEach((track) => track.stop());
   }
 
-  await updateCallStatus(chatId, 'ended');
+  if (chatId) {
+    await updateCallStatus(chatId, 'ended');
+  }
 };

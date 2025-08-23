@@ -186,6 +186,6 @@ export async function addIceCandidate(chatId: string, candidate: RTCIceCandidate
 
 export async function updateCallStatus(chatId: string, status: 'declined' | 'ended') {
     const callDocRef = doc(db, 'calls', chatId);
-    await updateDoc(callDocRef, { status });
+    await setDoc(callDocRef, { status }, { merge: true });
     // Consider deleting the document after a call ends and has been acknowledged by both parties.
 }

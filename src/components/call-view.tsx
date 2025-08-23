@@ -76,9 +76,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         analyserRef.current = analyser;
 
         const visualize = () => {
-            const bufferLength = analyser.frequencyBinCount;
+            if (!analyserRef.current) return;
+            const bufferLength = analyserRef.current.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-            analyser.getByteFrequencyData(dataArray);
+            analyserRef.current.getByteFrequencyData(dataArray);
             const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
             setMicVolume(average / 128); // Normalize to 0-1 range
             animationFrameRef.current = requestAnimationFrame(visualize);
@@ -159,7 +160,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
 
     const unsubscribe = onSnapshot(doc(db, 'calls', callId), async (docSnapshot) => {
         const data = docSnapshot.data();
-        if (!data) return;
+        if (!data) { // Document was deleted, call has ended.
+             handleHangUp(false, callStatus === 'connected' ? 'ended' : 'missed');
+             return;
+        }
 
         const pc = pcRef.current;
         if (!pc) return;
@@ -218,19 +222,23 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
           return;
       };
 
+      // To prevent multiple logs, only the initiator of the hangup action deletes the document.
       if (isInitiator) {
          await hangUp(callId);
       }
       
       const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
       
-      logCall({
-          senderId: currentUser.id,
-          recipientId: chatPartner.id,
-          status,
-          duration,
-          callerId: initialCallState?.callerId || currentUser.id,
-      });
+      // Log the call only once per client.
+      if(callStatus !== 'ended' && callStatus !== 'declined') { // Avoid duplicate logs
+        logCall({
+            senderId: currentUser.id,
+            recipientId: chatPartner.id,
+            status,
+            duration,
+            callerId: initialCallState?.callerId || currentUser.id,
+        });
+      }
 
       onEndCall();
   };
@@ -322,10 +330,12 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         <Button onClick={toggleCamera} variant={isCameraOn ? 'secondary' : 'destructive'} size="icon" className="rounded-full h-14 w-14">
             {isCameraOn ? <Video /> : <VideoOff />}
         </Button>
-         <Button onClick={() => handleHangUp(true, callStatus === 'connected' ? 'ended' : 'declined')} variant="destructive" size="lg" className="rounded-full h-14 w-24">
+         <Button onClick={() => handleHangUp(true, callStatus === 'connected' ? 'ended' : 'missed')} variant="destructive" size="lg" className="rounded-full h-14 w-24">
             <PhoneOff />
         </Button>
       </div>
     </div>
   );
 }
+
+    

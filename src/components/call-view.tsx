@@ -7,7 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { startCall, hangUp, updateCallStatus, addIceCandidate } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, collection } from 'firebase/firestore';
+import { doc, onSnapshot, collection, getDocs, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useSettings } from '@/context/settings-provider';
@@ -31,7 +31,6 @@ interface CallViewProps {
 
 type CallStatus = 'ringing' | 'connecting' | 'connected' | 'declined' | 'ended' | 'missed';
 
-
 export function CallView({ currentUser, chatPartner, isReceivingCall, initialCallState, onEndCall }: CallViewProps) {
   const [callId, setCallId] = useState<string | null>(initialCallState?.id || null);
   const [callStatus, setCallStatus] = useState<CallStatus>(initialCallState ? 'ringing' : 'connecting');
@@ -49,6 +48,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>();
+  const [iceCandidateQueue, setIceCandidateQueue] = useState<RTCIceCandidateInit[]>([]);
   
   const { toast } = useToast();
   const { videoDeviceId, audioDeviceId } = useSettings();
@@ -71,75 +71,115 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
 
 
   useEffect(() => {
-    let pc: RTCPeerConnection;
-    let localStream: MediaStream;
-
     const initialize = async () => {
-      try {
-        const constraints: MediaStreamConstraints = {
-            video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
-            audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
-        };
-        localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        setHasPermission(true);
-        localStreamRef.current = localStream;
+        try {
+            const constraints: MediaStreamConstraints = {
+                video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
+                audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            setHasPermission(true);
+            localStreamRef.current = stream;
 
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = localStream;
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
+            }
+            
+            if (stream.getAudioTracks().length > 0) {
+                const audioContext = new AudioContext();
+                audioContextRef.current = audioContext;
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 32;
+                source.connect(analyser);
+                analyserRef.current = analyser;
+
+                const visualize = () => {
+                    if (!analyserRef.current) return;
+                    const bufferLength = analyserRef.current.frequencyBinCount;
+                    const dataArray = new Uint8Array(bufferLength);
+                    analyserRef.current.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
+                    setMicVolume(average / 128);
+                    animationFrameRef.current = requestAnimationFrame(visualize);
+                };
+                visualize();
+            }
+
+        } catch (error: any) {
+            console.error("Error initializing media.", error);
+            setHasPermission(false);
+            toast({
+                variant: 'destructive',
+                title: 'Ошибка инициализации звонка',
+                description: error.message === 'Failed to allocate videosource' 
+                  ? 'Не удалось получить доступ к камере. Возможно, она используется другим приложением. Перезагрузите страницу.'
+                  : 'Не удалось получить доступ к камере и микрофону. Пожалуйста, проверьте разрешения.',
+            });
+            handleHangUp(true, 'ended');
         }
+    };
 
-        if (localStream.getAudioTracks().length > 0) {
-          const audioContext = new AudioContext();
-          audioContextRef.current = audioContext;
-          const source = audioContext.createMediaStreamSource(localStream);
-          const analyser = audioContext.createAnalyser();
-          analyser.fftSize = 32;
-          source.connect(analyser);
-          analyserRef.current = analyser;
+    initialize();
 
-          const visualize = () => {
-              if (!analyserRef.current) return;
-              const bufferLength = analyserRef.current.frequencyBinCount;
-              const dataArray = new Uint8Array(bufferLength);
-              analyserRef.current.getByteFrequencyData(dataArray);
-              const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
-              setMicVolume(average / 128);
-              animationFrameRef.current = requestAnimationFrame(visualize);
-          };
-          visualize();
+    return () => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
         }
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close();
+        }
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => track.stop());
+            localStreamRef.current = null;
+        }
+        if (pcRef.current) {
+            pcRef.current.close();
+            pcRef.current = null;
+        }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-        pc = new RTCPeerConnection(servers);
-        pcRef.current = pc;
+  useEffect(() => {
+    if (!hasPermission) return;
 
-        pc.ontrack = event => {
-          if (remoteVideoRef.current && event.streams[0]) {
+    const pc = new RTCPeerConnection(servers);
+    pcRef.current = pc;
+
+    if(localStreamRef.current){
+        localStreamRef.current.getTracks().forEach(track => {
+            pc.addTrack(track, localStreamRef.current!);
+        });
+    }
+
+    pc.ontrack = event => {
+        if (remoteVideoRef.current && event.streams[0]) {
             remoteVideoRef.current.srcObject = event.streams[0];
-          }
-        };
+        }
+    };
 
-        pc.onicecandidate = event => {
-            if (event.candidate && callId) {
-                addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
-            }
-        };
+    pc.onicecandidate = event => {
+        if (event.candidate && callId) {
+            addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
+        }
+    };
+    
+    pc.onconnectionstatechange = () => {
+        if (pcRef.current?.connectionState === 'connected') {
+            setCallStatus('connected');
+        } else if (['disconnected', 'closed', 'failed'].includes(pcRef.current?.connectionState || '')) {
+            handleHangUp(false, 'ended');
+        }
+    };
 
-        pc.onconnectionstatechange = () => {
-            if (pcRef.current?.connectionState === 'connected') {
-                setCallStatus('connected');
-            } else if (['disconnected', 'closed', 'failed'].includes(pcRef.current?.connectionState || '')) {
-                handleHangUp(false, 'ended');
-            }
-        };
-
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-        
+    const initializeCall = async () => {
         if (isReceivingCall && initialCallState) {
+            setCallId(initialCallState.id);
             await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             await updateCallStatus(initialCallState.id, 'answered', answer);
-            setCallId(initialCallState.id);
         } else {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -147,41 +187,13 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             setCallId(newCallId);
             setCallStatus('ringing');
         }
-
-      } catch (error: any) {
-        console.error("Error initializing call.", error);
-        setHasPermission(false);
-        toast({
-            variant: 'destructive',
-            title: 'Ошибка инициализации звонка',
-            description: error.message === 'Failed to allocate videosource' 
-              ? 'Не удалось получить доступ к камере. Возможно, она используется другим приложением. Перезагрузите страницу.'
-              : 'Не удалось получить доступ к камере и микрофону. Пожалуйста, проверьте разрешения.',
-        });
-        handleHangUp(true, 'ended');
-      }
     };
+    
+    initializeCall();
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPermission]);
 
-    initialize();
-
-    return () => {
-      if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-          audioContextRef.current.close();
-      }
-      if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach(track => track.stop());
-          localStreamRef.current = null;
-      }
-      if (pcRef.current) {
-          pcRef.current.close();
-          pcRef.current = null;
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (!callId) return;
@@ -215,10 +227,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     const unsubscribeCandidates = onSnapshot(candidatesCollection, (snapshot) => {
         snapshot.docChanges().forEach((change) => {
             if (change.type === 'added') {
-                const candidate = new RTCIceCandidate(change.doc.data());
-                if (pcRef.current?.remoteDescription) {
-                    pcRef.current?.addIceCandidate(candidate);
-                }
+                setIceCandidateQueue(prev => [...prev, change.doc.data()]);
             }
         });
     });
@@ -229,10 +238,18 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callId]);
+  
+  useEffect(() => {
+    if (pcRef.current?.remoteDescription && iceCandidateQueue.length > 0) {
+        iceCandidateQueue.forEach(candidate => {
+            pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate));
+        });
+        setIceCandidateQueue([]);
+    }
+  }, [pcRef.current?.remoteDescription, iceCandidateQueue]);
 
 
   const handleAcceptCall = async () => {
-    // Logic is now moved to the initial useEffect for receiving calls
     setCallStatus('connecting');
   };
 
@@ -338,3 +355,5 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
+
+    

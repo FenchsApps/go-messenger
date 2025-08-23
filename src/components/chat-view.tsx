@@ -160,7 +160,7 @@ export function ChatView({
 
                  if (window.Android?.showCallNotification) {
                     window.Android.showCallNotification(caller.name, caller.avatar);
-                 } else if (Notification.permission === 'granted') {
+                 } else if (Notification.permission === 'granted' && !isWindowFocused) {
                     new Notification('Входящий звонок', {
                         body: `${caller.name} звонит вам...`,
                         icon: caller.avatar,
@@ -171,7 +171,7 @@ export function ChatView({
      });
 
      return () => unsubscribe();
-  }, [currentUser.id, isCalling]);
+  }, [currentUser.id, isCalling, isWindowFocused]);
 
 
   const handleSendMessage = async (text: string) => {

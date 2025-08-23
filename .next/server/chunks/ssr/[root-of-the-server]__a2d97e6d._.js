@@ -582,6 +582,7 @@ async function addIceCandidate(chatId, candidate) {
     const callDoc = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getDoc"])(callDocRef);
     if (callDoc.exists()) {
         const data = callDoc.data();
+        // Use a more robust way to update array to avoid race conditions if possible
         const candidates = data.iceCandidates || [];
         await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateDoc"])(callDocRef, {
             iceCandidates: [
@@ -599,22 +600,33 @@ async function updateCallStatus(chatId, status, duration, callerId, calleeId) {
         if (status === 'ended' || status === 'declined') {
             await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["deleteDoc"])(callDocRef);
             if (callerId && calleeId) {
-                let callStatus = callData.status === 'answered' ? 'answered' : status === 'declined' ? 'declined' : 'missed';
+                // Determine the correct call status for the message
+                // If callData.status is not 'answered', it was missed (if not declined)
+                let finalStatus = callData.status === 'answered' ? 'answered' : 'missed';
+                if (status === 'declined') {
+                    finalStatus = 'declined';
+                }
                 let messageText = 'Звонок';
-                if (callStatus === 'answered') {
+                if (finalStatus === 'answered') {
                     messageText = `Звонок длительностью ${duration} сек.`;
-                } else if (callStatus === 'declined') {
+                } else if (finalStatus === 'declined') {
                     messageText = 'Звонок отклонен';
-                } else if (callStatus === 'missed') {
+                } else if (finalStatus === 'missed') {
                     messageText = 'Пропущенный звонок';
                 }
                 await sendMessage(callerId, calleeId, messageText, undefined, {
-                    status: callStatus,
+                    status: finalStatus,
                     duration: duration
                 });
             }
+        } else if (status === 'answered') {
+            await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateDoc"])(callDocRef, {
+                status
+            });
         }
     } else if (status === 'answered') {
+        // If doc doesn't exist and we are answering, create it.
+        // This can happen in a race condition.
         await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["setDoc"])(callDocRef, {
             status
         }, {

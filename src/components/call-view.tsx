@@ -34,6 +34,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
   const [isCallEnded, setIsCallEnded] = useState(false);
   const [queuedCandidates, setQueuedCandidates] = useState<RTCIceCandidateInit[]>([]);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const isCaller = !initialCallState?.offer;
 
   // 1. Get user media
@@ -42,40 +43,29 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setLocalStream(stream);
+        setHasPermission(true);
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
         }
       } catch (error) {
         console.error("Error starting media:", error);
-        toast({ title: "Ошибка медиа", description: "Не удалось получить доступ к камере или микрофону.", variant: "destructive"});
-        handleHangUp('declined');
+        setHasPermission(false);
+        toast({ title: "Ошибка медиа", description: "Не удалось получить доступ к камере или микрофону. Проверьте разрешения в браузере.", variant: "destructive"});
+        // Give user time to see the error before ending the call
+        setTimeout(() => handleHangUp('declined'), 3000);
       }
     };
 
     startMedia();
     
-    return () => {
-        setIsCallEnded(true); 
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // This effect should only run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Ensure hangup is called on unmount
-  useEffect(() => {
-      return () => {
-        if (pcRef.current || localStream) {
-             const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
-             hangUp(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
-             pcRef.current = null;
-        }
-      }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, localStream, callStartTime]);
   
-
   // 2. Create peer connection and handle call logic
   useEffect(() => {
-    if (!localStream) return;
+    // Wait for media stream and permission before initializing WebRTC
+    if (!localStream || hasPermission !== true) return;
     
     const pc = new RTCPeerConnection( { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] });
     pcRef.current = pc;
@@ -109,9 +99,21 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     };
 
     initializeCall();
+    
+    const hangupCleanup = () => {
+      if (pcRef.current) {
+        const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
+        hangUp(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
+        pcRef.current = null;
+      }
+    }
+
+    return () => {
+        hangupCleanup();
+    }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localStream, chatId]);
+  }, [localStream, hasPermission, chatId]);
 
 
   // 3. Listen for signaling changes
@@ -119,8 +121,9 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     const callDocRef = doc(db, 'calls', chatId);
     const unsubscribe = onSnapshot(callDocRef, async (snapshot) => {
         const pc = pcRef.current;
+
         if (!snapshot.exists()) {
-            if (!isCallEnded) {
+            if (!isCallEnded && callStatus !== 'calling') { // Don't end if it hasn't started
                 setIsCallEnded(true);
                 setCallStatus('ended');
                 setTimeout(() => onEndCall(), 2000);
@@ -129,7 +132,8 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         }
 
         const callData = snapshot.data() as CallState;
-        if (callData.status !== callStatus) {
+        
+        if (callData.status && callData.status !== callStatus) {
             setCallStatus(callData.status);
         }
 
@@ -149,6 +153,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
                     if (pc.remoteDescription) {
                         pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
                     } else {
+                        // Queue candidates if remote description is not set yet
                         setQueuedCandidates(prev => [...prev, candidate]);
                     }
                 }
@@ -156,7 +161,10 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      setIsCallEnded(true); // Ensure ended state on unmount
+    }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, onEndCall, callStartTime, isCaller, isCallEnded, callStatus]);
@@ -169,7 +177,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
       });
       setQueuedCandidates([]);
     }
-  }, [queuedCandidates]);
+  }, [pcRef.current?.remoteDescription, queuedCandidates]);
 
 
   const handleHangUp = (status: 'ended' | 'declined' = 'ended') => {
@@ -194,6 +202,14 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
   }
 
   const renderCallStatus = () => {
+    if (hasPermission === false) {
+      return (
+        <Alert variant="destructive" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white border-0">
+          <AlertTitle>Доступ к камере/микрофону запрещен</AlertTitle>
+          <AlertDescription>Пожалуйста, разрешите доступ в настройках браузера.</AlertDescription>
+        </Alert>
+      )
+    }
     if (isCallEnded) {
         return (
              <Alert className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white border-0">
@@ -238,12 +254,23 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         muted
         className="absolute w-32 h-48 md:w-48 md:h-64 top-4 right-4 rounded-lg object-cover border-2 border-white"
       />
+       { hasPermission === false && (
+         <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+            <Alert variant="destructive">
+                <AlertTitle>Требуется доступ к камере и микрофону</AlertTitle>
+                <AlertDescription>
+                   Чтобы совершать звонки, разрешите доступ в вашем браузере.
+                </AlertDescription>
+            </Alert>
+         </div>
+        )
+       }
       <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent">
         <div className="flex justify-center items-center gap-4">
-          <Button variant="secondary" size="icon" className="rounded-full h-14 w-14" onClick={toggleMute}>
+          <Button variant="secondary" size="icon" className="rounded-full h-14 w-14" onClick={toggleMute} disabled={!localStream}>
             {isMuted ? <MicOff /> : <Mic />}
           </Button>
-           <Button variant="secondary" size="icon" className="rounded-full h-14 w-14" onClick={toggleVideo}>
+           <Button variant="secondary" size="icon" className="rounded-full h-14 w-14" onClick={toggleVideo} disabled={!localStream}>
             {isVideoOff ? <VideoOff /> : <Video />}
           </Button>
           <Button variant="destructive" size="icon" className="rounded-full h-16 w-16" onClick={() => handleHangUp()}>

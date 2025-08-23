@@ -178,6 +178,7 @@ export async function addIceCandidate(chatId: string, candidate: RTCIceCandidate
   const callDoc = await getDoc(callDocRef);
   if (callDoc.exists()) {
     const data = callDoc.data();
+    // Use a more robust way to update array to avoid race conditions if possible
     const candidates = data.iceCandidates || [];
     await updateDoc(callDocRef, {
       iceCandidates: [...candidates, candidate],
@@ -201,23 +202,33 @@ export async function updateCallStatus(
             await deleteDoc(callDocRef);
             
             if(callerId && calleeId) {
-                let callStatus = callData.status === 'answered' ? 'answered' : (status === 'declined' ? 'declined' : 'missed');
+                // Determine the correct call status for the message
+                // If callData.status is not 'answered', it was missed (if not declined)
+                let finalStatus = callData.status === 'answered' ? 'answered' : 'missed';
+                if (status === 'declined') {
+                    finalStatus = 'declined';
+                }
+
                 let messageText = 'Звонок';
-                 if(callStatus === 'answered') {
+                 if(finalStatus === 'answered') {
                     messageText = `Звонок длительностью ${duration} сек.`
-                 } else if (callStatus === 'declined') {
+                 } else if (finalStatus === 'declined') {
                     messageText = 'Звонок отклонен'
-                 } else if (callStatus === 'missed') {
+                 } else if (finalStatus === 'missed') {
                     messageText = 'Пропущенный звонок'
                  }
 
                 await sendMessage(callerId, calleeId, messageText, undefined, {
-                    status: callStatus,
+                    status: finalStatus as 'answered' | 'declined' | 'missed',
                     duration: duration,
                 })
             }
+        } else if (status === 'answered') {
+            await updateDoc(callDocRef, { status });
         }
     } else if(status === 'answered') {
+        // If doc doesn't exist and we are answering, create it.
+        // This can happen in a race condition.
         await setDoc(callDocRef, { status }, { merge: true });
     }
 }

@@ -15,7 +15,7 @@ export type Message = {
   recipientId: string;
   text: string;
   timestamp: number;
-  type: 'text' | 'sticker' | 'gif' | 'call';
+  type: 'text' | 'sticker' | 'gif';
   stickerId?: string;
   gifUrl?: string;
   edited?: boolean;
@@ -23,16 +23,5 @@ export type Message = {
     name: string;
     text: string;
   } | null;
-  callInfo?: {
-    status: 'answered' | 'declined' | 'missed';
-    duration?: number; // in seconds
-  }
-};
-
-export type CallState = {
-  offer?: RTCSessionDescriptionInit;
-  answer?: RTCSessionDescriptionInit;
-  iceCandidates?: RTCIceCandidateInit[];
-  status: 'calling' | 'ringing' | 'answered' | 'declined' | 'ended';
-  createdAt?: any;
+  read?: boolean;
 };

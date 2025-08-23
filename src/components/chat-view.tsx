@@ -1,19 +1,34 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import type { Message, User, CallState } from '@/lib/types';
+import type { Message, User } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
 import { ChatInput } from './chat-input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from './ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, getDocs, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
-import { CallView } from './call-view';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -30,7 +45,7 @@ interface ChatViewProps {
 declare global {
     interface Window {
         Android?: {
-            showCallNotification(callerName: string, callerAvatar: string): void;
+            showNewMessageNotification(senderName: string, messageText: string, senderAvatar: string): void;
         };
     }
 }
@@ -46,16 +61,13 @@ export function ChatView({
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState('');
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
-  const [callState, setCallState] = useState<CallState | null>(null);
-  const [isCalling, setIsCalling] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
 
-  useEffect(() => {
+   useEffect(() => {
     const handleFocus = () => setIsWindowFocused(true);
     const handleBlur = () => setIsWindowFocused(false);
 
@@ -67,14 +79,18 @@ export function ChatView({
       window.removeEventListener('blur', handleBlur);
     };
   }, []);
+
+  useEffect(() => {
+    if (isWindowFocused) {
+        markMessagesAsRead(chatId, currentUser.id);
+    }
+  }, [isWindowFocused, messages, chatId, currentUser.id]);
   
   useEffect(() => {
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
     const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
       const newMessages: Message[] = [];
-      const isFirstLoad = messagesRef.current.length === 0;
-
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const newMessage = {
@@ -84,47 +100,40 @@ export function ChatView({
         } as Message;
         newMessages.push(newMessage);
         
-        // Show notification for new messages
-        if (!isFirstLoad && newMessage.senderId !== currentUser.id && !isWindowFocused && Notification.permission === 'granted') {
+        // Show notification for new messages only when window is not focused
+        if (newMessage.senderId !== currentUser.id && !isWindowFocused) {
              const sender = allUsers.find(u => u.id === newMessage.senderId);
-             const notificationText = newMessage.type === 'text' ? newMessage.text : (newMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
-             new Notification(`Новое сообщение от ${sender?.name || 'Unknown'}`, {
-                body: notificationText,
-                icon: sender?.avatar
-             });
+             if (sender) {
+                 const notificationText = newMessage.type === 'text' ? newMessage.text : (newMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
+                 
+                 // For native WebView
+                 if (window.Android?.showNewMessageNotification) {
+                    window.Android.showNewMessageNotification(sender.name, notificationText, sender.avatar);
+                 } 
+                 // For Web Browser
+                 else if (Notification.permission === 'granted') {
+                    new Notification(`Новое сообщение от ${sender.name}`, {
+                        body: notificationText,
+                        icon: sender.avatar
+                    });
+                 }
+             }
         }
       });
+      
+      const prevMessages = messages;
       setMessages(newMessages);
-    });
 
-    const callDocRef = doc(db, 'calls', chatId);
-    const unsubscribeCalls = onSnapshot(callDocRef, (doc) => {
-       if (!doc.exists()) {
-            if(isCalling) {
-                handleEndCall();
-            }
-            return;
-        }
-
-        const callData = doc.data() as CallState | null;
-        setCallState(callData);
-
-        // If there's an incoming call for us, start the call view
-        if (callData?.status === 'ringing' && callData?.offer && !isCalling) {
-            setIsCalling(true);
-            
-            // For WebView: Trigger native notification
-            if (window.Android && typeof window.Android.showCallNotification === 'function') {
-                window.Android.showCallNotification(chatPartner.name, chatPartner.avatar);
-            }
-        }
+      // Mark as read only if new messages have arrived
+      if (newMessages.length > prevMessages.length && isWindowFocused) {
+          markMessagesAsRead(chatId, currentUser.id);
+      }
     });
 
     return () => {
         unsubscribeMessages();
-        unsubscribeCalls();
     }
-  }, [chatId, currentUser.id, isWindowFocused, isCalling, chatPartner.name, chatPartner.avatar]);
+  }, [chatId, currentUser.id, isWindowFocused, messages]);
 
 
   const handleSendMessage = async (text: string) => {
@@ -189,26 +198,14 @@ export function ChatView({
     setForwardingMessage(null);
   }
 
-  const handleInitiateCall = () => {
-    // We set isCalling to true immediately for the caller
-    setIsCalling(true);
-  }
-  
-  const handleEndCall = () => {
-      setIsCalling(false);
-      setCallState(null); // Clear the call state locally
-  }
-
-  if (isCalling) {
-      return (
-          <CallView 
-              chatId={chatId}
-              currentUser={currentUser}
-              chatPartner={chatPartner}
-              initialCallState={callState}
-              onEndCall={handleEndCall}
-          />
-      )
+  const handleClearChat = async () => {
+    const result = await clearChatHistory(chatId);
+    if (result.error) {
+        toast({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+    } else {
+        toast({ title: 'Успех', description: 'История чата была очищена.' });
+    }
+    setIsClearingChat(false);
   }
 
   return (
@@ -217,7 +214,7 @@ export function ChatView({
         user={chatPartner} 
         isMobile={isMobile} 
         onBack={onBack}
-        onCall={handleInitiateCall}
+        onClearChat={() => setIsClearingChat(true)}
       />
       <ChatMessages
         messages={messages}
@@ -251,6 +248,20 @@ export function ChatView({
         onForward={handleConfirmForward}
         currentUser={currentUser}
       />
+      <AlertDialog open={isClearingChat} onOpenChange={setIsClearingChat}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Очистить историю чата?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      Это действие навсегда удалит все сообщения в этом чате. Это действие нельзя будет отменить.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel>Отмена</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearChat}>Очистить</AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
@@ -36,8 +36,8 @@ function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
 }
 
-export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }, callInfo?: { status: 'answered' | 'declined' | 'missed', duration?: number }) {
-    if (!text.trim() && !callInfo) {
+export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }) {
+    if (!text.trim()) {
         return { error: 'Message cannot be empty' };
     }
     
@@ -49,10 +49,10 @@ export async function sendMessage(senderId: string, recipientId: string, text: s
             recipientId,
             text,
             timestamp: serverTimestamp(),
-            type: callInfo ? 'call' : 'text',
+            type: 'text',
             edited: false,
             forwardedFrom: forwardedFrom || null,
-            callInfo: callInfo || null,
+            read: false,
         });
         return { error: null, data: { id: docRef.id, text } };
     } catch (error) {
@@ -72,6 +72,7 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
             timestamp: serverTimestamp(),
             type: 'sticker',
             stickerId,
+            read: false,
         });
         return { error: null, data: { id: docRef.id, stickerId } };
     } catch (error) {
@@ -91,6 +92,7 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
             timestamp: serverTimestamp(),
             type: 'gif',
             gifUrl,
+            read: false,
         });
         return { error: null, data: { id: docRef.id, gifUrl } };
     } catch (error) {
@@ -157,78 +159,38 @@ export async function deleteMessage(chatId: string, messageId: string) {
     }
 }
 
-
-// WebRTC Signaling Actions
-export async function createCallOffer(chatId: string, offer: RTCSessionDescriptionInit) {
-  const callDocRef = doc(db, 'calls', chatId);
-  await setDoc(callDocRef, {
-    offer,
-    status: 'ringing',
-    createdAt: serverTimestamp(),
-  });
-}
-
-export async function createCallAnswer(chatId: string, answer: RTCSessionDescriptionInit) {
-  const callDocRef = doc(db, 'calls', chatId);
-  await updateDoc(callDocRef, { answer, status: 'answered' });
-}
-
-export async function addIceCandidate(chatId: string, candidate: RTCIceCandidateInit) {
-  const callDocRef = doc(db, 'calls', chatId);
-  const callDoc = await getDoc(callDocRef);
-  if (callDoc.exists()) {
-    const data = callDoc.data();
-    // Use a more robust way to update array to avoid race conditions if possible
-    const candidates = data.iceCandidates || [];
-    await updateDoc(callDocRef, {
-      iceCandidates: [...candidates, candidate],
-    });
-  }
-}
-
-export async function updateCallStatus(
-    chatId: string, 
-    status: 'declined' | 'ended' | 'answered', 
-    duration?: number,
-    callerId?: string,
-    calleeId?: string,
-) {
-    const callDocRef = doc(db, 'calls', chatId);
-    const callDoc = await getDoc(callDocRef);
-
-    if (callDoc.exists()) {
-        const callData = callDoc.data();
-        if (status === 'ended' || status === 'declined') {
-            
-            if(callerId && calleeId) {
-                // Determine the correct call status for the message
-                // If callData.status is not 'answered', it was missed (if not declined)
-                let finalStatus = callData.status === 'answered' ? 'answered' : 'missed';
-                if (status === 'declined') {
-                    finalStatus = 'declined';
-                }
-
-                let messageText = 'Звонок';
-                 if(finalStatus === 'answered') {
-                    messageText = `Звонок длительностью ${duration} сек.`
-                 } else if (finalStatus === 'declined') {
-                    messageText = 'Звонок отклонен'
-                 } else if (finalStatus === 'missed') {
-                    messageText = 'Пропущенный звонок'
-                 }
-
-                await sendMessage(callerId, calleeId, messageText, undefined, {
-                    status: finalStatus as 'answered' | 'declined' | 'missed',
-                    duration: duration,
-                })
-            }
-            await deleteDoc(callDocRef);
-        } else if (status === 'answered') {
-            await updateDoc(callDocRef, { status });
+export async function markMessagesAsRead(chatId: string, currentUserId: string) {
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    const q = query(messagesRef, where('recipientId', '==', currentUserId), where('read', '==', false));
+    
+    try {
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            return; // No unread messages to mark
         }
-    } else if(status === 'answered') {
-        // If doc doesn't exist and we are answering, create it.
-        // This can happen in a race condition.
-        await setDoc(callDocRef, { status }, { merge: true });
+        
+        const batch = writeBatch(db);
+        querySnapshot.forEach(doc => {
+            batch.update(doc.ref, { read: true });
+        });
+        await batch.commit();
+    } catch (error) {
+        console.error("Error marking messages as read: ", error);
+    }
+}
+
+export async function clearChatHistory(chatId: string) {
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    try {
+        const querySnapshot = await getDocs(messagesRef);
+        const batch = writeBatch(db);
+        querySnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        return { success: true };
+    } catch (error) {
+        console.error("Error clearing chat history: ", error);
+        return { error: 'Failed to clear chat history.' };
     }
 }

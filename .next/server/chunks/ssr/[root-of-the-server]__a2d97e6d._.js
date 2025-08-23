@@ -349,18 +349,16 @@ try {
 var { g: global, __dirname } = __turbopack_context__;
 {
 // @ts-nocheck
-/* __next_internal_action_entry_do_not_use__ [{"409e93a08092ba11b70da181b8437860f103d7cbfb":"searchGifs","40a8fec7cdefd0ea77a3ee93895583fba2af256290":"getFilteredMessage","6040f336319d499f4f8fb5ee6879c5eee6b49a0fbf":"createCallAnswer","60683cf55ab4a59e76eb7909f0c39798439d5d6c92":"addIceCandidate","6082a68fb814428b566b32d551d95980da5a0e9c05":"deleteMessage","60ebe43e685c27f63aae9b9bcc8269d30c2244126b":"createCallOffer","702e1c340d1eab2bea22e72f39e9f5e78357cf0ea1":"sendSticker","705394123808f77ae076418e2562d4b6e3695e2f20":"sendGif","705763b4cc11e647e621930ce50f6aa5850bc05850":"editMessage","7ca53473e44b1197fd7e48ac4fbf54d37643f07461":"updateCallStatus","7caa2447a300bdb474f91bdc8f096d1589fc2797dc":"sendMessage"},"",""] */ __turbopack_context__.s({
-    "addIceCandidate": (()=>addIceCandidate),
-    "createCallAnswer": (()=>createCallAnswer),
-    "createCallOffer": (()=>createCallOffer),
+/* __next_internal_action_entry_do_not_use__ [{"409e93a08092ba11b70da181b8437860f103d7cbfb":"searchGifs","40a8fec7cdefd0ea77a3ee93895583fba2af256290":"getFilteredMessage","40f784cb07841038eb7841f8782797dc636cd57a95":"clearChatHistory","6017f6d2a4ed6ee70bb28fd0a9f062866349785ef9":"markMessagesAsRead","6082a68fb814428b566b32d551d95980da5a0e9c05":"deleteMessage","702e1c340d1eab2bea22e72f39e9f5e78357cf0ea1":"sendSticker","705394123808f77ae076418e2562d4b6e3695e2f20":"sendGif","705763b4cc11e647e621930ce50f6aa5850bc05850":"editMessage","78aa2447a300bdb474f91bdc8f096d1589fc2797dc":"sendMessage"},"",""] */ __turbopack_context__.s({
+    "clearChatHistory": (()=>clearChatHistory),
     "deleteMessage": (()=>deleteMessage),
     "editMessage": (()=>editMessage),
     "getFilteredMessage": (()=>getFilteredMessage),
+    "markMessagesAsRead": (()=>markMessagesAsRead),
     "searchGifs": (()=>searchGifs),
     "sendGif": (()=>sendGif),
     "sendMessage": (()=>sendMessage),
-    "sendSticker": (()=>sendSticker),
-    "updateCallStatus": (()=>updateCallStatus)
+    "sendSticker": (()=>sendSticker)
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/build/webpack/loaders/next-flight-loader/server-reference.js [app-rsc] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$app$2d$render$2f$encryption$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/app-render/encryption.js [app-rsc] (ecmascript)");
@@ -410,8 +408,8 @@ function getChatId(userId1, userId2) {
         userId2
     ].sort().join('_');
 }
-async function sendMessage(senderId, recipientId, text, forwardedFrom, callInfo) {
-    if (!text.trim() && !callInfo) {
+async function sendMessage(senderId, recipientId, text, forwardedFrom) {
+    if (!text.trim()) {
         return {
             error: 'Message cannot be empty'
         };
@@ -423,10 +421,10 @@ async function sendMessage(senderId, recipientId, text, forwardedFrom, callInfo)
             recipientId,
             text,
             timestamp: (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["serverTimestamp"])(),
-            type: callInfo ? 'call' : 'text',
+            type: 'text',
             edited: false,
             forwardedFrom: forwardedFrom || null,
-            callInfo: callInfo || null
+            read: false
         });
         return {
             error: null,
@@ -451,7 +449,8 @@ async function sendSticker(senderId, recipientId, stickerId) {
             text: '',
             timestamp: (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["serverTimestamp"])(),
             type: 'sticker',
-            stickerId
+            stickerId,
+            read: false
         });
         return {
             error: null,
@@ -476,7 +475,8 @@ async function sendGif(senderId, recipientId, gifUrl) {
             text: '',
             timestamp: (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["serverTimestamp"])(),
             type: 'gif',
-            gifUrl
+            gifUrl,
+            read: false
         });
         return {
             error: null,
@@ -562,76 +562,42 @@ async function deleteMessage(chatId, messageId) {
         };
     }
 }
-async function createCallOffer(chatId, offer) {
-    const callDocRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["doc"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], 'calls', chatId);
-    await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["setDoc"])(callDocRef, {
-        offer,
-        status: 'ringing',
-        createdAt: (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["serverTimestamp"])()
-    });
-}
-async function createCallAnswer(chatId, answer) {
-    const callDocRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["doc"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], 'calls', chatId);
-    await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateDoc"])(callDocRef, {
-        answer,
-        status: 'answered'
-    });
-}
-async function addIceCandidate(chatId, candidate) {
-    const callDocRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["doc"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], 'calls', chatId);
-    const callDoc = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getDoc"])(callDocRef);
-    if (callDoc.exists()) {
-        const data = callDoc.data();
-        // Use a more robust way to update array to avoid race conditions if possible
-        const candidates = data.iceCandidates || [];
-        await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateDoc"])(callDocRef, {
-            iceCandidates: [
-                ...candidates,
-                candidate
-            ]
+async function markMessagesAsRead(chatId, currentUserId) {
+    const messagesRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["collection"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], 'chats', chatId, 'messages');
+    const q = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["query"])(messagesRef, (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["where"])('recipientId', '==', currentUserId), (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["where"])('read', '==', false));
+    try {
+        const querySnapshot = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getDocs"])(q);
+        if (querySnapshot.empty) {
+            return; // No unread messages to mark
+        }
+        const batch = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["writeBatch"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"]);
+        querySnapshot.forEach((doc)=>{
+            batch.update(doc.ref, {
+                read: true
+            });
         });
+        await batch.commit();
+    } catch (error) {
+        console.error("Error marking messages as read: ", error);
     }
 }
-async function updateCallStatus(chatId, status, duration, callerId, calleeId) {
-    const callDocRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["doc"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], 'calls', chatId);
-    const callDoc = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getDoc"])(callDocRef);
-    if (callDoc.exists()) {
-        const callData = callDoc.data();
-        if (status === 'ended' || status === 'declined') {
-            if (callerId && calleeId) {
-                // Determine the correct call status for the message
-                // If callData.status is not 'answered', it was missed (if not declined)
-                let finalStatus = callData.status === 'answered' ? 'answered' : 'missed';
-                if (status === 'declined') {
-                    finalStatus = 'declined';
-                }
-                let messageText = 'Звонок';
-                if (finalStatus === 'answered') {
-                    messageText = `Звонок длительностью ${duration} сек.`;
-                } else if (finalStatus === 'declined') {
-                    messageText = 'Звонок отклонен';
-                } else if (finalStatus === 'missed') {
-                    messageText = 'Пропущенный звонок';
-                }
-                await sendMessage(callerId, calleeId, messageText, undefined, {
-                    status: finalStatus,
-                    duration: duration
-                });
-            }
-            await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["deleteDoc"])(callDocRef);
-        } else if (status === 'answered') {
-            await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateDoc"])(callDocRef, {
-                status
-            });
-        }
-    } else if (status === 'answered') {
-        // If doc doesn't exist and we are answering, create it.
-        // This can happen in a race condition.
-        await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["setDoc"])(callDocRef, {
-            status
-        }, {
-            merge: true
+async function clearChatHistory(chatId) {
+    const messagesRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["collection"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], 'chats', chatId, 'messages');
+    try {
+        const querySnapshot = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getDocs"])(messagesRef);
+        const batch = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["writeBatch"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"]);
+        querySnapshot.forEach((doc)=>{
+            batch.delete(doc.ref);
         });
+        await batch.commit();
+        return {
+            success: true
+        };
+    } catch (error) {
+        console.error("Error clearing chat history: ", error);
+        return {
+            error: 'Failed to clear chat history.'
+        };
     }
 }
 ;
@@ -643,22 +609,18 @@ async function updateCallStatus(chatId, status, duration, callerId, calleeId) {
     searchGifs,
     editMessage,
     deleteMessage,
-    createCallOffer,
-    createCallAnswer,
-    addIceCandidate,
-    updateCallStatus
+    markMessagesAsRead,
+    clearChatHistory
 ]);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(getFilteredMessage, "40a8fec7cdefd0ea77a3ee93895583fba2af256290", null);
-(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(sendMessage, "7caa2447a300bdb474f91bdc8f096d1589fc2797dc", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(sendMessage, "78aa2447a300bdb474f91bdc8f096d1589fc2797dc", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(sendSticker, "702e1c340d1eab2bea22e72f39e9f5e78357cf0ea1", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(sendGif, "705394123808f77ae076418e2562d4b6e3695e2f20", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(searchGifs, "409e93a08092ba11b70da181b8437860f103d7cbfb", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(editMessage, "705763b4cc11e647e621930ce50f6aa5850bc05850", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(deleteMessage, "6082a68fb814428b566b32d551d95980da5a0e9c05", null);
-(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(createCallOffer, "60ebe43e685c27f63aae9b9bcc8269d30c2244126b", null);
-(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(createCallAnswer, "6040f336319d499f4f8fb5ee6879c5eee6b49a0fbf", null);
-(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(addIceCandidate, "60683cf55ab4a59e76eb7909f0c39798439d5d6c92", null);
-(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(updateCallStatus, "7ca53473e44b1197fd7e48ac4fbf54d37643f07461", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(markMessagesAsRead, "6017f6d2a4ed6ee70bb28fd0a9f062866349785ef9", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(clearChatHistory, "40f784cb07841038eb7841f8782797dc636cd57a95", null);
 }}),
 "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript) <locals>": ((__turbopack_context__) => {
 "use strict";
@@ -667,8 +629,6 @@ var { g: global, __dirname } = __turbopack_context__;
 {
 __turbopack_context__.s({});
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/app/actions.ts [app-rsc] (ecmascript)");
-;
-;
 ;
 ;
 ;
@@ -694,15 +654,13 @@ var { g: global, __dirname } = __turbopack_context__;
 {
 __turbopack_context__.s({
     "409e93a08092ba11b70da181b8437860f103d7cbfb": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["searchGifs"]),
-    "6040f336319d499f4f8fb5ee6879c5eee6b49a0fbf": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["createCallAnswer"]),
-    "60683cf55ab4a59e76eb7909f0c39798439d5d6c92": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["addIceCandidate"]),
+    "40f784cb07841038eb7841f8782797dc636cd57a95": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["clearChatHistory"]),
+    "6017f6d2a4ed6ee70bb28fd0a9f062866349785ef9": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["markMessagesAsRead"]),
     "6082a68fb814428b566b32d551d95980da5a0e9c05": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["deleteMessage"]),
-    "60ebe43e685c27f63aae9b9bcc8269d30c2244126b": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["createCallOffer"]),
     "702e1c340d1eab2bea22e72f39e9f5e78357cf0ea1": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["sendSticker"]),
     "705394123808f77ae076418e2562d4b6e3695e2f20": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["sendGif"]),
     "705763b4cc11e647e621930ce50f6aa5850bc05850": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["editMessage"]),
-    "7ca53473e44b1197fd7e48ac4fbf54d37643f07461": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateCallStatus"]),
-    "7caa2447a300bdb474f91bdc8f096d1589fc2797dc": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["sendMessage"])
+    "78aa2447a300bdb474f91bdc8f096d1589fc2797dc": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["sendMessage"])
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/app/actions.ts [app-rsc] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i('[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => "[project]/src/app/actions.ts [app-rsc] (ecmascript)" } [app-rsc] (server actions loader, ecmascript) <locals>');
@@ -714,15 +672,13 @@ var { g: global, __dirname } = __turbopack_context__;
 {
 __turbopack_context__.s({
     "409e93a08092ba11b70da181b8437860f103d7cbfb": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["409e93a08092ba11b70da181b8437860f103d7cbfb"]),
-    "6040f336319d499f4f8fb5ee6879c5eee6b49a0fbf": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["6040f336319d499f4f8fb5ee6879c5eee6b49a0fbf"]),
-    "60683cf55ab4a59e76eb7909f0c39798439d5d6c92": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["60683cf55ab4a59e76eb7909f0c39798439d5d6c92"]),
+    "40f784cb07841038eb7841f8782797dc636cd57a95": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["40f784cb07841038eb7841f8782797dc636cd57a95"]),
+    "6017f6d2a4ed6ee70bb28fd0a9f062866349785ef9": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["6017f6d2a4ed6ee70bb28fd0a9f062866349785ef9"]),
     "6082a68fb814428b566b32d551d95980da5a0e9c05": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["6082a68fb814428b566b32d551d95980da5a0e9c05"]),
-    "60ebe43e685c27f63aae9b9bcc8269d30c2244126b": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["60ebe43e685c27f63aae9b9bcc8269d30c2244126b"]),
     "702e1c340d1eab2bea22e72f39e9f5e78357cf0ea1": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["702e1c340d1eab2bea22e72f39e9f5e78357cf0ea1"]),
     "705394123808f77ae076418e2562d4b6e3695e2f20": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["705394123808f77ae076418e2562d4b6e3695e2f20"]),
     "705763b4cc11e647e621930ce50f6aa5850bc05850": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["705763b4cc11e647e621930ce50f6aa5850bc05850"]),
-    "7ca53473e44b1197fd7e48ac4fbf54d37643f07461": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["7ca53473e44b1197fd7e48ac4fbf54d37643f07461"]),
-    "7caa2447a300bdb474f91bdc8f096d1589fc2797dc": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["7caa2447a300bdb474f91bdc8f096d1589fc2797dc"])
+    "78aa2447a300bdb474f91bdc8f096d1589fc2797dc": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["78aa2447a300bdb474f91bdc8f096d1589fc2797dc"])
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$module__evaluation$3e$__ = __turbopack_context__.i('[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => "[project]/src/app/actions.ts [app-rsc] (ecmascript)" } [app-rsc] (server actions loader, ecmascript) <module evaluation>');
 var __TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__ = __turbopack_context__.i('[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => "[project]/src/app/actions.ts [app-rsc] (ecmascript)" } [app-rsc] (server actions loader, ecmascript) <exports>');

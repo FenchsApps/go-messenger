@@ -48,7 +48,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>();
-  const [iceCandidateQueue, setIceCandidateQueue] = useState<RTCIceCandidateInit[]>([]);
   
   const { toast } = useToast();
   const { videoDeviceId, audioDeviceId } = useSettings();
@@ -70,8 +69,9 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   },[callId, callStatus, onEndCall]);
 
 
+  // Initialize and clean up media devices
   useEffect(() => {
-    const initialize = async () => {
+    const initializeMedia = async () => {
         try {
             const constraints: MediaStreamConstraints = {
                 video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
@@ -120,7 +120,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         }
     };
 
-    initialize();
+    initializeMedia();
 
     return () => {
         if (animationFrameRef.current) {
@@ -138,33 +138,36 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             pcRef.current = null;
         }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Initialize PeerConnection and signaling
   useEffect(() => {
-    if (!hasPermission) return;
+    if (!hasPermission || !localStreamRef.current) return;
 
     const pc = new RTCPeerConnection(servers);
     pcRef.current = pc;
 
-    if(localStreamRef.current){
-        localStreamRef.current.getTracks().forEach(track => {
-            pc.addTrack(track, localStreamRef.current!);
-        });
-    }
-
+    // Add local tracks to the connection
+    localStreamRef.current.getTracks().forEach(track => {
+      pc.addTrack(track, localStreamRef.current!);
+    });
+    
+    // Handle remote tracks
     pc.ontrack = event => {
         if (remoteVideoRef.current && event.streams[0]) {
             remoteVideoRef.current.srcObject = event.streams[0];
         }
     };
 
+    // Handle ICE candidates
     pc.onicecandidate = event => {
         if (event.candidate && callId) {
             addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
         }
     };
     
+    // Handle connection state changes
     pc.onconnectionstatechange = () => {
         if (pcRef.current?.connectionState === 'connected') {
             setCallStatus('connected');
@@ -174,27 +177,31 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     };
 
     const initializeCall = async () => {
-        if (isReceivingCall && initialCallState) {
-            setCallId(initialCallState.id);
-            await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            await updateCallStatus(initialCallState.id, 'answered', answer);
-        } else {
+        if (!isReceivingCall) { // Caller logic
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             const newCallId = await startCall(currentUser.id, chatPartner.id, offer);
             setCallId(newCallId);
             setCallStatus('ringing');
+        } else if (initialCallState) { // Recipient logic
+            setCallId(initialCallState.id);
+            await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await updateCallStatus(initialCallState.id, 'answered', answer);
         }
     };
     
-    initializeCall();
-    
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPermission]);
+    initializeCall().catch(e => {
+        console.error("Error during call initialization: ", e);
+        handleHangUp(true, 'ended');
+    });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPermission, callId]);
 
 
+  // Listen for Firestore document changes
   useEffect(() => {
     if (!callId) return;
 
@@ -210,7 +217,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
              return;
         }
 
-        if (data.answer && pc.remoteDescription === null) {
+        if (data.answer && pc.remoteDescription?.type !== 'answer') {
             await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
         }
         
@@ -220,14 +227,22 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             }
         }
     });
-
+    
     const candidateType = isReceivingCall ? 'caller' : 'recipient';
     const candidatesCollection = collection(db, 'calls', callId, `${candidateType}Candidates`);
     
     const unsubscribeCandidates = onSnapshot(candidatesCollection, (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
+        snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'added') {
-                setIceCandidateQueue(prev => [...prev, change.doc.data()]);
+                 const candidate = new RTCIceCandidate(change.doc.data());
+                 try {
+                     // Add candidates only after remote description is set
+                     if (pcRef.current?.remoteDescription) {
+                        await pcRef.current?.addIceCandidate(candidate);
+                     }
+                 } catch (e) {
+                     console.error('Error adding received ice candidate', e);
+                 }
             }
         });
     });
@@ -238,15 +253,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callId]);
-  
-  useEffect(() => {
-    if (pcRef.current?.remoteDescription && iceCandidateQueue.length > 0) {
-        iceCandidateQueue.forEach(candidate => {
-            pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate));
-        });
-        setIceCandidateQueue([]);
-    }
-  }, [pcRef.current?.remoteDescription, iceCandidateQueue]);
 
 
   const handleAcceptCall = async () => {
@@ -355,5 +361,3 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
-
-    

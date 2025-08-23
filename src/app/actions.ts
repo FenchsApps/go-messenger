@@ -215,13 +215,21 @@ export async function updateCallStatus(callId: string, status: string, answer?: 
     if (answer) {
         updates.answer = answer;
     }
-
-    const callDoc = await getDoc(callDocRef);
-    if (!callDoc.exists() && status === 'answered') {
-       // This case is unlikely but as a safeguard
-       await setDoc(callDocRef, updates, { merge: true });
-    } else {
-       await updateDoc(callDocRef, updates);
+    
+    try {
+        const callDoc = await getDoc(callDocRef);
+        if (callDoc.exists()) {
+           await updateDoc(callDocRef, updates);
+        } else if (status === 'answered') {
+           // This case is unlikely but as a safeguard, if we are trying to answer a call that was just hung up, recreate it.
+           await setDoc(callDocRef, updates, { merge: true });
+        }
+    } catch (error) {
+        // This will catch the "Not Found" error and prevent the app from crashing.
+        // We can safely ignore it, as it means the call document was deleted by the other user.
+        if (error.code !== 'not-found') {
+            console.error("Error updating call status:", error);
+        }
     }
 }
 
@@ -233,15 +241,22 @@ export async function addIceCandidate(callId: string, candidate: any, type: 'cal
 
 export async function hangUp(callId: string) {
     const callDocRef = doc(db, 'calls', callId);
-    if ((await getDoc(callDocRef)).exists()) {
-        const callerCandidates = await getDocs(collection(callDocRef, 'callerCandidates'));
-        const recipientCandidates = await getDocs(collection(callDocRef, 'recipientCandidates'));
-        
-        const batch = writeBatch(db);
-        callerCandidates.forEach(doc => batch.delete(doc.ref));
-        recipientCandidates.forEach(doc => batch.delete(doc.ref));
-        batch.delete(callDocRef);
+    try {
+        if ((await getDoc(callDocRef)).exists()) {
+            const callerCandidates = await getDocs(collection(callDocRef, 'callerCandidates'));
+            const recipientCandidates = await getDocs(collection(callDocRef, 'recipientCandidates'));
+            
+            const batch = writeBatch(db);
+            callerCandidates.forEach(doc => batch.delete(doc.ref));
+            recipientCandidates.forEach(doc => batch.delete(doc.ref));
+            batch.delete(callDocRef);
 
-        await batch.commit();
+            await batch.commit();
+        }
+    } catch (error) {
+        if (error.code !== 'not-found') {
+            console.error("Error hanging up call:", error);
+        }
+        // If not found, it means the other user already hung up. Safe to ignore.
     }
 }

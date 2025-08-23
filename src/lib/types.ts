@@ -24,3 +24,10 @@ export type Message = {
     text: string;
   } | null;
 };
+
+export type CallState = {
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  iceCandidates?: RTCIceCandidateInit[];
+  status: 'calling' | 'ringing' | 'answered' | 'declined' | 'ended';
+};

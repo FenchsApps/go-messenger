@@ -2,7 +2,7 @@
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
@@ -154,4 +154,38 @@ export async function deleteMessage(chatId: string, messageId: string) {
         console.error("Error deleting message:", error);
         return { error: 'Failed to delete message' };
     }
+}
+
+
+// WebRTC Signaling Actions
+export async function createCallOffer(chatId: string, offer: RTCSessionDescriptionInit) {
+  const callDocRef = doc(db, 'calls', chatId);
+  await setDoc(callDocRef, {
+    offer,
+    status: 'ringing',
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function createCallAnswer(chatId: string, answer: RTCSessionDescriptionInit) {
+  const callDocRef = doc(db, 'calls', chatId);
+  await updateDoc(callDocRef, { answer, status: 'answered' });
+}
+
+export async function addIceCandidate(chatId: string, candidate: RTCIceCandidateInit) {
+  const callDocRef = doc(db, 'calls', chatId);
+  const callDoc = await getDoc(callDocRef);
+  if (callDoc.exists()) {
+    const data = callDoc.data();
+    const candidates = data.iceCandidates || [];
+    await updateDoc(callDocRef, {
+      iceCandidates: [...candidates, candidate],
+    });
+  }
+}
+
+export async function updateCallStatus(chatId: string, status: 'declined' | 'ended') {
+    const callDocRef = doc(db, 'calls', chatId);
+    await updateDoc(callDocRef, { status });
+    // Consider deleting the document after a call ends and has been acknowledged by both parties.
 }

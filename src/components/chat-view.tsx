@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import type { Message, User } from '@/lib/types';
+import type { Message, User, CallState } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
@@ -9,11 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, createCallOffer } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
-
+import { CallView } from './call-view';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -37,6 +37,8 @@ export function ChatView({
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState('');
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  const [callState, setCallState] = useState<CallState | null>(null);
+  const [isCalling, setIsCalling] = useState(false);
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
@@ -44,7 +46,7 @@ export function ChatView({
   useEffect(() => {
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
       const newMessages: Message[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -57,7 +59,26 @@ export function ChatView({
       setMessages(newMessages);
     });
 
-    return () => unsubscribe();
+    const callDocRef = doc(db, 'calls', chatId);
+    const unsubscribeCalls = onSnapshot(callDocRef, (doc) => {
+        if (doc.exists()) {
+            const data = doc.data() as CallState;
+            setCallState(data);
+            if(data.status === 'ringing' || data.status === 'answered') {
+                setIsCalling(true);
+            } else {
+                setIsCalling(false);
+            }
+        } else {
+            setIsCalling(false);
+            setCallState(null);
+        }
+    });
+
+    return () => {
+        unsubscribeMessages();
+        unsubscribeCalls();
+    }
   }, [chatId]);
 
 
@@ -123,9 +144,34 @@ export function ChatView({
     setForwardingMessage(null);
   }
 
+  const handleInitiateCall = () => {
+    setIsCalling(true);
+  }
+  
+  const handleEndCall = () => {
+      setIsCalling(false);
+  }
+
+  if (isCalling) {
+      return (
+          <CallView 
+              chatId={chatId}
+              currentUser={currentUser}
+              chatPartner={chatPartner}
+              callState={callState}
+              onEndCall={handleEndCall}
+          />
+      )
+  }
+
   return (
     <div className="flex flex-col h-full bg-background">
-      <ChatHeader user={chatPartner} isMobile={isMobile} onBack={onBack} />
+      <ChatHeader 
+        user={chatPartner} 
+        isMobile={isMobile} 
+        onBack={onBack}
+        onCall={handleInitiateCall}
+      />
       <ChatMessages
         messages={messages}
         currentUser={currentUser}

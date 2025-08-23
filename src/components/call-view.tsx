@@ -34,7 +34,7 @@ type CallStatus = 'ringing' | 'connecting' | 'connected' | 'declined' | 'ended' 
 
 export function CallView({ currentUser, chatPartner, isReceivingCall, initialCallState, onEndCall }: CallViewProps) {
   const [callId, setCallId] = useState<string | null>(initialCallState?.id || null);
-  const [callStatus, setCallStatus] = useState<CallStatus>('connecting');
+  const [callStatus, setCallStatus] = useState<CallStatus>(initialCallState ? 'ringing' : 'connecting');
   
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isMicOn, setIsMicOn] = useState(true);
@@ -55,7 +55,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const { videoDeviceId, audioDeviceId } = useSettings();
 
   useEffect(() => {
-    const initializeCall = async () => {
+    const initializeMedia = async () => {
       try {
         const constraints: MediaStreamConstraints = {
             video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
@@ -87,8 +87,23 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             animationFrameRef.current = requestAnimationFrame(visualize);
         };
         visualize();
-        // --- End Mic Visualizer Setup ---
+        
+        return stream;
 
+      } catch (error) {
+        console.error("Error accessing media devices.", error);
+        setHasPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Ошибка доступа',
+          description: 'Не удалось получить доступ к камере и микрофону. Пожалуйста, проверьте разрешения и выбранные устройства в настройках.',
+        });
+        handleHangUp(true, 'ended');
+        return null;
+      }
+    };
+    
+    const initializePeerConnection = (stream: MediaStream) => {
         const pc = new RTCPeerConnection(servers);
         pcRef.current = pc;
 
@@ -114,11 +129,18 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                 handleHangUp(false, 'ended');
             }
         };
+        return pc;
+    }
 
-        if (isReceivingCall) {
-          setCallId(initialCallState.id);
-          setCallStatus('ringing');
+    const setupCall = async () => {
+        const stream = await initializeMedia();
+        if (!stream) return;
+
+        const pc = initializePeerConnection(stream);
+        
+        if (isReceivingCall && initialCallState) {
           await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
+          setCallId(initialCallState.id);
         } else {
           const offerDescription = await pc.createOffer();
           await pc.setLocalDescription(offerDescription);
@@ -126,19 +148,9 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
           setCallId(newCallId);
           setCallStatus('ringing');
         }
-      } catch (error) {
-        console.error("Error accessing media devices.", error);
-        setHasPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Ошибка доступа',
-          description: 'Не удалось получить доступ к камере и микрофону. Пожалуйста, проверьте разрешения и выбранные устройства в настройках.',
-        });
-        onEndCall();
-      }
     };
 
-    initializeCall();
+    setupCall();
     
     return () => {
         if (animationFrameRef.current) {
@@ -157,7 +169,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     const unsubscribe = onSnapshot(doc(db, 'calls', callId), async (docSnapshot) => {
         const data = docSnapshot.data();
         if (!data) { 
-             handleHangUp(false, callStatus === 'ringing' ? 'missed' : 'ended');
+             // If document is deleted, it means the call was hung up by the other party.
+             if (callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
+                 handleHangUp(false, callStatus === 'ringing' ? 'missed' : 'ended');
+             }
              return;
         }
 
@@ -169,7 +184,9 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         }
         
         if (data.status && ['declined', 'ended', 'missed'].includes(data.status)) {
-             handleHangUp(false, data.status);
+             if (callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
+                handleHangUp(false, data.status);
+             }
         }
     });
 
@@ -209,7 +226,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     if(callId) {
         await updateCallStatus(callId, 'declined');
     }
-    onEndCall(); 
+    // onEndCall will be triggered by the snapshot listener detecting the 'declined' status
   };
 
   const handleHangUp = async (isInitiator: boolean, finalStatus: CallStatus) => {
@@ -218,43 +235,27 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         return;
       }
       
+      setCallStatus(finalStatus);
       const currentCallId = callId;
-      if (!currentCallId) {
-          if(callStatus !== 'ended') onEndCall();
-          setCallStatus('ended');
-          return;
-      };
-
-      // Set local status immediately to prevent re-triggers
-      setCallStatus(finalStatus); 
       
-      const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
-      
-      // The person who hangs up is responsible for cleaning up and logging the call
-      if (isInitiator) {
+      if (isInitiator && currentCallId) {
          await hangUp(currentCallId);
-         await logCall({
+      }
+      
+      if (currentCallId) {
+          const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+          await logCall({
             senderId: currentUser.id,
             recipientId: chatPartner.id,
             status: finalStatus,
             duration,
             callerId: initialCallState?.callerId || currentUser.id,
-        });
-      } else {
-        // The other party might need to log the call if the initiator just disappeared (e.g. closed browser)
-        if(finalStatus !== 'declined'){
-             await logCall({
-                senderId: currentUser.id,
-                recipientId: chatPartner.id,
-                status: finalStatus,
-                duration,
-                callerId: initialCallState?.callerId || currentUser.id,
-            });
-        }
+          });
       }
       
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
       }
       if (pcRef.current) {
           pcRef.current.close();
@@ -358,5 +359,3 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
-
-    

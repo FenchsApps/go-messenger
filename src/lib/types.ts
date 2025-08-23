@@ -15,7 +15,7 @@ export type Message = {
   recipientId: string;
   text: string;
   timestamp: number;
-  type: 'text' | 'sticker' | 'gif' | 'call';
+  type: 'text' | 'sticker' | 'gif';
   stickerId?: string;
   gifUrl?: string;
   edited?: boolean;
@@ -24,8 +24,4 @@ export type Message = {
     text: string;
   } | null;
   read?: boolean;
-  // Call specific fields
-  callStatus?: 'answered' | 'declined' | 'missed' | 'ended';
-  duration?: number; // in seconds
-  callerId?: string;
 };

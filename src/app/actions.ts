@@ -245,19 +245,3 @@ export async function hangUp(callId: string) {
         await batch.commit();
     }
 }
-
-export async function logCall({ senderId, recipientId, status, duration, callerId }) {
-    const chatId = getChatId(senderId, recipientId);
-    
-    await addDoc(collection(db, 'chats', chatId, 'messages'), {
-        senderId,
-        recipientId,
-        text: '',
-        timestamp: serverTimestamp(),
-        type: 'call',
-        callStatus: status,
-        duration: duration,
-        callerId: callerId,
-        read: false,
-    });
-}

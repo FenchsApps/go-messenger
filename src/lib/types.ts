@@ -30,4 +30,5 @@ export type CallState = {
   answer?: RTCSessionDescriptionInit;
   iceCandidates?: RTCIceCandidateInit[];
   status: 'calling' | 'ringing' | 'answered' | 'declined' | 'ended';
+  createdAt?: any;
 };

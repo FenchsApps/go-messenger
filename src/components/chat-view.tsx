@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, createCallOffer } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, createCallOffer, updateCallStatus } from '@/app/actions';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
@@ -89,17 +89,12 @@ export function ChatView({
 
     const callDocRef = doc(db, 'calls', chatId);
     const unsubscribeCalls = onSnapshot(callDocRef, (doc) => {
-        if (doc.exists()) {
-            const data = doc.data() as CallState;
-            setCallState(data);
-            if(data.status === 'ringing' || data.status === 'answered') {
-                setIsCalling(true);
-            } else {
-                setIsCalling(false);
-            }
-        } else {
-            setIsCalling(false);
-            setCallState(null);
+        const callData = doc.data() as CallState | null;
+        setCallState(callData);
+
+        // If there's an incoming call for us, start the call view
+        if (callData?.status === 'ringing' && callData?.offer) {
+            setIsCalling(true);
         }
     });
 
@@ -173,11 +168,13 @@ export function ChatView({
   }
 
   const handleInitiateCall = () => {
+    // We set isCalling to true immediately for the caller
     setIsCalling(true);
   }
   
   const handleEndCall = () => {
       setIsCalling(false);
+      setCallState(null); // Clear the call state locally
   }
 
   if (isCalling) {
@@ -186,7 +183,7 @@ export function ChatView({
               chatId={chatId}
               currentUser={currentUser}
               chatPartner={chatPartner}
-              callState={callState}
+              initialCallState={callState}
               onEndCall={handleEndCall}
           />
       )

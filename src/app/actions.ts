@@ -184,8 +184,14 @@ export async function addIceCandidate(chatId: string, candidate: RTCIceCandidate
   }
 }
 
-export async function updateCallStatus(chatId: string, status: 'declined' | 'ended') {
+export async function updateCallStatus(chatId: string, status: 'declined' | 'ended' | 'answered') {
     const callDocRef = doc(db, 'calls', chatId);
-    await setDoc(callDocRef, { status }, { merge: true });
-    // Consider deleting the document after a call ends and has been acknowledged by both parties.
+    if (status === 'ended' || status === 'declined') {
+        const callDoc = await getDoc(callDocRef);
+        if (callDoc.exists()) {
+             await deleteDoc(callDocRef);
+        }
+    } else {
+        await setDoc(callDocRef, { status }, { merge: true });
+    }
 }

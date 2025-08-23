@@ -43,9 +43,11 @@
 <!-- РАЗРЕШЕНИЕ ДЛЯ РАБОТЫ В ФОНЕ (КЛЮЧЕВОЕ!) -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
+<!-- КЛЮЧЕВОЕ РАЗРЕШЕНИЕ ДЛЯ ОТОБРАЖЕНИЯ ПОВЕРХ ДРУГИХ ОКОН -->
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
 <!-- Для Android 14+ требуется указывать тип службы -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-
 ```
 
 3.  Теперь **полностью замените** ваш тег `<application>` на этот код. Он содержит правильную регистрацию `MainActivity` (чтобы приложение было видно в лаунчере) и фоновой службы.

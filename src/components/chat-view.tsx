@@ -100,7 +100,6 @@ export function ChatView({
         } as Message;
         newMessages.push(newMessage);
         
-        // Show notification for new messages only when window is not focused
         if (newMessage.senderId !== currentUser.id && !isWindowFocused) {
              const sender = allUsers.find(u => u.id === newMessage.senderId);
              if (sender) {
@@ -124,7 +123,6 @@ export function ChatView({
       const prevMessages = messages;
       setMessages(newMessages);
 
-      // Mark as read only if new messages have arrived
       if (newMessages.length > prevMessages.length && isWindowFocused) {
           markMessagesAsRead(chatId, currentUser.id);
       }

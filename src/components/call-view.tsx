@@ -55,40 +55,14 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const { videoDeviceId, audioDeviceId } = useSettings();
 
   useEffect(() => {
+    let isCleanupNeeded = true;
     
-    const setupCall = async () => {
-        
-        const pc = new RTCPeerConnection(servers);
-        pcRef.current = pc;
-
-        // Handle remote stream
-        pc.ontrack = event => {
-          if (remoteVideoRef.current && event.streams[0]) {
-            remoteVideoRef.current.srcObject = event.streams[0];
-          }
-        };
-
-        // Handle ICE candidates
-        pc.onicecandidate = event => {
-          if (event.candidate && callId) {
-            addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
-          }
-        };
-        
-        pc.onconnectionstatechange = () => {
-            if (pcRef.current?.connectionState === 'connected') {
-                setCallStatus('connected');
-                setStartTime(Date.now());
-            } else if (['disconnected', 'closed', 'failed'].includes(pcRef.current?.connectionState || '')) {
-                handleHangUp(false, 'ended');
-            }
-        };
-
+    const initializeCall = async () => {
         try {
             const constraints: MediaStreamConstraints = {
                 video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
                 audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
-            }
+            };
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             setHasPermission(true);
             localStreamRef.current = stream;
@@ -96,28 +70,54 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             if (localVideoRef.current) {
               localVideoRef.current.srcObject = stream;
             }
+            
+            // Mic Volume Visualizer setup
+            if (stream.getAudioTracks().length > 0) {
+                const audioContext = new AudioContext();
+                audioContextRef.current = audioContext;
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 32;
+                source.connect(analyser);
+                analyserRef.current = analyser;
 
+                const visualize = () => {
+                    if (!analyserRef.current) return;
+                    const bufferLength = analyserRef.current.frequencyBinCount;
+                    const dataArray = new Uint8Array(bufferLength);
+                    analyserRef.current.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
+                    setMicVolume(average / 128); // Normalize to 0-1 range
+                    animationFrameRef.current = requestAnimationFrame(visualize);
+                };
+                visualize();
+            }
+
+            const pc = new RTCPeerConnection(servers);
+            pcRef.current = pc;
+            
             stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-            // Mic Volume Visualizer
-            const audioContext = new AudioContext();
-            audioContextRef.current = audioContext;
-            const source = audioContext.createMediaStreamSource(stream);
-            const analyser = audioContext.createAnalyser();
-            analyser.fftSize = 32;
-            source.connect(analyser);
-            analyserRef.current = analyser;
-
-            const visualize = () => {
-                if (!analyserRef.current) return;
-                const bufferLength = analyserRef.current.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-                analyserRef.current.getByteFrequencyData(dataArray);
-                const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
-                setMicVolume(average / 128); // Normalize to 0-1 range
-                animationFrameRef.current = requestAnimationFrame(visualize);
+            pc.ontrack = event => {
+              if (remoteVideoRef.current && event.streams[0]) {
+                remoteVideoRef.current.srcObject = event.streams[0];
+              }
             };
-            visualize();
+            
+            pc.onicecandidate = event => {
+                if (event.candidate && callId) {
+                    addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
+                }
+            };
+
+            pc.onconnectionstatechange = () => {
+                if (pcRef.current?.connectionState === 'connected') {
+                    setCallStatus('connected');
+                    setStartTime(Date.now());
+                } else if (['disconnected', 'closed', 'failed'].includes(pcRef.current?.connectionState || '')) {
+                    handleHangUp(false, 'ended');
+                }
+            };
 
             if (isReceivingCall && initialCallState) {
                 await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
@@ -142,15 +142,27 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         }
     };
     
-    setupCall();
+    initializeCall();
     
     return () => {
+        if (!isCleanupNeeded) return;
+
         if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
         }
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close();
         }
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => track.stop());
+            localStreamRef.current = null;
+        }
+        if (pcRef.current) {
+            pcRef.current.close();
+            pcRef.current = null;
+        }
+        // This is a flag to prevent multiple cleanups which can happen with Strict Mode
+        isCleanupNeeded = false; 
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -243,15 +255,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
           });
       }
       
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-        localStreamRef.current = null;
-      }
-      if (pcRef.current) {
-          pcRef.current.close();
-          pcRef.current = null;
-      }
-      
+      // Cleanup is handled by the main useEffect return function
       onEndCall();
   };
 

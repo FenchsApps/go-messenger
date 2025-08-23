@@ -7,7 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { startCall, hangUp, updateCallStatus, addIceCandidate, logCall } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, collection } from 'firebase/firestore';
+import { doc, onSnapshot, collection, getDocs, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useSettings } from '@/context/settings-provider';
@@ -55,101 +55,93 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const { videoDeviceId, audioDeviceId } = useSettings();
 
   useEffect(() => {
-    const initializeMedia = async () => {
-      try {
-        const constraints: MediaStreamConstraints = {
-            video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
-            audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
-        }
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        setHasPermission(true);
-        localStreamRef.current = stream;
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-
-        // --- Mic Volume Visualizer Setup ---
-        const audioContext = new AudioContext();
-        audioContextRef.current = audioContext;
-        const source = audioContext.createMediaStreamSource(stream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 32;
-        source.connect(analyser);
-        analyserRef.current = analyser;
-
-        const visualize = () => {
-            if (!analyserRef.current) return;
-            const bufferLength = analyserRef.current.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-            analyserRef.current.getByteFrequencyData(dataArray);
-            const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
-            setMicVolume(average / 128); // Normalize to 0-1 range
-            animationFrameRef.current = requestAnimationFrame(visualize);
-        };
-        visualize();
-        
-        return stream;
-
-      } catch (error) {
-        console.error("Error accessing media devices.", error);
-        setHasPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Ошибка доступа',
-          description: 'Не удалось получить доступ к камере и микрофону. Пожалуйста, проверьте разрешения и выбранные устройства в настройках.',
-        });
-        handleHangUp(true, 'ended');
-        return null;
-      }
-    };
     
-    const initializePeerConnection = (stream: MediaStream) => {
+    const setupCall = async () => {
+        
         const pc = new RTCPeerConnection(servers);
         pcRef.current = pc;
 
-        stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-        pc.onicecandidate = event => {
-          if (event.candidate && callId) {
-            addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
-          }
-        };
-
+        // Handle remote stream
         pc.ontrack = event => {
           if (remoteVideoRef.current && event.streams[0]) {
             remoteVideoRef.current.srcObject = event.streams[0];
           }
         };
+
+        // Handle ICE candidates
+        pc.onicecandidate = event => {
+          if (event.candidate && callId) {
+            addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
+          }
+        };
         
         pc.onconnectionstatechange = () => {
-            if (pc.connectionState === 'connected') {
+            if (pcRef.current?.connectionState === 'connected') {
                 setCallStatus('connected');
                 setStartTime(Date.now());
-            } else if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) {
+            } else if (['disconnected', 'closed', 'failed'].includes(pcRef.current?.connectionState || '')) {
                 handleHangUp(false, 'ended');
             }
         };
-        return pc;
-    }
 
-    const setupCall = async () => {
-        const stream = await initializeMedia();
-        if (!stream) return;
+        try {
+            const constraints: MediaStreamConstraints = {
+                video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
+                audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
+            }
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            setHasPermission(true);
+            localStreamRef.current = stream;
 
-        const pc = initializePeerConnection(stream);
-        
-        if (isReceivingCall && initialCallState) {
-          await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
-          setCallId(initialCallState.id);
-        } else {
-          const offerDescription = await pc.createOffer();
-          await pc.setLocalDescription(offerDescription);
-          const newCallId = await startCall(currentUser.id, chatPartner.id, offerDescription);
-          setCallId(newCallId);
-          setCallStatus('ringing');
+            if (localVideoRef.current) {
+              localVideoRef.current.srcObject = stream;
+            }
+
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            // Mic Volume Visualizer
+            const audioContext = new AudioContext();
+            audioContextRef.current = audioContext;
+            const source = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 32;
+            source.connect(analyser);
+            analyserRef.current = analyser;
+
+            const visualize = () => {
+                if (!analyserRef.current) return;
+                const bufferLength = analyserRef.current.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                analyserRef.current.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
+                setMicVolume(average / 128); // Normalize to 0-1 range
+                animationFrameRef.current = requestAnimationFrame(visualize);
+            };
+            visualize();
+
+            if (isReceivingCall && initialCallState) {
+                await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
+                setCallId(initialCallState.id);
+            } else {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                const newCallId = await startCall(currentUser.id, chatPartner.id, offer);
+                setCallId(newCallId);
+                setCallStatus('ringing');
+            }
+
+        } catch (error) {
+            console.error("Error accessing media devices.", error);
+            setHasPermission(false);
+            toast({
+                variant: 'destructive',
+                title: 'Ошибка доступа',
+                description: 'Не удалось получить доступ к камере и микрофону. Пожалуйста, проверьте разрешения и выбранные устройства в настройках.',
+            });
+            handleHangUp(true, 'ended');
         }
     };
-
+    
     setupCall();
     
     return () => {
@@ -168,25 +160,24 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
 
     const unsubscribe = onSnapshot(doc(db, 'calls', callId), async (docSnapshot) => {
         const data = docSnapshot.data();
+        const pc = pcRef.current;
+        if (!pc) return;
+
         if (!data) { 
-             // If document is deleted, it means the call was hung up by the other party.
              if (callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
                  handleHangUp(false, callStatus === 'ringing' ? 'missed' : 'ended');
              }
              return;
         }
 
-        const pc = pcRef.current;
-        if (!pc) return;
-        
         if (data.answer && pc.remoteDescription === null) {
             await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
         }
         
         if (data.status && ['declined', 'ended', 'missed'].includes(data.status)) {
-             if (callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
+            if (callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
                 handleHangUp(false, data.status);
-             }
+            }
         }
     });
 
@@ -197,7 +188,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         snapshot.docChanges().forEach((change) => {
             if (change.type === 'added') {
                 const candidate = new RTCIceCandidate(change.doc.data());
-                if(pcRef.current?.remoteDescription) { 
+                if (pcRef.current?.remoteDescription) {
                     pcRef.current?.addIceCandidate(candidate);
                 }
             }
@@ -209,7 +200,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         unsubscribeCandidates();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callId, isReceivingCall]);
+  }, [callId]);
 
 
   const handleAcceptCall = async () => {
@@ -217,20 +208,19 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     if (!pc || !callId) return;
 
     setCallStatus('connecting');
-    const answerDescription = await pc.createAnswer();
-    await pc.setLocalDescription(answerDescription);
-    await updateCallStatus(callId, 'answered', answerDescription);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await updateCallStatus(callId, 'answered', answer);
   };
 
   const handleDeclineCall = async () => {
-    if(callId) {
+    if (callId) {
         await updateCallStatus(callId, 'declined');
     }
-    // onEndCall will be triggered by the snapshot listener detecting the 'declined' status
+    onEndCall(); 
   };
 
   const handleHangUp = async (isInitiator: boolean, finalStatus: CallStatus) => {
-      // Prevent multiple hangup calls
       if (callStatus === 'ended' || callStatus === 'declined' || callStatus === 'missed') {
         return;
       }

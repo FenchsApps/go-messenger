@@ -71,7 +71,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     return () => {
         const pc = pcRef.current;
         const ls = localStream;
-        setTimeout(() => hangUp(pc, ls, chatId), 500);
+        hangUp(pc, ls, chatId);
     };
   }, [chatId, toast]);
 

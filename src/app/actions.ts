@@ -2,7 +2,7 @@
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
@@ -193,4 +193,71 @@ export async function clearChatHistory(chatId: string) {
         console.error("Error clearing chat history: ", error);
         return { error: 'Failed to clear chat history.' };
     }
+}
+
+// --- Call Actions ---
+
+export async function startCall(callerId: string, recipientId: string, offer: any) {
+    const callDocRef = doc(collection(db, 'calls'));
+    await setDoc(callDocRef, {
+        callerId,
+        recipientId,
+        offer,
+        status: 'ringing',
+        createdAt: serverTimestamp(),
+    });
+    return callDocRef.id;
+}
+
+export async function updateCallStatus(callId: string, status: string, answer?: any) {
+    const callDocRef = doc(db, 'calls', callId);
+    const updates: any = { status };
+    if (answer) {
+        updates.answer = answer;
+    }
+
+    const callDoc = await getDoc(callDocRef);
+    if (!callDoc.exists() && status === 'answered') {
+       // This case is unlikely but as a safeguard
+       await setDoc(callDocRef, updates, { merge: true });
+    } else {
+       await updateDoc(callDocRef, updates);
+    }
+}
+
+
+export async function addIceCandidate(callId: string, candidate: any, type: 'caller' | 'recipient') {
+    const candidatesCol = collection(db, 'calls', callId, `${type}Candidates`);
+    await addDoc(candidatesCol, candidate);
+}
+
+export async function hangUp(callId: string) {
+    const callDocRef = doc(db, 'calls', callId);
+    if ((await getDoc(callDocRef)).exists()) {
+        const callerCandidates = await getDocs(collection(callDocRef, 'callerCandidates'));
+        const recipientCandidates = await getDocs(collection(callDocRef, 'recipientCandidates'));
+        
+        const batch = writeBatch(db);
+        callerCandidates.forEach(doc => batch.delete(doc.ref));
+        recipientCandidates.forEach(doc => batch.delete(doc.ref));
+        batch.delete(callDocRef);
+
+        await batch.commit();
+    }
+}
+
+export async function logCall({ senderId, recipientId, status, duration, callerId }) {
+    const chatId = getChatId(senderId, recipientId);
+    
+    await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        senderId,
+        recipientId,
+        text: '',
+        timestamp: serverTimestamp(),
+        type: 'call',
+        callStatus: status,
+        duration: duration,
+        callerId: callerId,
+        read: false,
+    });
 }

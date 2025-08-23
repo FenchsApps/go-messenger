@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { format } from 'date-fns';
 import { MessageMenu } from './message-menu';
 import { stickers } from '@/lib/data';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
 
 interface ChatMessagesProps {
@@ -16,6 +16,18 @@ interface ChatMessagesProps {
   onEdit: (message: Message) => void;
   onDelete: (messageId: string) => void;
   onForward: (message: Message) => void;
+}
+
+function formatDuration(seconds: number) {
+    if (!seconds || seconds < 1) return "меньше секунды";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const parts = [];
+    if (h > 0) parts.push(`${h} ч`);
+    if (m > 0) parts.push(`${m} мин`);
+    if (s > 0) parts.push(`${s} с`);
+    return parts.join(' ');
 }
 
 export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDelete, onForward }: ChatMessagesProps) {
@@ -36,6 +48,52 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
         const showAvatar = !isCurrentUser && (index === 0 || messages[index - 1].senderId !== message.senderId);
 
         const StickerComponent = message.stickerId ? stickers.find(s => s.id === message.stickerId)?.component : null;
+
+        if (message.type === 'call') {
+            const isCallInitiator = message.callerId === currentUser.id;
+            let CallIcon, callText;
+
+            switch(message.callStatus) {
+                case 'accepted':
+                    CallIcon = Phone;
+                    callText = isCallInitiator ? `Исходящий звонок` : `Входящий звонок`;
+                    break;
+                case 'declined':
+                    CallIcon = PhoneMissed;
+                    callText = `Звонок отклонен`;
+                    break;
+                case 'missed':
+                    CallIcon = PhoneMissed;
+                    callText = isCallInitiator ? `Нет ответа` : `Пропущенный звонок`;
+                    break;
+                 case 'ended':
+                    CallIcon = Phone;
+                    callText = isCallInitiator ? `Исходящий звонок` : `Входящий звонок`;
+                    break;
+                default:
+                    CallIcon = Phone;
+                    callText = 'Звонок';
+            }
+
+            return (
+                 <div key={message.id} className="flex justify-center">
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted text-muted-foreground text-sm">
+                        <CallIcon className={cn("w-4 h-4", {
+                           'text-green-500': message.callStatus === 'accepted' || message.callStatus === 'ended',
+                           'text-red-500': message.callStatus === 'declined' || message.callStatus === 'missed',
+                        })} />
+                        <div>
+                            <span>{callText}</span>
+                            {message.duration && <span className="ml-2 text-xs">({formatDuration(message.duration)})</span>}
+                        </div>
+                        <span className="text-xs opacity-70">
+                            {message.timestamp && format(new Date(message.timestamp), 'HH:mm')}
+                        </span>
+                    </div>
+                </div>
+            )
+        }
+
 
         return (
           <div

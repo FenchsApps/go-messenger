@@ -25,10 +25,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, startCall, hangUp, updateCallStatus, addIceCandidate } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, getDocs, doc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
+import { CallView } from './call-view';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -46,6 +47,7 @@ declare global {
     interface Window {
         Android?: {
             showNewMessageNotification(senderName: string, messageText: string, senderAvatar: string): void;
+            showCallNotification(callerName: string, callerAvatar: string): void;
         };
     }
 }
@@ -63,6 +65,10 @@ export function ChatView({
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
+  const [isCalling, setIsCalling] = useState(false);
+  const [isReceivingCall, setIsReceivingCall] = useState(false);
+  const [callState, setCallState] = useState<any>(null);
+
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
@@ -99,27 +105,31 @@ export function ChatView({
           timestamp: data.timestamp?.toDate().getTime() || Date.now(),
         } as Message;
         newMessages.push(newMessage);
-        
-        if (newMessage.senderId !== currentUser.id && !isWindowFocused && !newMessage.read) {
-             const sender = allUsers.find(u => u.id === newMessage.senderId);
-             if (sender) {
-                 const notificationText = newMessage.type === 'text' ? newMessage.text : (newMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
-                 
-                 // For native WebView
-                 if (window.Android?.showNewMessageNotification) {
-                    window.Android.showNewMessageNotification(sender.name, notificationText, sender.avatar);
-                 } 
-                 // For Web Browser
-                 else if (Notification.permission === 'granted') {
-                    new Notification(`Новое сообщение от ${sender.name}`, {
-                        body: notificationText,
-                        icon: sender.avatar
-                    });
-                 }
-             }
-        }
       });
       
+      const newUnreadMessages = querySnapshot.docChanges()
+        .filter(change => change.type === 'added' && !change.doc.metadata.hasPendingWrites)
+        .map(change => change.doc.data() as Message)
+        .filter(msg => msg.senderId !== currentUser.id && !msg.read);
+      
+      if (!isWindowFocused && newUnreadMessages.length > 0) {
+        const lastMessage = newUnreadMessages[newUnreadMessages.length - 1];
+        const sender = allUsers.find(u => u.id === lastMessage.senderId);
+        if (sender) {
+            const notificationText = lastMessage.type === 'text' ? lastMessage.text : (lastMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
+            
+            if (window.Android?.showNewMessageNotification) {
+               window.Android.showNewMessageNotification(sender.name, notificationText, sender.avatar);
+            } 
+            else if (Notification.permission === 'granted') {
+               new Notification(`Новое сообщение от ${sender.name}`, {
+                   body: notificationText,
+                   icon: sender.avatar
+               });
+            }
+        }
+      }
+
       setMessages(newMessages);
 
       if (isWindowFocused) {
@@ -131,6 +141,36 @@ export function ChatView({
         unsubscribeMessages();
     }
   }, [chatId, currentUser.id, isWindowFocused]);
+
+  useEffect(() => {
+     const q = query(collection(db, 'calls'), where('recipientId', '==', currentUser.id), where('status', '==', 'ringing'));
+     const unsubscribe = onSnapshot(q, (snapshot) => {
+         if (!snapshot.empty) {
+             const callDoc = snapshot.docs[0];
+             const callData = callDoc.data();
+             const caller = allUsers.find(u => u.id === callData.callerId);
+             
+             if (caller) {
+                 setCallState({ id: callDoc.id, ...callData });
+                 setIsReceivingCall(true);
+
+                 if (window.Android?.showCallNotification) {
+                    window.Android.showCallNotification(caller.name, caller.avatar);
+                 } else if (Notification.permission === 'granted') {
+                    new Notification('Входящий звонок', {
+                        body: `${caller.name} звонит вам...`,
+                        icon: caller.avatar,
+                    });
+                 }
+             }
+         } else {
+            setIsReceivingCall(false);
+            setCallState(null);
+         }
+     });
+
+     return () => unsubscribe();
+  }, [currentUser.id]);
 
 
   const handleSendMessage = async (text: string) => {
@@ -206,6 +246,29 @@ export function ChatView({
     setIsClearingChat(false);
   }
 
+  const handleStartCall = () => {
+    setIsCalling(true);
+  };
+
+  const handleEndCall = () => {
+    setIsCalling(false);
+    setIsReceivingCall(false);
+    setCallState(null);
+  };
+
+  if (isCalling || isReceivingCall) {
+    return (
+        <CallView
+            currentUser={currentUser}
+            chatPartner={chatPartner}
+            isReceivingCall={isReceivingCall}
+            initialCallState={callState}
+            onEndCall={handleEndCall}
+        />
+    )
+  }
+
+
   return (
     <div className="flex flex-col h-full bg-background">
       <ChatHeader 
@@ -213,6 +276,7 @@ export function ChatView({
         isMobile={isMobile} 
         onBack={onBack}
         onClearChat={() => setIsClearingChat(true)}
+        onStartCall={handleStartCall}
       />
       <ChatMessages
         messages={messages}

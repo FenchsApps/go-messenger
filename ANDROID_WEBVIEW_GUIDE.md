@@ -48,12 +48,28 @@
 
 ```
 
-3.  Теперь внутри тега `<application>` зарегистрируйте нашу будущую службу `WebViewService`. Добавьте эту строку после тега `</activity>`:
+3.  Теперь **полностью замените** ваш тег `<application>` на этот код. Он содержит правильную регистрацию `MainActivity` (чтобы приложение было видно в лаунчере) и фоновой службы.
 
 ```xml
-<application ...>
-    <activity ...>
-        ...
+<application
+    android:allowBackup="true"
+    android:dataExtractionRules="@xml/data_extraction_rules"
+    android:fullBackupContent="@xml/backup_rules"
+    android:icon="@mipmap/ic_launcher"
+    android:label="@string/app_name"
+    android:roundIcon="@mipmap/ic_launcher_round"
+    android:supportsRtl="true"
+    android:theme="@style/Theme.GoMessenger"
+    tools:targetApi="31">
+
+    <activity
+        android:name=".MainActivity"
+        android:exported="true">
+        <!-- Этот intent-filter делает приложение видимым в лаунчере -->
+        <intent-filter>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
     </activity>
 
     <!-- Регистрация нашей фоновой службы -->

@@ -10,13 +10,14 @@ export type User = {
 };
 
 export type Message = {
-  id: string;
+  id:string;
   senderId: string;
   recipientId: string;
   text: string;
   timestamp: number;
-  type: 'text' | 'sticker';
+  type: 'text' | 'sticker' | 'gif';
   stickerId?: string;
+  gifUrl?: string;
   edited?: boolean;
   forwardedFrom?: {
     name: string;

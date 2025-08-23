@@ -69,7 +69,8 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser && message.type === 'text',
                   'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser && message.type === 'text',
                 },
-                message.type === 'sticker' && 'p-1 bg-transparent'
+                 message.type === 'sticker' && 'p-1 bg-transparent',
+                 message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden'
               )}
             >
               {message.forwardedFrom && (
@@ -77,6 +78,16 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   <p className="font-bold">Переслано от {message.forwardedFrom.name}</p>
                   <p>{message.forwardedFrom.text}</p>
                 </div>
+              )}
+               {message.type === 'gif' && message.gifUrl && (
+                <Image
+                  src={message.gifUrl}
+                  alt="GIF"
+                  width={250}
+                  height={200}
+                  className="max-w-full h-auto"
+                  unoptimized // Important for GIFs
+                />
               )}
               {message.type === 'sticker' && StickerComponent && (
                 <div className="w-32 h-32">

@@ -4,13 +4,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Send } from 'lucide-react';
 import { StickerPanel } from './sticker-panel';
 import { cn } from '@/lib/utils';
+import { GifPanel } from './gif-panel';
 
 interface ChatInputProps {
   onSendMessage: (text: string) => Promise<void>;
   onSendSticker: (stickerId: string) => void;
+  onSendGif: (gifUrl: string) => void;
 }
 
-export function ChatInput({ onSendMessage, onSendSticker }: ChatInputProps) {
+export function ChatInput({ onSendMessage, onSendSticker, onSendGif }: ChatInputProps) {
   const [text, setText] = useState('');
   const [isPending, startTransition] = useTransition();
 
@@ -36,6 +38,7 @@ export function ChatInput({ onSendMessage, onSendSticker }: ChatInputProps) {
         className="relative flex items-center gap-2"
       >
         <StickerPanel onStickerSelect={onSendSticker} />
+        <GifPanel onGifSelect={onSendGif} />
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif } from '@/app/actions';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
@@ -75,6 +75,10 @@ export function ChatView({
   const handleSendSticker = async (stickerId: string) => {
     await sendSticker(currentUser.id, chatPartner.id, stickerId);
   };
+  
+  const handleSendGif = async (gifUrl: string) => {
+    await sendGif(currentUser.id, chatPartner.id, gifUrl);
+  };
 
   const handleEdit = (message: Message) => {
     setEditingMessage(message);
@@ -130,7 +134,11 @@ export function ChatView({
         onDelete={handleDelete}
         onForward={handleForward}
       />
-      <ChatInput onSendMessage={handleSendMessage} onSendSticker={handleSendSticker} />
+      <ChatInput 
+        onSendMessage={handleSendMessage} 
+        onSendSticker={handleSendSticker}
+        onSendGif={handleSendGif}
+       />
 
       <Dialog open={!!editingMessage} onOpenChange={() => setEditingMessage(null)}>
         <DialogContent>

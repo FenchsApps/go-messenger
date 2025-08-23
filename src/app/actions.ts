@@ -79,6 +79,56 @@ export async function sendSticker(senderId: string, recipientId: string, sticker
     }
 }
 
+export async function sendGif(senderId: string, recipientId: string, gifUrl: string) {
+    const chatId = getChatId(senderId, recipientId);
+    
+    try {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            senderId,
+            recipientId,
+            text: '',
+            timestamp: serverTimestamp(),
+            type: 'gif',
+            gifUrl,
+        });
+        return { error: null, data: { id: docRef.id, gifUrl } };
+    } catch (error) {
+        console.error("Error sending GIF:", error);
+        return { error: 'Failed to send GIF' };
+    }
+}
+
+export async function searchGifs(query: string) {
+  const apiKey = process.env.TENOR_API_KEY;
+  if (!apiKey) {
+    console.error('Tenor API key not found.');
+    return { error: 'GIF service is not configured.' };
+  }
+  
+  const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(
+    query
+  )}&key=${apiKey}&client_key=my-project&limit=20`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error('Tenor API error:', response.statusText);
+      return { error: 'Failed to fetch GIFs.' };
+    }
+    const data = await response.json();
+    const gifs = data.results.map((r: any) => ({
+      id: r.id,
+      url: r.media_formats.gif.url,
+      preview: r.media_formats.tinygif.url,
+    }));
+    return { data: gifs };
+  } catch (error) {
+    console.error('Error fetching GIFs:', error);
+    return { error: 'Failed to fetch GIFs.' };
+  }
+}
+
+
 export async function editMessage(chatId: string, messageId: string, newText: string) {
     if (!newText.trim()) {
         return { error: "Message can't be empty" };

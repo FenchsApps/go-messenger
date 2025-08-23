@@ -7,7 +7,7 @@ import { Phone, Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPeerConnection, hangUp } from '@/lib/webrtc';
-import { createCallAnswer, updateCallStatus } from '@/app/actions';
+import { createCallAnswer, updateCallStatus, createCallOffer } from '@/app/actions';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';

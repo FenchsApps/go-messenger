@@ -84,6 +84,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
 
         if (isReceivingCall) {
           setCallId(initialCallState.id);
+          setCallStatus('ringing');
           await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
         } else {
           const offerDescription = await pc.createOffer();
@@ -159,7 +160,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     if (!pc || !callId) return;
 
     setCallStatus('connecting');
-    await updateCallStatus(callId, 'answered');
     const answerDescription = await pc.createAnswer();
     await pc.setLocalDescription(answerDescription);
     await updateCallStatus(callId, 'answered', answerDescription);
@@ -230,12 +230,12 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                 Пожалуйста, предоставьте доступ в настройках вашего браузера, чтобы совершать звонки.
               </AlertDescription>
             </Alert>
-            <Button onClick={onEndCall} variant="secondary" className="mt-4">Назад к чату</Button>
+            <Button onClick={() => handleHangUp(true, 'missed')} variant="secondary" className="mt-4">Назад к чату</Button>
         </div>
     )
   }
 
-  if (isReceivingCall && callStatus !== 'connected' && callStatus !== 'connecting') {
+  if (isReceivingCall && callStatus === 'ringing') {
     return (
       <div className="flex flex-col items-center justify-between h-full bg-gray-800 text-white p-8">
         <div className="flex flex-col items-center gap-4">

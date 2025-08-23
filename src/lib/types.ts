@@ -25,7 +25,7 @@ export type Message = {
   } | null;
   read?: boolean;
   // Call specific fields
-  callStatus?: 'accepted' | 'declined' | 'missed' | 'ended';
+  callStatus?: 'answered' | 'declined' | 'missed' | 'ended';
   duration?: number; // in seconds
   callerId?: string;
 };

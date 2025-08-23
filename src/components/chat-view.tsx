@@ -152,10 +152,11 @@ export function ChatView({
              const callData = callDoc.data();
              const caller = allUsers.find(u => u.id === callData.callerId);
              
-             if (caller) {
-                 setIsCalling(true);
+             // Prevent entering call screen if already in a call
+             if (caller && !isCalling) {
                  setIsReceivingCall(true);
                  setCallState({ id: callDoc.id, ...callData });
+                 setIsCalling(true);
 
                  if (window.Android?.showCallNotification) {
                     window.Android.showCallNotification(caller.name, caller.avatar);
@@ -166,14 +167,11 @@ export function ChatView({
                     });
                  }
              }
-         } else {
-            // This part might cause issues if a call document is deleted upon hanging up
-            // It could prematurely end a new outgoing call.
          }
      });
 
      return () => unsubscribe();
-  }, [currentUser.id]);
+  }, [currentUser.id, isCalling]);
 
 
   const handleSendMessage = async (text: string) => {

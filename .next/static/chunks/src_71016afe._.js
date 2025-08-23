@@ -3649,6 +3649,7 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
     const [isCallEnded, setIsCallEnded] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [queuedCandidates, setQueuedCandidates] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
     const [callStartTime, setCallStartTime] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
+    const isCaller = !initialCallState?.offer;
     // 1. Get user media
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "CallView.useEffect": ()=>{
@@ -3677,16 +3678,17 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
             startMedia();
             return ({
                 "CallView.useEffect": ()=>{
-                    // This will be called on component unmount
+                    setIsCallEnded(true); // Ensure cleanup runs
                     if (pcRef.current || localStream) {
                         const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
                         (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$webrtc$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["hangUp"])(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
+                        pcRef.current = null;
                     }
                 }
             })["CallView.useEffect"];
         }
     }["CallView.useEffect"], []);
-    // 2. Create peer connection and call offer/answer
+    // 2. Create peer connection and handle call logic
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "CallView.useEffect": ()=>{
             if (!localStream) return;
@@ -3694,10 +3696,16 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
             pcRef.current = pc;
             const initializeCall = {
                 "CallView.useEffect.initializeCall": async ()=>{
-                    if (!initialCallState?.offer) {
+                    if (isCaller) {
                         const offer = await pc.createOffer();
                         await pc.setLocalDescription(offer);
                         await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$18d097__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__["createCallOffer"])(chatId, offer);
+                    } else if (initialCallState?.offer) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
+                        const answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+                        await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$196e03__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__["createCallAnswer"])(chatId, answer);
+                        await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$39b5f3__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__["updateCallStatus"])(chatId, 'answered');
                     }
                 }
             }["CallView.useEffect.initializeCall"];
@@ -3706,7 +3714,7 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
     }["CallView.useEffect"], [
         localStream,
         chatId,
-        initialCallState?.offer
+        isCaller
     ]);
     // 3. Listen for signaling changes
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
@@ -3726,22 +3734,16 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                         return;
                     }
                     const callData = snapshot.data();
-                    setCallStatus(callData.status);
+                    if (callData.status !== callStatus) {
+                        setCallStatus(callData.status);
+                    }
                     if (callData.status === 'answered' && !callStartTime) {
                         setCallStartTime(Date.now());
                     }
                     if (!pc) return;
-                    // Handle incoming answer
-                    if (callData.answer && pc.signalingState !== 'stable') {
+                    // Handle incoming answer for the caller
+                    if (isCaller && callData.answer && pc.signalingState !== 'stable') {
                         await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
-                    }
-                    // Handle incoming offer
-                    if (callData.offer && pc.signalingState === 'stable' && !initialCallState?.offer) {
-                        await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
-                        const answer = await pc.createAnswer();
-                        await pc.setLocalDescription(answer);
-                        await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$196e03__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__["createCallAnswer"])(chatId, answer);
-                        await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$39b5f3__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__["updateCallStatus"])(chatId, 'answered');
                     }
                     // Add ICE candidates
                     if (callData.iceCandidates) {
@@ -3777,8 +3779,9 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
         chatId,
         onEndCall,
         callStartTime,
-        initialCallState?.offer,
-        isCallEnded
+        isCaller,
+        isCallEnded,
+        callStatus
     ]);
     // 4. Process queued ICE candidates
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({

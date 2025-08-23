@@ -7,7 +7,7 @@ import { Phone, Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPeerConnection, hangUp } from '@/lib/webrtc';
-import { createCallAnswer, updateCallStatus, createCallOffer } from '@/app/actions';
+import { createCallAnswer, updateCallStatus, createCallOffer, addIceCandidate } from '@/app/actions';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -34,7 +34,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
   const [isCallEnded, setIsCallEnded] = useState(false);
   const [queuedCandidates, setQueuedCandidates] = useState<RTCIceCandidateInit[]>([]);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
-
+  const isCaller = !initialCallState?.offer;
 
   // 1. Get user media
   useEffect(() => {
@@ -55,31 +55,39 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     startMedia();
     
     return () => {
-        // This will be called on component unmount
+        setIsCallEnded(true); // Ensure cleanup runs
         if (pcRef.current || localStream) {
-            const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
-            hangUp(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
+             const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
+             hangUp(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
+             pcRef.current = null;
         }
     };
   }, []);
 
-  // 2. Create peer connection and call offer/answer
+  // 2. Create peer connection and handle call logic
   useEffect(() => {
     if (!localStream) return;
 
     const { pc } = createPeerConnection(chatId, localStream, setRemoteStream);
     pcRef.current = pc;
-
+    
     const initializeCall = async () => {
-      if (!initialCallState?.offer) { // This peer is the caller
+       if (isCaller) { // This peer is the caller
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await createCallOffer(chatId, offer);
+      } else if (initialCallState?.offer) { // This peer is the callee
+        await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await createCallAnswer(chatId, answer);
+        await updateCallStatus(chatId, 'answered');
       }
     };
 
     initializeCall();
-  }, [localStream, chatId, initialCallState?.offer]);
+
+  }, [localStream, chatId, isCaller]);
 
 
   // 3. Listen for signaling changes
@@ -88,7 +96,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     const unsubscribe = onSnapshot(callDocRef, async (snapshot) => {
         const pc = pcRef.current;
         if (!snapshot.exists()) {
-            if (!isCallEnded) { // Prevent multiple triggers
+            if (!isCallEnded) {
                 setIsCallEnded(true);
                 setCallStatus('ended');
                 setTimeout(() => onEndCall(), 2000);
@@ -97,7 +105,9 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         }
 
         const callData = snapshot.data() as CallState;
-        setCallStatus(callData.status);
+        if (callData.status !== callStatus) {
+            setCallStatus(callData.status);
+        }
 
         if(callData.status === 'answered' && !callStartTime) {
             setCallStartTime(Date.now());
@@ -105,25 +115,15 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
 
         if (!pc) return;
         
-        // Handle incoming answer
-        if (callData.answer && pc.signalingState !== 'stable') {
+        // Handle incoming answer for the caller
+        if (isCaller && callData.answer && pc.signalingState !== 'stable') {
             await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
         }
-        
-        // Handle incoming offer
-        if (callData.offer && pc.signalingState === 'stable' && !initialCallState?.offer) {
-             await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
-             const answer = await pc.createAnswer();
-             await pc.setLocalDescription(answer);
-             await createCallAnswer(chatId, answer);
-             await updateCallStatus(chatId, 'answered');
-        }
-
 
         // Add ICE candidates
         if (callData.iceCandidates) {
-            const currentCandidates = new Set((await pc.getReceivers()).map(r => r.transport?.iceTransport?.getSelectedCandidatePair()?.remote.candidate));
-            callData.iceCandidates.forEach(candidate => {
+             const currentCandidates = new Set((await pc.getReceivers()).map(r => r.transport?.iceTransport?.getSelectedCandidatePair()?.remote.candidate));
+             callData.iceCandidates.forEach(candidate => {
                 if (candidate && !currentCandidates.has(candidate.candidate)) {
                     if (pc.remoteDescription) {
                         pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
@@ -137,7 +137,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
 
     return () => unsubscribe();
 
-  }, [chatId, onEndCall, callStartTime, initialCallState?.offer, isCallEnded]);
+  }, [chatId, onEndCall, callStartTime, isCaller, isCallEnded, callStatus]);
 
   // 4. Process queued ICE candidates
   useEffect(() => {

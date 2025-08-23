@@ -14,7 +14,7 @@
 3.  Выберите шаблон **"Empty Views Activity"** и нажмите **"Next"**.
 4.  Настройте ваш проект:
     *   **Name**: `Go Messenger` (или любое другое имя).
-    *   **Package name**: Например, `com.example.gomessenger`.
+    *   **Package name**: Например, `com.example.gomessenger`. **(Запомните это имя, оно понадобится!)**
     *   **Save location**: Выберите, где сохранить проект.
     *   **Language**: Выберите **Kotlin** (это современный стандарт для Android).
     *   **Minimum SDK**: Выберите API 24 или выше для лучшей совместимости с современными веб-технологиями.
@@ -71,7 +71,7 @@
 
 Теперь самое главное — напишем код, который загрузит ваш сайт в `WebView` и настроит его для корректной работы.
 
-1.  Откройте `app > java > com.example.gomessenger > MainActivity.kt`.
+1.  Откройте `app > java > com.example.gomessenger > MainActivity.kt`. (Путь может немного отличаться, если вы указали другой package name).
 2.  Замените содержимое этого файла на следующий код:
 
 ```kotlin
@@ -83,6 +83,9 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+// Убедитесь, что эта строка импорта добавлена. 
+// Если у вас другой package name, замените 'com.example.gomessenger' на ваш.
+import com.example.gomessenger.R 
 
 class MainActivity : AppCompatActivity() {
 
@@ -131,7 +134,15 @@ class MainActivity : AppCompatActivity() {
 
 **Важно**: не забудьте заменить `"https://your-deployed-app-url.com"` на реальный URL вашего мессенджера.
 
-## Шаг 5: Сборка APK
+## Шаг 5: Решение ошибки "Unresolved reference: R"
+
+Если Android Studio подсвечивает `R` красным цветом и пишет "Unresolved reference", попробуйте следующие шаги:
+
+1.  **Проверьте package name:** Убедитесь, что `package com.example.gomessenger` вверху файла `MainActivity.kt` **в точности** совпадает с тем, что вы указали при создании проекта.
+2.  **Добавьте импорт:** Убедитесь, что строка `import com.example.gomessenger.R` присутствует. Если у вас другой package name, исправьте этот импорт.
+3.  **Очистка и пересборка проекта:** Это самый частый способ решения проблемы. В верхнем меню Android Studio выберите **Build -> Clean Project**, а после завершения очистки выберите **Build -> Rebuild Project**.
+
+## Шаг 6: Сборка APK
 
 1.  В верхнем меню Android Studio выберите **"Build" > "Build Bundle(s) / APK(s)" > "Build APK(s)"**.
 2.  После завершения сборки Android Studio покажет уведомление со ссылкой на APK-файл. Обычно он находится в `app/build/outputs/apk/debug/app-debug.apk`.

@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, where, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 import { CallView } from './call-view';
 
@@ -118,9 +118,11 @@ export function ChatView({
         if (sender) {
             const notificationText = lastMessage.stickerId ? 'Отправил(а) стикер' : lastMessage.gifUrl ? 'Отправил(а) GIF' : lastMessage.text;
             
-            // Send notification to WebView if available
             if (window.Android?.showNewMessageNotification) {
                window.Android.showNewMessageNotification(sender.name, notificationText, sender.avatar);
+            } else if (!isWindowFocused && Notification.permission === 'granted') {
+                 // Browser notifications are handled by Service Workers now for background tabs.
+                 // For simplicity in this context, we will rely on native notifications via WebView.
             }
         }
       }
@@ -138,28 +140,35 @@ export function ChatView({
   }, [chatId, currentUser.id, isWindowFocused]);
 
   useEffect(() => {
+     // Don't listen for new calls if already in one or receiving one
+     if (isCalling || isReceivingCall) return;
+
      const q = query(collection(db, 'calls'), where('recipientId', '==', currentUser.id), where('status', '==', 'ringing'));
      const unsubscribe = onSnapshot(q, (snapshot) => {
-         if (!snapshot.empty && !isCalling) {
+         if (!snapshot.empty) {
              const callDoc = snapshot.docs[0];
+             // Check if we are already handling this call
+             if (callDoc.id === callState?.id) return;
+             
              const callData = callDoc.data();
              const caller = allUsers.find(u => u.id === callData.callerId);
              
              if (caller) {
-                 setIsReceivingCall(true);
                  setCallState({ id: callDoc.id, ...callData });
+                 setIsReceivingCall(true);
                  setIsCalling(true);
-
-                 // Send notification to WebView if available
+                 
                  if (window.Android?.showCallNotification) {
                     window.Android.showCallNotification(caller.name, caller.avatar);
+                 } else if (!isWindowFocused && Notification.permission === 'granted') {
+                    // Browser notifications are handled by Service Workers now.
                  }
              }
          }
      });
 
      return () => unsubscribe();
-  }, [currentUser.id, isCalling, isWindowFocused]);
+  }, [currentUser.id, isCalling, isReceivingCall, callState?.id]);
 
 
   const handleSendMessage = async (text: string) => {
@@ -251,6 +260,7 @@ export function ChatView({
     return (
         <div className='h-full w-full'>
             <CallView
+                key={callState?.id || 'new-call'}
                 currentUser={currentUser}
                 chatPartner={chatPartner}
                 isReceivingCall={isReceivingCall}

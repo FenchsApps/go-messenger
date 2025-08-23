@@ -197,7 +197,7 @@ export async function clearChatHistory(chatId: string) {
 
 // --- Call Actions ---
 
-export async function startCall(callerId: string, recipientId: string, offer: any) {
+export async function createCallOffer(callerId: string, recipientId: string, offer: any) {
     const callDocRef = doc(collection(db, 'calls'));
     await setDoc(callDocRef, {
         callerId,
@@ -209,43 +209,40 @@ export async function startCall(callerId: string, recipientId: string, offer: an
     return callDocRef.id;
 }
 
-export async function updateCallStatus(callId: string, status: string, answer?: any) {
+export async function createCallAnswer(callId: string, answer: any) {
     const callDocRef = doc(db, 'calls', callId);
-    const updates: any = { status };
-    if (answer) {
-        updates.answer = answer;
+    const callDoc = await getDoc(callDocRef);
+    if (callDoc.exists()) {
+        await updateDoc(callDocRef, { answer, status: 'answered' });
     }
-    
+}
+
+export async function addIceCandidate(callId: string, candidate: any, type: 'caller' | 'recipient') {
+    try {
+        const candidatesCol = collection(db, 'calls', callId, `${type}Candidates`);
+        await addDoc(candidatesCol, candidate);
+    } catch (error) {
+        // This might fail if the call document was already deleted. Safe to ignore.
+        if (error.code !== 'not-found') {
+            console.error(`Error adding ${type} ICE candidate:`, error);
+        }
+    }
+}
+
+export async function endCall(callId: string) {
+    const callDocRef = doc(db, 'calls', callId);
     try {
         const callDoc = await getDoc(callDocRef);
         if (callDoc.exists()) {
-           await updateDoc(callDocRef, updates);
-        } else if (status === 'answered') {
-           // This case is unlikely but as a safeguard, if we are trying to answer a call that was just hung up, recreate it.
-           await setDoc(callDocRef, updates, { merge: true });
-        }
-    } catch (error) {
-        // This will catch the "Not Found" error and prevent the app from crashing.
-        // We can safely ignore it, as it means the call document was deleted by the other user.
-        if (error.code !== 'not-found') {
-            console.error("Error updating call status:", error);
-        }
-    }
-}
-
-
-export async function addIceCandidate(callId: string, candidate: any, type: 'caller' | 'recipient') {
-    const candidatesCol = collection(db, 'calls', callId, `${type}Candidates`);
-    await addDoc(candidatesCol, candidate);
-}
-
-export async function hangUp(callId: string) {
-    const callDocRef = doc(db, 'calls', callId);
-    try {
-        if ((await getDoc(callDocRef)).exists()) {
-            const callerCandidates = await getDocs(collection(callDocRef, 'callerCandidates'));
-            const recipientCandidates = await getDocs(collection(callDocRef, 'recipientCandidates'));
+            // Delete ICE candidate subcollections first
+            const callerCandidatesQuery = query(collection(callDocRef, 'callerCandidates'));
+            const recipientCandidatesQuery = query(collection(callDocRef, 'recipientCandidates'));
             
+            const [callerCandidates, recipientCandidates] = await Promise.all([
+                getDocs(callerCandidatesQuery),
+                getDocs(recipientCandidatesQuery)
+            ]);
+
             const batch = writeBatch(db);
             callerCandidates.forEach(doc => batch.delete(doc.ref));
             recipientCandidates.forEach(doc => batch.delete(doc.ref));
@@ -254,9 +251,9 @@ export async function hangUp(callId: string) {
             await batch.commit();
         }
     } catch (error) {
-        if (error.code !== 'not-found') {
-            console.error("Error hanging up call:", error);
-        }
         // If not found, it means the other user already hung up. Safe to ignore.
+        if (error.code !== 'not-found') {
+            console.error("Error ending call:", error);
+        }
     }
 }

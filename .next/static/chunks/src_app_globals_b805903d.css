@@ -1977,6 +1977,10 @@ body {
   animation-timing-function: linear;
 }
 
+.paused {
+  animation-play-state: paused;
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }

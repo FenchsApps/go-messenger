@@ -32,6 +32,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
   const [callStatus, setCallStatus] = useState(initialCallState?.status || 'calling');
   const [isCallEnded, setIsCallEnded] = useState(false);
   const [queuedCandidates, setQueuedCandidates] = useState<RTCIceCandidateInit[]>([]);
+  const [callStartTime, setCallStartTime] = useState<number | null>(null);
 
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     return () => {
         const pc = pcRef.current;
         const ls = localStream;
-        hangUp(pc, ls, chatId);
+        hangUp(pc, ls, chatId, 0, currentUser.id, chatPartner.id);
     };
   }, [chatId, toast]);
 
@@ -97,17 +98,21 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         if (!snapshot.exists()) {
             setIsCallEnded(true);
             setCallStatus('ended');
-            setTimeout(() => onEndCall(), 2000); 
+            setTimeout(() => onEndCall(), 2000);
             return;
         }
 
         const callData = snapshot.data() as CallState;
         setCallStatus(callData.status);
 
+        if(callData.status === 'answered' && !callStartTime) {
+            setCallStartTime(Date.now());
+        }
+
         if (!pc) return;
         
         const processCandidates = (candidates: RTCIceCandidateInit[]) => {
-            if (pc.currentRemoteDescription) {
+            if (pc.remoteDescription) {
                 candidates.forEach(candidate => {
                     if (candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
                 });
@@ -135,11 +140,12 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
 
     return () => unsubscribe();
 
-  }, [chatId, onEndCall]);
+  }, [chatId, onEndCall, callStartTime]);
 
 
   const handleHangUp = (status: 'ended' | 'declined' = 'ended') => {
-    updateCallStatus(chatId, status);
+      const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
+      updateCallStatus(chatId, status, duration, currentUser.id, chatPartner.id);
   };
 
   const toggleMute = () => {

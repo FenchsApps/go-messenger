@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { format } from 'date-fns';
 import { MessageMenu } from './message-menu';
 import { stickers } from '@/lib/data';
+import { PhoneMissed, PhoneIncoming, PhoneOutgoing, PhoneOff } from 'lucide-react';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -25,9 +26,43 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
     }
   }, [messages]);
 
+  const renderCallMessage = (message: Message) => {
+    const isCurrentUser = message.senderId === currentUser.id;
+    let Icon = PhoneOutgoing;
+    let text = message.text;
+
+    if (message.callInfo?.status === 'missed') {
+        Icon = PhoneMissed;
+        text = isCurrentUser ? `Вы пропустили звонок от ${chatPartner.name}` : `${currentUser.name} пропустил(а) звонок`;
+    } else if (message.callInfo?.status === 'declined') {
+        Icon = PhoneOff;
+        text = isCurrentUser ? `${chatPartner.name} отклонил(а) звонок` : 'Вы отклонили звонок';
+    } else if (message.callInfo?.status === 'answered') {
+        Icon = isCurrentUser ? PhoneOutgoing : PhoneIncoming;
+        const duration = message.callInfo.duration;
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        text = `Звонок завершен • ${minutes > 0 ? `${minutes} мин ` : ''}${seconds} сек`;
+    }
+    
+    return (
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground my-2">
+            <Icon className="h-4 w-4" />
+            <span>{text}</span>
+            <span className="text-xs">
+                 {message.timestamp && format(new Date(message.timestamp), 'HH:mm')}
+            </span>
+        </div>
+    )
+  }
+
   return (
     <div ref={scrollAreaRef} className="flex-1 overflow-y-auto p-4 space-y-4">
       {messages.map((message, index) => {
+        if(message.type === 'call') {
+            return <div key={message.id}>{renderCallMessage(message)}</div>;
+        }
+
         const isCurrentUser = message.senderId === currentUser.id;
         const sender = isCurrentUser ? currentUser : chatPartner;
         const showAvatar = !isCurrentUser && (index === 0 || messages[index - 1].senderId !== message.senderId);

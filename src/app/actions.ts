@@ -36,8 +36,8 @@ function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
 }
 
-export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }) {
-    if (!text.trim()) {
+export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }, callInfo?: { status: 'answered' | 'declined' | 'missed', duration?: number }) {
+    if (!text.trim() && !callInfo) {
         return { error: 'Message cannot be empty' };
     }
     
@@ -49,9 +49,10 @@ export async function sendMessage(senderId: string, recipientId: string, text: s
             recipientId,
             text,
             timestamp: serverTimestamp(),
-            type: 'text',
+            type: callInfo ? 'call' : 'text',
             edited: false,
             forwardedFrom: forwardedFrom || null,
+            callInfo: callInfo || null,
         });
         return { error: null, data: { id: docRef.id, text } };
     } catch (error) {
@@ -184,14 +185,39 @@ export async function addIceCandidate(chatId: string, candidate: RTCIceCandidate
   }
 }
 
-export async function updateCallStatus(chatId: string, status: 'declined' | 'ended' | 'answered') {
+export async function updateCallStatus(
+    chatId: string, 
+    status: 'declined' | 'ended' | 'answered', 
+    duration?: number,
+    callerId?: string,
+    calleeId?: string,
+) {
     const callDocRef = doc(db, 'calls', chatId);
-    if (status === 'ended' || status === 'declined') {
-        const callDoc = await getDoc(callDocRef);
-        if (callDoc.exists()) {
-             await deleteDoc(callDocRef);
+    const callDoc = await getDoc(callDocRef);
+
+    if (callDoc.exists()) {
+        const callData = callDoc.data();
+        if (status === 'ended' || status === 'declined') {
+            await deleteDoc(callDocRef);
+            
+            if(callerId && calleeId) {
+                let callStatus = callData.status === 'answered' ? 'answered' : (status === 'declined' ? 'declined' : 'missed');
+                let messageText = 'Звонок';
+                 if(callStatus === 'answered') {
+                    messageText = `Звонок длительностью ${duration} сек.`
+                 } else if (callStatus === 'declined') {
+                    messageText = 'Звонок отклонен'
+                 } else if (callStatus === 'missed') {
+                    messageText = 'Пропущенный звонок'
+                 }
+
+                await sendMessage(callerId, calleeId, messageText, undefined, {
+                    status: callStatus,
+                    duration: duration,
+                })
+            }
         }
-    } else {
+    } else if(status === 'answered') {
         await setDoc(callDocRef, { status }, { merge: true });
     }
 }

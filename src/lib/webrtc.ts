@@ -38,7 +38,14 @@ export const createPeerConnection = (
 };
 
 
-export const hangUp = async (pc: RTCPeerConnection | null, localStream: MediaStream | null, chatId: string) => {
+export const hangUp = async (
+    pc: RTCPeerConnection | null, 
+    localStream: MediaStream | null, 
+    chatId: string, 
+    duration: number,
+    callerId: string,
+    calleeId: string
+) => {
   if (pc) {
     pc.getSenders().forEach((sender) => {
         if(sender.track) {
@@ -52,6 +59,6 @@ export const hangUp = async (pc: RTCPeerConnection | null, localStream: MediaStr
   }
   
   if (chatId) {
-    await updateCallStatus(chatId, 'ended');
+    await updateCallStatus(chatId, 'ended', duration, callerId, calleeId);
   }
 };

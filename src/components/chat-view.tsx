@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, createCallOffer, updateCallStatus } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif } from '@/app/actions';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
@@ -93,7 +93,7 @@ export function ChatView({
         setCallState(callData);
 
         // If there's an incoming call for us, start the call view
-        if (callData?.status === 'ringing' && callData?.offer) {
+        if (callData?.status === 'ringing' && callData?.offer && !isCalling) {
             setIsCalling(true);
         }
     });
@@ -102,7 +102,7 @@ export function ChatView({
         unsubscribeMessages();
         unsubscribeCalls();
     }
-  }, [chatId, currentUser.id, isWindowFocused]);
+  }, [chatId, currentUser.id, isWindowFocused, messages.length, isCalling]);
 
 
   const handleSendMessage = async (text: string) => {

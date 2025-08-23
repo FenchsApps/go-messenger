@@ -35,6 +35,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
 
 
+  // 1. Get user media
   useEffect(() => {
     const startMedia = async () => {
       try {
@@ -43,62 +44,54 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
         }
-        return stream;
       } catch (error) {
         console.error("Error starting media:", error);
         toast({ title: "Ошибка медиа", description: "Не удалось получить доступ к камере или микрофону.", variant: "destructive"});
         handleHangUp('declined');
-        return null;
       }
     };
 
-    const initializeCall = async (stream: MediaStream) => {
-        const { pc } = createPeerConnection(chatId, stream, setRemoteStream);
-        pcRef.current = pc;
-        
-        if (!initialCallState?.offer) {
-             const offer = await pc.createOffer();
-             await pc.setLocalDescription(offer);
-             await createCallOffer(chatId, offer);
-        }
-    };
+    startMedia();
     
-    startMedia().then(stream => {
-      if (stream) {
-        initializeCall(stream);
-      }
-    });
-
     return () => {
-        const pc = pcRef.current;
-        const ls = localStream;
-        hangUp(pc, ls, chatId, 0, currentUser.id, chatPartner.id);
-    };
-  }, [chatId, toast]);
-
-
-  useEffect(() => {
-    if (!pcRef.current) return;
-    
-    if (pcRef.current.remoteDescription && queuedCandidates.length > 0) {
-      queuedCandidates.forEach(candidate => {
-        if(pcRef.current) {
-            pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding queued ICE candidate:", e));
+        // This will be called on component unmount
+        if (pcRef.current || localStream) {
+            const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
+            hangUp(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
         }
-      });
-      setQueuedCandidates([]);
-    }
-  }, [pcRef.current?.remoteDescription, queuedCandidates]);
+    };
+  }, []);
+
+  // 2. Create peer connection and call offer/answer
+  useEffect(() => {
+    if (!localStream) return;
+
+    const { pc } = createPeerConnection(chatId, localStream, setRemoteStream);
+    pcRef.current = pc;
+
+    const initializeCall = async () => {
+      if (!initialCallState?.offer) { // This peer is the caller
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await createCallOffer(chatId, offer);
+      }
+    };
+
+    initializeCall();
+  }, [localStream, chatId, initialCallState?.offer]);
 
 
+  // 3. Listen for signaling changes
   useEffect(() => {
     const callDocRef = doc(db, 'calls', chatId);
     const unsubscribe = onSnapshot(callDocRef, async (snapshot) => {
         const pc = pcRef.current;
         if (!snapshot.exists()) {
-            setIsCallEnded(true);
-            setCallStatus('ended');
-            setTimeout(() => onEndCall(), 2000);
+            if (!isCallEnded) { // Prevent multiple triggers
+                setIsCallEnded(true);
+                setCallStatus('ended');
+                setTimeout(() => onEndCall(), 2000);
+            }
             return;
         }
 
@@ -111,36 +104,49 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
 
         if (!pc) return;
         
-        const processCandidates = (candidates: RTCIceCandidateInit[]) => {
-            if (pc.remoteDescription) {
-                candidates.forEach(candidate => {
-                    if (candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
-                });
-            } else {
-                setQueuedCandidates(prev => [...prev, ...candidates]);
-            }
-        }
-
-        if (callData.offer && !pc.currentRemoteDescription && pc.signalingState !== 'stable') {
-          await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          await createCallAnswer(chatId, answer);
-          await updateCallStatus(chatId, 'answered');
-        }
-
-        if (callData.answer && !pc.currentRemoteDescription && pc.signalingState === 'have-local-offer') {
+        // Handle incoming answer
+        if (callData.answer && pc.signalingState !== 'stable') {
             await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
         }
+        
+        // Handle incoming offer
+        if (callData.offer && pc.signalingState === 'stable' && !initialCallState?.offer) {
+             await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+             const answer = await pc.createAnswer();
+             await pc.setLocalDescription(answer);
+             await createCallAnswer(chatId, answer);
+             await updateCallStatus(chatId, 'answered');
+        }
 
+
+        // Add ICE candidates
         if (callData.iceCandidates) {
-             processCandidates(callData.iceCandidates);
+            const currentCandidates = new Set((await pc.getReceivers()).map(r => r.transport?.iceTransport?.getSelectedCandidatePair()?.remote.candidate));
+            callData.iceCandidates.forEach(candidate => {
+                if (candidate && !currentCandidates.has(candidate.candidate)) {
+                    if (pc.remoteDescription) {
+                        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
+                    } else {
+                        setQueuedCandidates(prev => [...prev, candidate]);
+                    }
+                }
+            });
         }
     });
 
     return () => unsubscribe();
 
-  }, [chatId, onEndCall, callStartTime]);
+  }, [chatId, onEndCall, callStartTime, initialCallState?.offer, isCallEnded]);
+
+  // 4. Process queued ICE candidates
+  useEffect(() => {
+    if (pcRef.current?.remoteDescription && queuedCandidates.length > 0) {
+      queuedCandidates.forEach(candidate => {
+        pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding queued ICE candidate:", e));
+      });
+      setQueuedCandidates([]);
+    }
+  }, [pcRef.current?.remoteDescription, queuedCandidates]);
 
 
   const handleHangUp = (status: 'ended' | 'declined' = 'ended') => {
@@ -170,7 +176,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
              </Alert>
         )
     }
-    if (callStatus === 'ringing') {
+    if (callStatus === 'ringing' || callStatus === 'calling') {
         return (
              <Alert className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white border-0">
                 <AlertTitle>Вызов {chatPartner.name}...</AlertTitle>
@@ -188,9 +194,13 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
         playsInline
         className={cn("w-full h-full object-cover", {"hidden": !remoteStream})}
       />
-       {!remoteStream && (
-        <div className="w-full h-full object-cover flex items-center justify-center">
+       {(!remoteStream || callStatus !== 'answered') && (
+        <div className="w-full h-full object-cover flex items-center justify-center bg-gray-800 text-white">
             <div className="flex flex-col items-center gap-4">
+                <Avatar className="w-24 h-24 border-4 border-white">
+                    <AvatarImage src={chatPartner.avatar} alt={chatPartner.name} />
+                    <AvatarFallback>{chatPartner.name.charAt(0)}</AvatarFallback>
+                </Avatar>
                 <p className="text-xl font-bold">{chatPartner.name}</p>
                 {renderCallStatus()}
             </div>

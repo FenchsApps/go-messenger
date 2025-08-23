@@ -7,7 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { startCall, hangUp, updateCallStatus, addIceCandidate } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, collection, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, onSnapshot, collection, getDocs, writeBatch, DocumentData } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useSettings } from '@/context/settings-provider';
@@ -29,11 +29,11 @@ interface CallViewProps {
   onEndCall: () => void;
 }
 
-type CallStatus = 'ringing' | 'connecting' | 'connected' | 'declined' | 'ended' | 'missed';
+type CallStatus = 'initializing' | 'ringing' | 'connecting' | 'connected' | 'declined' | 'ended' | 'missed';
 
 export function CallView({ currentUser, chatPartner, isReceivingCall, initialCallState, onEndCall }: CallViewProps) {
   const [callId, setCallId] = useState<string | null>(initialCallState?.id || null);
-  const [callStatus, setCallStatus] = useState<CallStatus>(initialCallState ? 'ringing' : 'connecting');
+  const [callStatus, setCallStatus] = useState<CallStatus>(initialCallState ? 'ringing' : 'initializing');
   
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isMicOn, setIsMicOn] = useState(true);
@@ -52,127 +52,103 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const { toast } = useToast();
   const { videoDeviceId, audioDeviceId } = useSettings();
 
-  const handleHangUp = useCallback(async (isInitiator: boolean, finalStatus: CallStatus) => {
-      if (pcRef.current) {
+  const cleanup = useCallback(() => {
+    // Stop all media tracks
+    if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+    }
+    // Close PeerConnection
+    if (pcRef.current) {
         pcRef.current.close();
         pcRef.current = null;
-      }
-      
-      const currentCallId = callId;
-      if (isInitiator && currentCallId) {
-         await hangUp(currentCallId);
-      }
-      
-      onEndCall();
-  },[callId, onEndCall]);
+    }
+    // Clean up audio visualizer
+    if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+    }
+}, []);
 
 
-  const setupPeerConnection = useCallback(() => {
-        const pc = new RTCPeerConnection(servers);
-        pcRef.current = pc;
+  const handleHangUp = useCallback(async (finalStatus?: CallStatus) => {
+    if (callStatus === 'ended' || callStatus === 'declined' || callStatus === 'missed') return;
 
-        if (localStreamRef.current) {
-            localStreamRef.current.getTracks().forEach(track => {
-                try {
-                    pc.addTrack(track, localStreamRef.current!);
-                } catch(e) {
-                    console.error("Error adding track", e);
-                }
-            });
-        }
+    if (finalStatus) {
+      setCallStatus(finalStatus);
+    } else {
+      setCallStatus('ended');
+    }
 
-        pc.ontrack = event => {
-            if (remoteVideoRef.current && event.streams[0]) {
-                remoteVideoRef.current.srcObject = event.streams[0];
-            }
-        };
+    const currentCallId = callId;
+    if (currentCallId) {
+      await hangUp(currentCallId);
+    }
+    cleanup();
+    onEndCall();
+  }, [callId, cleanup, onEndCall, callStatus]);
 
-        pc.onicecandidate = event => {
-            if (event.candidate && callId) {
-                addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
-            }
-        };
-
-        pc.onconnectionstatechange = () => {
-             if (pcRef.current?.connectionState === 'connected') {
-                setCallStatus('connected');
-            } else if (['disconnected', 'closed', 'failed'].includes(pcRef.current?.connectionState || '')) {
-                if (callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
-                    handleHangUp(false, 'ended');
-                }
-            }
-        };
-  }, [callId, isReceivingCall, callStatus, handleHangUp]);
-
-
-  // Initialize media devices
+  // Main useEffect for initialization and teardown
   useEffect(() => {
-    const initializeMedia = async () => {
-        try {
-            const constraints: MediaStreamConstraints = {
-                video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
-                audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
-            };
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            setHasPermission(true);
-            localStreamRef.current = stream;
-
-            if (localVideoRef.current) {
-                localVideoRef.current.srcObject = stream;
-            }
-            
-            if (stream.getAudioTracks().length > 0) {
-                const audioContext = new AudioContext();
-                audioContextRef.current = audioContext;
-                const source = audioContext.createMediaStreamSource(stream);
-                const analyser = audioContext.createAnalyser();
-                analyser.fftSize = 32;
-                source.connect(analyser);
-                analyserRef.current = analyser;
-
-                const visualize = () => {
-                    if (!analyserRef.current) return;
-                    const bufferLength = analyserRef.current.frequencyBinCount;
-                    const dataArray = new Uint8Array(bufferLength);
-                    analyserRef.current.getByteFrequencyData(dataArray);
-                    const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
-                    setMicVolume(average / 128);
-                    animationFrameRef.current = requestAnimationFrame(visualize);
-                };
-                visualize();
-            }
-
-        } catch (error: any) {
-            console.error("Error initializing media.", error);
-            setHasPermission(false);
-            toast({
-                variant: 'destructive',
-                title: 'Ошибка инициализации звонка',
-                description: error.message === 'Failed to allocate videosource' 
-                  ? 'Не удалось получить доступ к камере. Возможно, она используется другим приложением. Перезагрузите страницу.'
-                  : 'Не удалось получить доступ к камере и микрофону. Пожалуйста, проверьте разрешения.',
-            });
-            handleHangUp(true, 'ended');
+    const initializeCall = async () => {
+      try {
+        const constraints: MediaStreamConstraints = {
+            video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
+            audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        localStreamRef.current = stream;
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
         }
+        setHasPermission(true);
+
+        // --- Audio Visualizer Setup ---
+        if (stream.getAudioTracks().length > 0) {
+          const audioContext = new AudioContext();
+          audioContextRef.current = audioContext;
+          const source = audioContext.createMediaStreamSource(stream);
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 32;
+          source.connect(analyser);
+          analyserRef.current = analyser;
+
+          const visualize = () => {
+              if (!analyserRef.current) return;
+              const bufferLength = analyserRef.current.frequencyBinCount;
+              const dataArray = new Uint8Array(bufferLength);
+              analyserRef.current.getByteFrequencyData(dataArray);
+              const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
+              setMicVolume(average / 128);
+              animationFrameRef.current = requestAnimationFrame(visualize);
+          };
+          visualize();
+        }
+
+      } catch (error: any) {
+        console.error("Error getting media devices.", error);
+        setHasPermission(false);
+        toast({
+            variant: 'destructive',
+            title: 'Ошибка доступа к камере/микрофону',
+            description: error.message.includes('allocate') ? 'Камера используется другим приложением. Перезагрузите страницу.' : 'Проверьте разрешения в браузере.',
+        });
+        handleHangUp('ended');
+      }
     };
-
-    initializeMedia();
-
+    
+    initializeCall();
+    
+    // Return the cleanup function to be called on component unmount
     return () => {
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-        }
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close();
-        }
-        if (localStreamRef.current) {
-            localStreamRef.current.getTracks().forEach(track => track.stop());
-            localStreamRef.current = null;
-        }
-        if (pcRef.current) {
-            pcRef.current.close();
-            pcRef.current = null;
-        }
+      cleanup();
+      // Ensure hangup is called on unmount if call is still active
+      if (callId && callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
+        hangUp(callId);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -180,36 +156,66 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   // Signaling logic
   useEffect(() => {
     if (!hasPermission || !localStreamRef.current) return;
-    if (pcRef.current) return; // Prevent re-initialization
 
-    const initializeCall = async () => {
-        setupPeerConnection();
-        const pc = pcRef.current;
-        if (!pc) return;
+    const pc = new RTCPeerConnection(servers);
+    pcRef.current = pc;
 
-        if (!isReceivingCall) { // Caller logic
+    // Add local stream tracks to the peer connection
+    localStreamRef.current.getTracks().forEach(track => {
+        try {
+            pc.addTrack(track, localStreamRef.current!);
+        } catch(e) {
+            console.error("Error adding track", e);
+        }
+    });
+
+    // Handle remote stream
+    pc.ontrack = event => {
+        if (remoteVideoRef.current && event.streams[0]) {
+            remoteVideoRef.current.srcObject = event.streams[0];
+        }
+    };
+    
+    // Handle ICE candidates
+    const queuedCandidates: RTCIceCandidate[] = [];
+    pc.onicecandidate = event => {
+        if (event.candidate && callId) {
+           addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
+        }
+    };
+    
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+            setCallStatus('connected');
+        } else if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) {
+             handleHangUp('ended');
+        }
+    };
+
+    const startSignaling = async () => {
+        if (!isReceivingCall) { // Caller
+            setCallStatus('ringing');
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             const newCallId = await startCall(currentUser.id, chatPartner.id, offer);
             setCallId(newCallId);
-            setCallStatus('ringing');
-        } else if (initialCallState) { // Recipient logic
+        } else if (initialCallState) { // Recipient
             await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             await updateCallStatus(initialCallState.id, 'answered', answer);
         }
     };
-    
-    initializeCall().catch(e => {
-        console.error("Error during call initialization: ", e);
-        handleHangUp(true, 'ended');
+    startSignaling().catch(e => {
+        console.error("Error during signaling: ", e);
+        handleHangUp('ended');
     });
 
-  }, [hasPermission, setupPeerConnection, isReceivingCall, initialCallState, currentUser.id, chatPartner.id, handleHangUp]);
+  }, [hasPermission, callId, chatPartner.id, currentUser.id, handleHangUp, initialCallState, isReceivingCall]);
 
 
-  // Listen for Firestore document changes
+  // Firestore listener
   useEffect(() => {
     if (!callId) return;
 
@@ -217,12 +223,17 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         const data = docSnapshot.data();
         const pc = pcRef.current;
 
-        if (!docSnapshot.exists()) { 
-             handleHangUp(false, callStatus === 'ringing' ? 'missed' : 'ended');
+        if (!docSnapshot.exists()) {
+             handleHangUp(callStatus === 'ringing' ? 'missed' : 'ended');
              return;
         }
-        
+
         if (!pc) return;
+        
+        if (data.status && ['declined', 'ended'].includes(data.status)) {
+            handleHangUp(data.status);
+            return;
+        }
 
         if (data.answer && pc.remoteDescription?.type !== 'answer') {
             try {
@@ -230,10 +241,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             } catch (e) {
                 console.error("Failed to set remote description on answer", e)
             }
-        }
-        
-        if (data.status && ['declined', 'ended'].includes(data.status)) {
-            handleHangUp(false, data.status);
         }
     });
     
@@ -244,12 +251,12 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'added') {
                  const candidate = new RTCIceCandidate(change.doc.data());
-                 try {
-                     if (pcRef.current?.remoteDescription) {
+                 if (pcRef.current?.remoteDescription) {
+                    try {
                         await pcRef.current?.addIceCandidate(candidate);
-                     }
-                 } catch (e) {
-                     console.error('Error adding received ice candidate', e);
+                    } catch (e) {
+                        console.error('Error adding received ice candidate', e);
+                    }
                  }
             }
         });
@@ -268,9 +275,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
 
   const handleDeclineCall = async () => {
     if (callId) {
-        await updateCallStatus(callId, 'declined');
+      await updateCallStatus(callId, 'declined');
     }
-    onEndCall(); 
+    // Immediately end the call on the receiver's side
+    handleHangUp('declined');
   };
 
 
@@ -291,7 +299,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         });
     }
   }
-
+  
   if (hasPermission === false) {
     return (
         <div className="flex flex-col items-center justify-center h-full bg-black text-white p-4">
@@ -301,7 +309,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                 Пожалуйста, предоставьте доступ в настройках вашего браузера или выберите другие устройства в настройках приложения.
               </AlertDescription>
             </Alert>
-            <Button onClick={() => onEndCall()} variant="secondary" className="mt-4">Назад к чату</Button>
+            <Button onClick={() => handleHangUp('ended')} variant="secondary" className="mt-4">Назад к чату</Button>
         </div>
     )
   }
@@ -361,7 +369,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         <Button onClick={toggleCamera} variant={isCameraOn ? 'secondary' : 'destructive'} size="icon" className="rounded-full h-14 w-14">
             {isCameraOn ? <Video /> : <VideoOff />}
         </Button>
-         <Button onClick={() => handleHangUp(true, callStatus === 'connected' ? 'ended' : 'declined')} variant="destructive" size="lg" className="rounded-full h-14 w-24">
+         <Button onClick={() => handleHangUp()} variant="destructive" size="lg" className="rounded-full h-14 w-24">
             <PhoneOff />
         </Button>
       </div>

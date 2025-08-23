@@ -82,18 +82,22 @@ import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
-// Убедитесь, что эта строка импорта добавлена. 
+// Убедитесь, что эта строка импорта добавлена.
 // Если у вас другой package name, замените 'com.example.gomessenger' на ваш.
-import com.example.gomessenger.R 
+import com.example.gomessenger.R
 
 class MainActivity : AppCompatActivity() {
+
+    // Объявляем webView как свойство класса, чтобы иметь к нему доступ в разных методах
+    private lateinit var webView: WebView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val webView: WebView = findViewById(R.id.webView)
+        webView = findViewById(R.id.webView)
 
         // Включить JavaScript
         webView.settings.javaScriptEnabled = true
@@ -115,20 +119,30 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // --- Новый способ обработки кнопки "Назад" ---
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    // Если в WebView нельзя вернуться назад, вызываем стандартное поведение.
+                    // Сначала отключаем наш обработчик, чтобы избежать бесконечного цикла.
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    // Снова включаем, если пользователь вернется на этот экран.
+                    isEnabled = true
+                }
+            }
+        })
+
+
         // ЗАМЕНИТЕ ЭТОТ URL НА АДРЕС ВАШЕГО ПРИЛОЖЕНИЯ
         val webUrl = "https://your-deployed-app-url.com" // <-- ВАЖНО!
         webView.loadUrl(webUrl)
     }
 
-    // Обработка кнопки "Назад" для навигации в WebView
-    override fun onBackPressed() {
-        val webView: WebView = findViewById(R.id.webView)
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
-        }
-    }
+    // Устаревший метод onBackPressed() больше не нужен.
+    // Новый обработчик в onCreate() полностью его заменяет.
 }
 ```
 

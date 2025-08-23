@@ -195,38 +195,28 @@ export async function clearChatHistory(chatId: string) {
     }
 }
 
+
 // --- Call Actions ---
 
-export async function createCallOffer(callerId: string, recipientId: string, offer: any) {
+export async function createCall(callerId: string, recipientId: string) {
     const callDocRef = doc(collection(db, 'calls'));
     await setDoc(callDocRef, {
         callerId,
         recipientId,
-        offer,
         status: 'ringing',
         createdAt: serverTimestamp(),
     });
     return callDocRef.id;
 }
 
-export async function createCallAnswer(callId: string, answer: any) {
-    const callDocRef = doc(db, 'calls', callId);
-    const callDoc = await getDoc(callDocRef);
-    if (callDoc.exists()) {
-        await updateDoc(callDocRef, { answer, status: 'answered' });
-    }
-}
-
-export async function addIceCandidate(callId: string, candidate: any, type: 'caller' | 'recipient') {
-    try {
-        const candidatesCol = collection(db, 'calls', callId, `${type}Candidates`);
-        await addDoc(candidatesCol, candidate);
-    } catch (error) {
-        // This might fail if the call document was already deleted. Safe to ignore.
-        if (error.code !== 'not-found') {
-            console.error(`Error adding ${type} ICE candidate:`, error);
-        }
-    }
+export async function sendCallSignal(callId: string, fromId: string, toId: string, data: any) {
+    const signalCollection = collection(db, 'calls', callId, 'signals');
+    await addDoc(signalCollection, {
+        from: fromId,
+        to: toId,
+        data,
+        createdAt: serverTimestamp(),
+    });
 }
 
 export async function endCall(callId: string) {
@@ -234,24 +224,17 @@ export async function endCall(callId: string) {
     try {
         const callDoc = await getDoc(callDocRef);
         if (callDoc.exists()) {
-            // Delete ICE candidate subcollections first
-            const callerCandidatesQuery = query(collection(callDocRef, 'callerCandidates'));
-            const recipientCandidatesQuery = query(collection(callDocRef, 'recipientCandidates'));
+            const signalsQuery = query(collection(callDocRef, 'signals'));
             
-            const [callerCandidates, recipientCandidates] = await Promise.all([
-                getDocs(callerCandidatesQuery),
-                getDocs(recipientCandidatesQuery)
-            ]);
+            const signalsSnapshot = await getDocs(signalsQuery);
 
             const batch = writeBatch(db);
-            callerCandidates.forEach(doc => batch.delete(doc.ref));
-            recipientCandidates.forEach(doc => batch.delete(doc.ref));
+            signalsSnapshot.forEach(doc => batch.delete(doc.ref));
             batch.delete(callDocRef);
 
             await batch.commit();
         }
     } catch (error) {
-        // If not found, it means the other user already hung up. Safe to ignore.
         if (error.code !== 'not-found') {
             console.error("Error ending call:", error);
         }

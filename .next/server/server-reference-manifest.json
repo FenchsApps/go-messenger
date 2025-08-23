@@ -77,7 +77,7 @@
         "app/page": "action-browser"
       }
     },
-    "70ebe43e685c27f63aae9b9bcc8269d30c2244126b": {
+    "60fb389e04dca841d04740b6dcff4e853ec414c442": {
       "workers": {
         "app/page": {
           "moduleId": "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
@@ -88,18 +88,7 @@
         "app/page": "action-browser"
       }
     },
-    "6040f336319d499f4f8fb5ee6879c5eee6b49a0fbf": {
-      "workers": {
-        "app/page": {
-          "moduleId": "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false
-        }
-      },
-      "layer": {
-        "app/page": "action-browser"
-      }
-    },
-    "70683cf55ab4a59e76eb7909f0c39798439d5d6c92": {
+    "781821dda6ba9148b86f738bbab53f2e4b9645b31c": {
       "workers": {
         "app/page": {
           "moduleId": "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",

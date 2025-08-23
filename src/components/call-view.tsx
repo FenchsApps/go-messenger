@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import type { User, CallState } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Phone, Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
+import { PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPeerConnection, hangUp } from '@/lib/webrtc';
-import { createCallAnswer, updateCallStatus, createCallOffer, addIceCandidate } from '@/app/actions';
+import { createCallAnswer, updateCallStatus, createCallOffer } from '@/app/actions';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -62,6 +62,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
              pcRef.current = null;
         }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 2. Create peer connection and handle call logic
@@ -87,6 +88,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
 
     initializeCall();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localStream, chatId, isCaller]);
 
 
@@ -122,9 +124,8 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
 
         // Add ICE candidates
         if (callData.iceCandidates) {
-             const currentCandidates = new Set((await pc.getReceivers()).map(r => r.transport?.iceTransport?.getSelectedCandidatePair()?.remote.candidate));
              callData.iceCandidates.forEach(candidate => {
-                if (candidate && !currentCandidates.has(candidate.candidate)) {
+                if (candidate) {
                     if (pc.remoteDescription) {
                         pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate", e));
                     } else {
@@ -137,6 +138,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
 
     return () => unsubscribe();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, onEndCall, callStartTime, isCaller, isCallEnded, callStatus]);
 
   // 4. Process queued ICE candidates

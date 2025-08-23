@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Message, User } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
@@ -35,7 +35,6 @@ function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
 }
 interface ChatViewProps {
-  initialMessages: Message[];
   currentUser: User;
   chatPartner: User;
   isMobile: boolean;
@@ -116,20 +115,12 @@ export function ChatView({
         const lastMessage = newUnreadMessages[newUnreadMessages.length - 1];
         const sender = allUsers.find(u => u.id === lastMessage.senderId);
 
-        if (sender && lastMessage.type !== 'call') {
-            const notificationText = lastMessage.type === 'text' ? lastMessage.text : (lastMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
+        if (sender) {
+            const notificationText = lastMessage.stickerId ? 'Отправил(а) стикер' : lastMessage.gifUrl ? 'Отправил(а) GIF' : lastMessage.text;
             
             // Send notification to WebView if available
             if (window.Android?.showNewMessageNotification) {
                window.Android.showNewMessageNotification(sender.name, notificationText, sender.avatar);
-            } 
-            
-            // Send browser notification if window is not focused
-            if (!isWindowFocused && Notification.permission === 'granted') {
-               new Notification(`Новое сообщение от ${sender.name}`, {
-                   body: notificationText,
-                   icon: sender.avatar
-               });
             }
         }
       }
@@ -162,14 +153,6 @@ export function ChatView({
                  // Send notification to WebView if available
                  if (window.Android?.showCallNotification) {
                     window.Android.showCallNotification(caller.name, caller.avatar);
-                 } 
-                 
-                 // Send browser notification if window is not focused
-                 if (Notification.permission === 'granted' && !isWindowFocused) {
-                    new Notification('Входящий звонок', {
-                        body: `${caller.name} звонит вам...`,
-                        icon: caller.avatar,
-                    });
                  }
              }
          }

@@ -53,23 +53,59 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const { videoDeviceId, audioDeviceId } = useSettings();
 
   const handleHangUp = useCallback(async (isInitiator: boolean, finalStatus: CallStatus) => {
-      if (callStatus === 'ended' || callStatus === 'declined' || callStatus === 'missed') {
-        return;
+      if (pcRef.current) {
+        pcRef.current.close();
+        pcRef.current = null;
       }
       
-      setCallStatus(finalStatus);
       const currentCallId = callId;
-      
       if (isInitiator && currentCallId) {
          await hangUp(currentCallId);
       }
       
       onEndCall();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[callId, callStatus, onEndCall]);
+  },[callId, onEndCall]);
 
 
-  // Initialize and clean up media devices
+  const setupPeerConnection = useCallback(() => {
+        const pc = new RTCPeerConnection(servers);
+        pcRef.current = pc;
+
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => {
+                try {
+                    pc.addTrack(track, localStreamRef.current!);
+                } catch(e) {
+                    console.error("Error adding track", e);
+                }
+            });
+        }
+
+        pc.ontrack = event => {
+            if (remoteVideoRef.current && event.streams[0]) {
+                remoteVideoRef.current.srcObject = event.streams[0];
+            }
+        };
+
+        pc.onicecandidate = event => {
+            if (event.candidate && callId) {
+                addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+             if (pcRef.current?.connectionState === 'connected') {
+                setCallStatus('connected');
+            } else if (['disconnected', 'closed', 'failed'].includes(pcRef.current?.connectionState || '')) {
+                if (callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
+                    handleHangUp(false, 'ended');
+                }
+            }
+        };
+  }, [callId, isReceivingCall, callStatus, handleHangUp]);
+
+
+  // Initialize media devices
   useEffect(() => {
     const initializeMedia = async () => {
         try {
@@ -141,42 +177,16 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Initialize PeerConnection and signaling
+  // Signaling logic
   useEffect(() => {
     if (!hasPermission || !localStreamRef.current) return;
-
-    const pc = new RTCPeerConnection(servers);
-    pcRef.current = pc;
-
-    // Add local tracks to the connection
-    localStreamRef.current.getTracks().forEach(track => {
-      pc.addTrack(track, localStreamRef.current!);
-    });
-    
-    // Handle remote tracks
-    pc.ontrack = event => {
-        if (remoteVideoRef.current && event.streams[0]) {
-            remoteVideoRef.current.srcObject = event.streams[0];
-        }
-    };
-
-    // Handle ICE candidates
-    pc.onicecandidate = event => {
-        if (event.candidate && callId) {
-            addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
-        }
-    };
-    
-    // Handle connection state changes
-    pc.onconnectionstatechange = () => {
-        if (pcRef.current?.connectionState === 'connected') {
-            setCallStatus('connected');
-        } else if (['disconnected', 'closed', 'failed'].includes(pcRef.current?.connectionState || '')) {
-            handleHangUp(false, 'ended');
-        }
-    };
+    if (pcRef.current) return; // Prevent re-initialization
 
     const initializeCall = async () => {
+        setupPeerConnection();
+        const pc = pcRef.current;
+        if (!pc) return;
+
         if (!isReceivingCall) { // Caller logic
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -184,7 +194,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             setCallId(newCallId);
             setCallStatus('ringing');
         } else if (initialCallState) { // Recipient logic
-            setCallId(initialCallState.id);
             await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -197,8 +206,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         handleHangUp(true, 'ended');
     });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPermission, callId]);
+  }, [hasPermission, setupPeerConnection, isReceivingCall, initialCallState, currentUser.id, chatPartner.id, handleHangUp]);
 
 
   // Listen for Firestore document changes
@@ -208,23 +216,24 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     const unsubscribe = onSnapshot(doc(db, 'calls', callId), async (docSnapshot) => {
         const data = docSnapshot.data();
         const pc = pcRef.current;
-        if (!pc) return;
 
-        if (!data) { 
-             if (callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'missed') {
-                 handleHangUp(false, callStatus === 'ringing' ? 'missed' : 'ended');
-             }
+        if (!docSnapshot.exists()) { 
+             handleHangUp(false, callStatus === 'ringing' ? 'missed' : 'ended');
              return;
         }
+        
+        if (!pc) return;
 
         if (data.answer && pc.remoteDescription?.type !== 'answer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+            } catch (e) {
+                console.error("Failed to set remote description on answer", e)
+            }
         }
         
         if (data.status && ['declined', 'ended'].includes(data.status)) {
-            if (callStatus !== 'ended' && callStatus !== 'declined') {
-                handleHangUp(false, data.status);
-            }
+            handleHangUp(false, data.status);
         }
     });
     
@@ -236,7 +245,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             if (change.type === 'added') {
                  const candidate = new RTCIceCandidate(change.doc.data());
                  try {
-                     // Add candidates only after remote description is set
                      if (pcRef.current?.remoteDescription) {
                         await pcRef.current?.addIceCandidate(candidate);
                      }
@@ -251,8 +259,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         unsubscribe();
         unsubscribeCandidates();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callId]);
+  }, [callId, isReceivingCall, handleHangUp, callStatus]);
 
 
   const handleAcceptCall = async () => {
@@ -354,7 +361,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         <Button onClick={toggleCamera} variant={isCameraOn ? 'secondary' : 'destructive'} size="icon" className="rounded-full h-14 w-14">
             {isCameraOn ? <Video /> : <VideoOff />}
         </Button>
-         <Button onClick={() => handleHangUp(true, callStatus === 'connected' ? 'ended' : 'missed')} variant="destructive" size="lg" className="rounded-full h-14 w-24">
+         <Button onClick={() => handleHangUp(true, callStatus === 'connected' ? 'ended' : 'declined')} variant="destructive" size="lg" className="rounded-full h-14 w-24">
             <PhoneOff />
         </Button>
       </div>

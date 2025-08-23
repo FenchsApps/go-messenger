@@ -3616,6 +3616,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$webrtc$2e$ts__
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$196e03__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__ = __turbopack_context__.i("[project]/src/app/data:196e03 [app-client] (ecmascript) <text/javascript>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$39b5f3__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__ = __turbopack_context__.i("[project]/src/app/data:39b5f3 [app-client] (ecmascript) <text/javascript>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$18d097__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__ = __turbopack_context__.i("[project]/src/app/data:18d097 [app-client] (ecmascript) <text/javascript>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$573ea3__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__ = __turbopack_context__.i("[project]/src/app/data:573ea3 [app-client] (ecmascript) <text/javascript>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$firebase$2f$firestore$2f$dist$2f$esm$2f$index$2e$esm$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$module__evaluation$3e$__ = __turbopack_context__.i("[project]/node_modules/firebase/firestore/dist/esm/index.esm.js [app-client] (ecmascript) <module evaluation>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$esm2017$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/@firebase/firestore/dist/index.esm2017.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/firebase.ts [app-client] (ecmascript)");
@@ -3678,7 +3679,17 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
             startMedia();
             return ({
                 "CallView.useEffect": ()=>{
-                    setIsCallEnded(true); // Ensure cleanup runs
+                    setIsCallEnded(true);
+                }
+            })["CallView.useEffect"];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        }
+    }["CallView.useEffect"], []);
+    // Ensure hangup is called on unmount
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+        "CallView.useEffect": ()=>{
+            return ({
+                "CallView.useEffect": ()=>{
                     if (pcRef.current || localStream) {
                         const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
                         (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$webrtc$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["hangUp"])(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
@@ -3688,13 +3699,43 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
             })["CallView.useEffect"];
         // eslint-disable-next-line react-hooks/exhaustive-deps
         }
-    }["CallView.useEffect"], []);
+    }["CallView.useEffect"], [
+        chatId,
+        localStream,
+        callStartTime
+    ]);
     // 2. Create peer connection and handle call logic
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "CallView.useEffect": ()=>{
             if (!localStream) return;
-            const { pc } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$webrtc$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["createPeerConnection"])(chatId, localStream, setRemoteStream);
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    {
+                        urls: [
+                            'stun:stun1.l.google.com:19302',
+                            'stun:stun2.l.google.com:19302'
+                        ]
+                    }
+                ]
+            });
             pcRef.current = pc;
+            localStream.getTracks().forEach({
+                "CallView.useEffect": (track)=>{
+                    pc.addTrack(track, localStream);
+                }
+            }["CallView.useEffect"]);
+            pc.ontrack = ({
+                "CallView.useEffect": (event)=>{
+                    setRemoteStream(event.streams[0]);
+                }
+            })["CallView.useEffect"];
+            pc.onicecandidate = ({
+                "CallView.useEffect": (event)=>{
+                    if (event.candidate) {
+                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$573ea3__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__["addIceCandidate"])(chatId, event.candidate.toJSON());
+                    }
+                }
+            })["CallView.useEffect"];
             const initializeCall = {
                 "CallView.useEffect.initializeCall": async ()=>{
                     if (isCaller) {
@@ -3715,8 +3756,7 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
         }
     }["CallView.useEffect"], [
         localStream,
-        chatId,
-        isCaller
+        chatId
     ]);
     // 3. Listen for signaling changes
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
@@ -3743,11 +3783,9 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                         setCallStartTime(Date.now());
                     }
                     if (!pc) return;
-                    // Handle incoming answer for the caller
                     if (isCaller && callData.answer && pc.signalingState !== 'stable') {
                         await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
                     }
-                    // Add ICE candidates
                     if (callData.iceCandidates) {
                         callData.iceCandidates.forEach({
                             "CallView.useEffect.unsubscribe": (candidate)=>{
@@ -3798,12 +3836,13 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
             }
         }
     }["CallView.useEffect"], [
-        pcRef.current?.remoteDescription,
         queuedCandidates
     ]);
     const handleHangUp = (status = 'ended')=>{
-        const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
-        (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$39b5f3__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__["updateCallStatus"])(chatId, status, duration, currentUser.id, chatPartner.id);
+        if (!isCallEnded) {
+            const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
+            (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$data$3a$39b5f3__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$text$2f$javascript$3e$__["updateCallStatus"])(chatId, status, duration, currentUser.id, chatPartner.id);
+        }
     };
     const toggleMute = ()=>{
         if (localStream) {
@@ -3825,12 +3864,12 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                     children: "Звонок завершен"
                 }, void 0, false, {
                     fileName: "[project]/src/components/call-view.tsx",
-                    lineNumber: 178,
+                    lineNumber: 200,
                     columnNumber: 17
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/call-view.tsx",
-                lineNumber: 177,
+                lineNumber: 199,
                 columnNumber: 14
             }, this);
         }
@@ -3845,12 +3884,12 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/call-view.tsx",
-                    lineNumber: 185,
+                    lineNumber: 207,
                     columnNumber: 17
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/call-view.tsx",
-                lineNumber: 184,
+                lineNumber: 206,
                 columnNumber: 14
             }, this);
         }
@@ -3868,7 +3907,7 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                 })
             }, void 0, false, {
                 fileName: "[project]/src/components/call-view.tsx",
-                lineNumber: 194,
+                lineNumber: 216,
                 columnNumber: 7
             }, this),
             (!remoteStream || callStatus !== 'answered') && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3884,20 +3923,20 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                                     alt: chatPartner.name
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/call-view.tsx",
-                                    lineNumber: 204,
+                                    lineNumber: 226,
                                     columnNumber: 21
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$avatar$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["AvatarFallback"], {
                                     children: chatPartner.name.charAt(0)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/call-view.tsx",
-                                    lineNumber: 205,
+                                    lineNumber: 227,
                                     columnNumber: 21
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/call-view.tsx",
-                            lineNumber: 203,
+                            lineNumber: 225,
                             columnNumber: 17
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3905,19 +3944,19 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                             children: chatPartner.name
                         }, void 0, false, {
                             fileName: "[project]/src/components/call-view.tsx",
-                            lineNumber: 207,
+                            lineNumber: 229,
                             columnNumber: 17
                         }, this),
                         renderCallStatus()
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/call-view.tsx",
-                    lineNumber: 202,
+                    lineNumber: 224,
                     columnNumber: 13
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/call-view.tsx",
-                lineNumber: 201,
+                lineNumber: 223,
                 columnNumber: 9
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("video", {
@@ -3928,7 +3967,7 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                 className: "absolute w-32 h-48 md:w-48 md:h-64 top-4 right-4 rounded-lg object-cover border-2 border-white"
             }, void 0, false, {
                 fileName: "[project]/src/components/call-view.tsx",
-                lineNumber: 212,
+                lineNumber: 234,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3943,16 +3982,16 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                             onClick: toggleMute,
                             children: isMuted ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$mic$2d$off$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__MicOff$3e$__["MicOff"], {}, void 0, false, {
                                 fileName: "[project]/src/components/call-view.tsx",
-                                lineNumber: 222,
+                                lineNumber: 244,
                                 columnNumber: 24
                             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$mic$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Mic$3e$__["Mic"], {}, void 0, false, {
                                 fileName: "[project]/src/components/call-view.tsx",
-                                lineNumber: 222,
+                                lineNumber: 244,
                                 columnNumber: 37
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/call-view.tsx",
-                            lineNumber: 221,
+                            lineNumber: 243,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -3962,16 +4001,16 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                             onClick: toggleVideo,
                             children: isVideoOff ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$video$2d$off$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__VideoOff$3e$__["VideoOff"], {}, void 0, false, {
                                 fileName: "[project]/src/components/call-view.tsx",
-                                lineNumber: 225,
+                                lineNumber: 247,
                                 columnNumber: 27
                             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$video$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Video$3e$__["Video"], {}, void 0, false, {
                                 fileName: "[project]/src/components/call-view.tsx",
-                                lineNumber: 225,
+                                lineNumber: 247,
                                 columnNumber: 42
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/call-view.tsx",
-                            lineNumber: 224,
+                            lineNumber: 246,
                             columnNumber: 12
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -3981,33 +4020,33 @@ function CallView({ chatId, currentUser, chatPartner, initialCallState, onEndCal
                             onClick: ()=>handleHangUp(),
                             children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$phone$2d$off$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__PhoneOff$3e$__["PhoneOff"], {}, void 0, false, {
                                 fileName: "[project]/src/components/call-view.tsx",
-                                lineNumber: 228,
+                                lineNumber: 250,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/call-view.tsx",
-                            lineNumber: 227,
+                            lineNumber: 249,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/call-view.tsx",
-                    lineNumber: 220,
+                    lineNumber: 242,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/call-view.tsx",
-                lineNumber: 219,
+                lineNumber: 241,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/call-view.tsx",
-        lineNumber: 193,
+        lineNumber: 215,
         columnNumber: 5
     }, this);
 }
-_s(CallView, "Lahs/m4EAcpHeBxbgllfiu8nK4w=", false, function() {
+_s(CallView, "/X979nTPIhsLaF01Cn1ruXJf3XI=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$hooks$2f$use$2d$toast$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useToast"]
     ];

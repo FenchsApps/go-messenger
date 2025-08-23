@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { createPeerConnection, hangUp } from '@/lib/webrtc';
-import { createCallAnswer, updateCallStatus, createCallOffer } from '@/app/actions';
+import { hangUp } from '@/lib/webrtc';
+import { createCallAnswer, updateCallStatus, createCallOffer, addIceCandidate } from '@/app/actions';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -55,29 +55,51 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     startMedia();
     
     return () => {
-        setIsCallEnded(true); // Ensure cleanup runs
+        setIsCallEnded(true); 
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ensure hangup is called on unmount
+  useEffect(() => {
+      return () => {
         if (pcRef.current || localStream) {
              const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
              hangUp(pcRef.current, localStream, chatId, duration, currentUser.id, chatPartner.id);
              pcRef.current = null;
         }
-    };
+      }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [chatId, localStream, callStartTime]);
+  
 
   // 2. Create peer connection and handle call logic
   useEffect(() => {
     if (!localStream) return;
-
-    const { pc } = createPeerConnection(chatId, localStream, setRemoteStream);
+    
+    const pc = new RTCPeerConnection( { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] });
     pcRef.current = pc;
+
+    localStream.getTracks().forEach((track) => {
+        pc.addTrack(track, localStream);
+    });
+
+    pc.ontrack = (event) => {
+        setRemoteStream(event.streams[0]);
+    };
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            addIceCandidate(chatId, event.candidate.toJSON());
+        }
+    };
     
     const initializeCall = async () => {
-       if (isCaller) { // This peer is the caller
+       if (isCaller) { 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await createCallOffer(chatId, offer);
-      } else if (initialCallState?.offer) { // This peer is the callee
+      } else if (initialCallState?.offer) { 
         await pc.setRemoteDescription(new RTCSessionDescription(initialCallState.offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -89,7 +111,7 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
     initializeCall();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localStream, chatId, isCaller]);
+  }, [localStream, chatId]);
 
 
   // 3. Listen for signaling changes
@@ -117,12 +139,10 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
 
         if (!pc) return;
         
-        // Handle incoming answer for the caller
         if (isCaller && callData.answer && pc.signalingState !== 'stable') {
             await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
         }
 
-        // Add ICE candidates
         if (callData.iceCandidates) {
              callData.iceCandidates.forEach(candidate => {
                 if (candidate) {
@@ -149,12 +169,14 @@ export function CallView({ chatId, currentUser, chatPartner, initialCallState, o
       });
       setQueuedCandidates([]);
     }
-  }, [pcRef.current?.remoteDescription, queuedCandidates]);
+  }, [queuedCandidates]);
 
 
   const handleHangUp = (status: 'ended' | 'declined' = 'ended') => {
-      const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
-      updateCallStatus(chatId, status, duration, currentUser.id, chatPartner.id);
+      if(!isCallEnded) {
+         const duration = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
+         updateCallStatus(chatId, status, duration, currentUser.id, chatPartner.id);
+      }
   };
 
   const toggleMute = () => {

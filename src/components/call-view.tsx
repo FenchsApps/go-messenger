@@ -62,8 +62,8 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
         pc.onicecandidate = event => {
-          if (event.candidate) {
-            addIceCandidate(callId!, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
+          if (event.candidate && callId) {
+            addIceCandidate(callId, event.candidate.toJSON(), isReceivingCall ? 'recipient' : 'caller');
           }
         };
 
@@ -88,7 +88,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         } else {
           const offerDescription = await pc.createOffer();
           await pc.setLocalDescription(offerDescription);
-          const newCallId = await startCall(currentUser.id, chatPartner.id, offerDescription.toJSON());
+          const newCallId = await startCall(currentUser.id, chatPartner.id, offerDescription);
           setCallId(newCallId);
         }
       } catch (error) {
@@ -162,7 +162,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     await updateCallStatus(callId, 'answered');
     const answerDescription = await pc.createAnswer();
     await pc.setLocalDescription(answerDescription);
-    await updateCallStatus(callId, 'answered', answerDescription.toJSON());
+    await updateCallStatus(callId, 'answered', answerDescription);
   };
 
   const handleDeclineCall = () => {

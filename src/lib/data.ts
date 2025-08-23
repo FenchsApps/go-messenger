@@ -1,4 +1,5 @@
 import type { User, Message } from './types';
+import { HeartSticker, HomeSticker, SchoolSticker, ShopSticker, SleepSticker, ThumbsUpSticker, WorkSticker, YummySticker } from '@/components/stickers';
 
 export const allUsers: User[] = [
   {
@@ -8,6 +9,7 @@ export const allUsers: User[] = [
     status: 'Online',
     phone: '79191352804',
     password: 'GGlim0060',
+    isCreator: true,
   },
   {
     id: 'sanya',
@@ -38,10 +40,12 @@ export const allUsers: User[] = [
 export const messages: Message[] = [];
 
 export const stickers = [
-  { id: 'sticker-1', url: 'https://placehold.co/128x128/FFFFFF/000000?text=👍', hint: 'thumbs up' },
-  { id: 'sticker-2', url: 'https://placehold.co/128x128/FFFFFF/000000?text=❤️', hint: 'heart' },
-  { id: 'sticker-3', url: 'https://placehold.co/128x128/FFFFFF/000000?text=😂', hint: 'laughing emoji' },
-  { id: 'sticker-4', url: 'https://placehold.co/128x128/FFFFFF/000000?text=👋', hint: 'waving hand' },
-  { id: 'sticker-5', url: 'https://placehold.co/128x128/FFFFFF/000000?text=🕊️', hint: 'pigeon' },
-  { id: 'sticker-6', url: 'https://placehold.co/128x128/FFFFFF/000000?text=☕', hint: 'coffee' },
+  { id: 'heart', component: HeartSticker, hint: 'heart' },
+  { id: 'like', component: ThumbsUpSticker, hint: 'thumbs up' },
+  { id: 'shop', component: ShopSticker, hint: 'shopping bag' },
+  { id: 'home', component: HomeSticker, hint: 'home' },
+  { id: 'school', component: SchoolSticker, hint: 'school' },
+  { id: 'work', component: WorkSticker, hint: 'work' },
+  { id: 'yummy', component: YummySticker, hint: 'yummy' },
+  { id: 'sleep', component: SleepSticker, hint: 'sleeping' },
 ];

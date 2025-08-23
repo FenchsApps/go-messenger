@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,13 +12,41 @@ import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
 
+const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
 
 export function Login() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const checkLoggedInUser = async () => {
+      try {
+        const userId = getCookie(LOGGED_IN_USER_COOKIE);
+        if (userId) {
+          const user = allUsers.find((u) => u.id === userId);
+          if (user) {
+            await setDoc(doc(db, 'users', user.id), {
+              status: 'Online',
+              lastSeen: serverTimestamp()
+            }, { merge: true });
+            setCurrentUser(user);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking logged in user:", error);
+        // If there's an error (e.g. offline), we still want to stop loading
+        // and show the login page. The user can try logging in manually.
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkLoggedInUser();
+  }, []);
 
   const handleLogin = async () => {
     const user = allUsers.find(
@@ -43,6 +71,7 @@ export function Login() {
         lastSeen: serverTimestamp()
       }, { merge: true });
 
+      setCookie(LOGGED_IN_USER_COOKIE, user.id, 7); // Save cookie for 7 days
       setCurrentUser(user);
     } else {
       toast({
@@ -60,10 +89,21 @@ export function Login() {
             lastSeen: serverTimestamp()
         }, { merge: true });
     }
+    removeCookie(LOGGED_IN_USER_COOKIE);
     setCurrentUser(null);
     setPhone('');
     setPassword('');
   };
+
+  if (isLoading) {
+    // You can return a loading spinner here
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-background">
+            <p>Loading...</p>
+        </div>
+    );
+  }
+
 
   if (currentUser) {
     return <Messenger currentUser={currentUser} onLogout={handleLogout} />;

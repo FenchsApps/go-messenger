@@ -1,10 +1,13 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import type { Message, User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { MessageMenu } from './message-menu';
+import { stickers } from '@/lib/data';
+import { Check, CheckCheck, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing } from 'lucide-react';
+import { useSettings } from '@/context/settings-provider';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -15,8 +18,22 @@ interface ChatMessagesProps {
   onForward: (message: Message) => void;
 }
 
+function formatDuration(seconds: number) {
+    if (!seconds || seconds < 1) return null;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const parts = [];
+    if (h > 0) parts.push(`${h} ч`);
+    if (m > 0) parts.push(`${m} мин`);
+    if (s > 0) parts.push(`${s} с`);
+    if (parts.length === 0 && seconds > 0) return "меньше секунды";
+    return parts.join(' ');
+}
+
 export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDelete, onForward }: ChatMessagesProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { textSize } = useSettings();
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -30,6 +47,52 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
         const isCurrentUser = message.senderId === currentUser.id;
         const sender = isCurrentUser ? currentUser : chatPartner;
         const showAvatar = !isCurrentUser && (index === 0 || messages[index - 1].senderId !== message.senderId);
+
+        const StickerComponent = message.stickerId ? stickers.find(s => s.id === message.stickerId)?.component : null;
+
+        if (message.type === 'call') {
+            const isCallInitiator = message.callerId === currentUser.id;
+            let CallIcon, callText;
+
+            switch(message.callStatus) {
+                case 'answered':
+                case 'ended':
+                    CallIcon = isCallInitiator ? PhoneOutgoing : PhoneIncoming;
+                    callText = isCallInitiator ? 'Исходящий звонок' : 'Входящий звонок';
+                    if (message.callStatus === 'ended' && !message.duration) callText = 'Звонок завершен';
+                    break;
+                case 'declined':
+                    CallIcon = PhoneMissed;
+                    callText = isCallInitiator ? 'Звонок отклонен' : `Собеседник отклонил звонок`;
+                    break;
+                case 'missed':
+                    CallIcon = PhoneMissed;
+                    callText = isCallInitiator ? 'Нет ответа' : 'Пропущенный звонок';
+                    break;
+                default:
+                    CallIcon = Phone;
+                    callText = 'Звонок';
+            }
+
+            return (
+                 <div key={message.id} className="flex justify-center">
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted text-muted-foreground text-sm">
+                        <CallIcon className={cn("w-4 h-4", {
+                           'text-green-500': message.callStatus === 'ended' || message.callStatus === 'answered',
+                           'text-red-500': message.callStatus === 'declined' || message.callStatus === 'missed',
+                        })} />
+                        <div>
+                            <span>{callText}</span>
+                            {message.duration ? <span className="ml-2 text-xs">({formatDuration(message.duration)})</span> : ''}
+                        </div>
+                        <span className="text-xs opacity-70">
+                            {message.timestamp && format(new Date(message.timestamp), 'HH:mm')}
+                        </span>
+                    </div>
+                </div>
+            )
+        }
+
 
         return (
           <div
@@ -61,11 +124,13 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
             )}
             <div
               className={cn(
-                'relative max-w-sm rounded-2xl px-4 py-2 transition-all duration-300 animate-in fade-in-25 slide-in-from-bottom-4',
+                'relative max-w-sm rounded-2xl px-3 py-2 transition-all duration-300 animate-in fade-in-25 slide-in-from-bottom-4',
                 {
-                  'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser,
-                  'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
-                }
+                  'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser && message.type === 'text',
+                  'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser && message.type === 'text',
+                },
+                 message.type === 'sticker' && 'p-1 bg-transparent',
+                 message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden'
               )}
             >
               {message.forwardedFrom && (
@@ -74,23 +139,42 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   <p>{message.forwardedFrom.text}</p>
                 </div>
               )}
-              {message.type === 'sticker' ? (
+               {message.type === 'gif' && message.gifUrl && (
                 <Image
-                  src={message.stickerUrl!}
-                  alt="sticker"
-                  width={128}
-                  height={128}
-                  className="rounded-md"
-                  data-ai-hint="sticker"
+                  src={message.gifUrl}
+                  alt="GIF"
+                  width={250}
+                  height={200}
+                  className="max-w-full h-auto"
+                  unoptimized // Important for GIFs
                 />
-              ) : (
-                <p className="whitespace-pre-wrap">{message.text}</p>
               )}
-              <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground/50 pt-1">
-                 {message.edited && <span className="text-xs">(изм.)</span>}
+              {message.type === 'sticker' && StickerComponent && (
+                <div className="w-32 h-32">
+                   <StickerComponent />
+                </div>
+              )}
+               {message.type === 'text' && message.text && (
+                <p className={cn(
+                  "whitespace-pre-wrap break-words",
+                  {
+                    'text-sm': textSize === 'sm',
+                    'text-base': textSize === 'md',
+                    'text-lg': textSize === 'lg',
+                  }
+                  )}>{message.text}</p>
+              )}
+              <div className={cn(
+                  "flex items-center justify-end gap-1.5 text-xs text-muted-foreground/80 pt-1",
+                  isCurrentUser && "text-primary-foreground/60"
+                  )}>
+                 {message.edited && <span className="text-xs italic">(изм.)</span>}
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    {format(new Date(message.timestamp), 'HH:mm')}
+                    {message.timestamp && format(new Date(message.timestamp), 'HH:mm')}
                 </span>
+                 {isCurrentUser && (
+                   message.read ? <CheckCheck className="h-4 w-4 text-blue-400" /> : <Check className="h-4 w-4" />
+                )}
               </div>
             </div>
              {!isCurrentUser && (

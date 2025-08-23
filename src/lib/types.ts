@@ -6,19 +6,26 @@ export type User = {
   phone: string;
   password?: string;
   lastSeen?: number;
+  isCreator?: boolean;
 };
 
 export type Message = {
-  id: string;
+  id:string;
   senderId: string;
   recipientId: string;
   text: string;
   timestamp: number;
-  type: 'text' | 'sticker';
-  stickerUrl?: string;
+  type: 'text' | 'sticker' | 'gif' | 'call';
+  stickerId?: string;
+  gifUrl?: string;
   edited?: boolean;
   forwardedFrom?: {
     name: string;
     text: string;
   } | null;
+  read?: boolean;
+  // Call specific fields
+  callStatus?: 'answered' | 'declined' | 'missed' | 'ended';
+  duration?: number; // in seconds
+  callerId?: string;
 };

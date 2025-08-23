@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import type { Message, User } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
@@ -53,18 +53,18 @@ declare global {
 }
 
 export function ChatView({
-  initialMessages,
   currentUser,
   chatPartner,
   isMobile,
   onBack,
 }: ChatViewProps) {
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState('');
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
+  
   const [isCalling, setIsCalling] = useState(false);
   const [isReceivingCall, setIsReceivingCall] = useState(false);
   const [callState, setCallState] = useState<any | null>(null);
@@ -117,7 +117,7 @@ export function ChatView({
         if (lastMessage.read) return;
 
         const sender = allUsers.find(u => u.id === lastMessage.senderId);
-        if (sender) {
+        if (sender && lastMessage.type !== 'call') {
             const notificationText = lastMessage.type === 'text' ? lastMessage.text : (lastMessage.type === 'sticker' ? 'Отправил(а) стикер' : 'Отправил(а) GIF');
             
             if (window.Android?.showNewMessageNotification) {
@@ -147,13 +147,12 @@ export function ChatView({
   useEffect(() => {
      const q = query(collection(db, 'calls'), where('recipientId', '==', currentUser.id), where('status', '==', 'ringing'));
      const unsubscribe = onSnapshot(q, (snapshot) => {
-         if (!snapshot.empty) {
+         if (!snapshot.empty && !isCalling) {
              const callDoc = snapshot.docs[0];
              const callData = callDoc.data();
              const caller = allUsers.find(u => u.id === callData.callerId);
              
-             // Prevent entering call screen if already in a call
-             if (caller && !isCalling) {
+             if (caller) {
                  setIsReceivingCall(true);
                  setCallState({ id: callDoc.id, ...callData });
                  setIsCalling(true);
@@ -261,13 +260,15 @@ export function ChatView({
 
   if (isCalling) {
     return (
-        <CallView
-            currentUser={currentUser}
-            chatPartner={chatPartner}
-            isReceivingCall={isReceivingCall}
-            initialCallState={callState}
-            onEndCall={handleEndCall}
-        />
+        <div className='h-full w-full'>
+            <CallView
+                currentUser={currentUser}
+                chatPartner={chatPartner}
+                isReceivingCall={isReceivingCall}
+                initialCallState={callState}
+                onEndCall={handleEndCall}
+            />
+        </div>
     )
   }
 

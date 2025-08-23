@@ -1,6 +1,6 @@
-
 'use client';
 
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,11 +11,36 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Settings, Moon, Sun, Monitor, CaseSensitive } from 'lucide-react';
+import { Settings, Moon, Sun, Monitor, CaseSensitive, Mic, Video } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Separator } from './ui/separator';
 
 export function SettingsDialog() {
-  const { theme, setTheme, textSize, setTextSize } = useSettings();
+  const { 
+    theme, setTheme, 
+    textSize, setTextSize,
+    videoDeviceId, setVideoDeviceId,
+    audioDeviceId, setAudioDeviceId
+  } = useSettings();
+  
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        // Request permission to list devices
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
+        setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
+      } catch (err) {
+        console.error("Could not get media devices.", err);
+      }
+    };
+    getDevices();
+  }, []);
 
   return (
     <Dialog>
@@ -34,7 +59,7 @@ export function SettingsDialog() {
             <Label className="font-semibold">Тема</Label>
             <RadioGroup
               value={theme}
-              onValueChange={setTheme}
+              onValueChange={(value) => setTheme(value as any)}
               className="grid grid-cols-3 gap-2"
             >
               <div>
@@ -73,7 +98,7 @@ export function SettingsDialog() {
             <Label className="font-semibold">Размер текста</Label>
             <RadioGroup
               value={textSize}
-              onValueChange={setTextSize}
+              onValueChange={(value) => setTextSize(value as any)}
               className="grid grid-cols-3 gap-2"
             >
               <div>
@@ -108,6 +133,44 @@ export function SettingsDialog() {
               </div>
             </RadioGroup>
           </div>
+
+          <Separator />
+
+          <div className="grid gap-3">
+             <Label className="font-semibold flex items-center gap-2">
+                <Video className="w-5 h-5" /> Камера
+             </Label>
+             <Select value={videoDeviceId} onValueChange={setVideoDeviceId}>
+                <SelectTrigger>
+                    <SelectValue placeholder="Выберите камеру" />
+                </SelectTrigger>
+                <SelectContent>
+                    {videoDevices.map(device => (
+                        <SelectItem key={device.deviceId} value={device.deviceId}>
+                            {device.label || `Камера ${videoDevices.indexOf(device) + 1}`}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+             </Select>
+          </div>
+           <div className="grid gap-3">
+             <Label className="font-semibold flex items-center gap-2">
+                <Mic className="w-5 h-5" /> Микрофон
+             </Label>
+             <Select value={audioDeviceId} onValueChange={setAudioDeviceId}>
+                <SelectTrigger>
+                    <SelectValue placeholder="Выберите микрофон" />
+                </SelectTrigger>
+                <SelectContent>
+                     {audioDevices.map(device => (
+                        <SelectItem key={device.deviceId} value={device.deviceId}>
+                            {device.label || `Микрофон ${audioDevices.indexOf(device) + 1}`}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+             </Select>
+          </div>
+
         </div>
       </DialogContent>
     </Dialog>

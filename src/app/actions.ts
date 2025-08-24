@@ -109,7 +109,7 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
   
     const chatId = getChatId(senderId, recipientId);
     const audioId = doc(collection(db, 'dummy')).id; 
-    const storageRef = ref(storage, `chats/${chatId}/${audioId}.webm`);
+    const storageRef = ref(storage, `voice_messages/${senderId}/${audioId}.webm`);
   
     try {
       // Decode the Base64 string into a Buffer

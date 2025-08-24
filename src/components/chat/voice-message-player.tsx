@@ -46,7 +46,9 @@ export function VoiceMessagePlayer({ audioUrl, duration: propDuration }: VoiceMe
     wavesurferRef.current = wavesurfer;
 
     wavesurfer.on('ready', (newDuration) => {
-      setTotalDuration(formatTime(newDuration));
+      // Prefer the duration from props if available and more accurate
+      const displayDuration = propDuration && propDuration > 0 ? propDuration : newDuration;
+      setTotalDuration(formatTime(displayDuration));
       setIsLoading(false);
     });
 
@@ -68,7 +70,7 @@ export function VoiceMessagePlayer({ audioUrl, duration: propDuration }: VoiceMe
     return () => {
       wavesurfer.destroy();
     };
-  }, [audioUrl]);
+  }, [audioUrl, propDuration]);
 
   const handlePlayPause = () => {
     if (wavesurferRef.current) {

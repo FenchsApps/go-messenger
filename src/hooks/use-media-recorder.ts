@@ -25,7 +25,6 @@ export function useMediaRecorder({
   const mediaChunks = useRef<Blob[]>([]);
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<MediaRecorderError | null>(null);
-  const [mediaBlobUrl, setMediaBlobUrl] = useState<string | null>(null);
   
   // Recording timer
   const timerInterval = useRef<NodeJS.Timeout | null>(null);
@@ -79,9 +78,7 @@ export function useMediaRecorder({
     mediaRecorder.current.onstop = () => {
       const duration = (Date.now() - startTimeRef.current) / 1000;
       const blob = new Blob(mediaChunks.current, { type: 'audio/webm' });
-      const url = URL.createObjectURL(blob);
       setStatus('stopped');
-      setMediaBlobUrl(url);
       onStop(blob, duration);
       mediaChunks.current = [];
 
@@ -113,10 +110,8 @@ export function useMediaRecorder({
   };
   
   const clearBlobUrl = () => {
-    if (mediaBlobUrl) {
-      URL.revokeObjectURL(mediaBlobUrl);
-    }
-    setMediaBlobUrl(null);
+    // This function is kept for potential future use if we need to generate local URLs again
+    // but for now, we just reset the status.
     setStatus('idle');
   };
   

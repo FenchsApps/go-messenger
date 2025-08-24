@@ -1,11 +1,30 @@
+
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read and write access to all users.
-    // This is not recommended for production apps.
-    // You should secure your data based on your app's requirements.
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+    // Правила для аватаров (если они у вас хранятся в Storage)
+    match /avatars/{userId}/{fileName} {
+      // Читать аватары может кто угодно
+      allow read;
+      // Записывать (менять) аватар может только его владелец
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Правила для голосовых сообщений
+    match /voice_messages/{senderId}/{messageId} {
+        // Читать аудио может только аутентифицированный пользователь.
+        // Для большей безопасности можно добавить проверку, что читающий
+        // является либо отправителем, либо получателем сообщения,
+        // но для этого потребуется обращение к Firestore, что усложнит правила.
+        // Для начала достаточно проверки аутентификации.
+        allow read: if request.auth != null;
+
+        // Записывать аудиофайл может только отправитель (аутентифицированный пользователь)
+        // и только в свою "папку" {senderId}.
+        allow write: if request.auth != null && request.auth.uid == senderId;
+    }
+
+    // Другие правила для других папок...
   }
 }

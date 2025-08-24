@@ -1,3 +1,4 @@
+
 export type User = {
   id: string;
   name: string;
@@ -25,3 +26,17 @@ export type Message = {
   } | null;
   read?: boolean;
 };
+
+export type Call = {
+    id: string;
+    callerId: string;
+    recipientId: string;
+    status: 'ringing' | 'active' | 'ended' | 'declined';
+    createdAt?: number;
+}
+
+export type CallSignal = {
+    type: 'offer' | 'answer' | 'iceCandidate';
+    sdp?: any;
+    candidate?: any;
+}

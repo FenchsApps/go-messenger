@@ -1,6 +1,7 @@
 
 'use client';
 
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,15 +12,33 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Settings, Moon, Sun, Monitor, CaseSensitive } from 'lucide-react';
+import { Settings, Moon, Sun, Monitor, CaseSensitive, Mic } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 export function SettingsDialog() {
   const { 
     theme, setTheme, 
     textSize, setTextSize,
+    micId, setMicId
   } = useSettings();
 
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        // Request permission
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
+        setAudioDevices(audioInputDevices);
+      } catch (err) {
+        console.error("Error enumerating audio devices:", err);
+      }
+    };
+    getDevices();
+  }, []);
 
   return (
     <Dialog>
@@ -111,6 +130,24 @@ export function SettingsDialog() {
                 </Label>
               </div>
             </RadioGroup>
+          </div>
+           <div className="grid gap-3">
+            <Label htmlFor="mic-select" className="font-semibold flex items-center gap-2">
+              <Mic className="w-5 h-5"/>
+              Микрофон
+            </Label>
+            <Select value={micId} onValueChange={setMicId}>
+              <SelectTrigger id="mic-select">
+                <SelectValue placeholder="Выберите микрофон" />
+              </SelectTrigger>
+              <SelectContent>
+                {audioDevices.map(device => (
+                  <SelectItem key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Микрофон ${audioDevices.indexOf(device) + 1}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </DialogContent>

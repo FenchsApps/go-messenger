@@ -11,6 +11,8 @@ interface SettingsContextProps {
   setTheme: (theme: Theme) => void;
   textSize: TextSize;
   setTextSize: (size: TextSize) => void;
+  micId: string | undefined;
+  setMicId: (id: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextProps | undefined>(undefined);
@@ -18,15 +20,18 @@ const SettingsContext = createContext<SettingsContextProps | undefined>(undefine
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('system');
   const [textSize, setTextSizeState] = useState<TextSize>('md');
+  const [micId, setMicIdState] = useState<string | undefined>(undefined);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     const storedTheme = localStorage.getItem('theme') as Theme | null;
     const storedTextSize = localStorage.getItem('textSize') as TextSize | null;
+    const storedMicId = localStorage.getItem('micId');
     
     if (storedTheme) setThemeState(storedTheme);
     if (storedTextSize) setTextSizeState(storedTextSize);
+    if (storedMicId) setMicIdState(storedMicId);
 
   }, []);
 
@@ -39,6 +44,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('textSize', newSize);
     setTextSizeState(newSize);
   };
+
+  const setMicId = (newId: string) => {
+    localStorage.setItem('micId', newId);
+    setMicIdState(newId);
+  }
 
   useEffect(() => {
     if (!isMounted) return;
@@ -77,6 +87,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const contextValue = {
       theme, setTheme,
       textSize, setTextSize,
+      micId, setMicId,
   };
 
   // Prevent hydration mismatch by returning null on the server

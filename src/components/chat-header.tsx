@@ -14,9 +14,10 @@ interface ChatHeaderProps {
   isMobile: boolean;
   onBack: () => void;
   onClearChat: () => void;
+  onStartCall: () => void;
 }
 
-export function ChatHeader({ user, isMobile, onBack, onClearChat }: ChatHeaderProps) {
+export function ChatHeader({ user, isMobile, onBack, onClearChat, onStartCall }: ChatHeaderProps) {
   return (
     <div className="flex items-center justify-between p-2 md:p-4 border-b">
       <div className="flex items-center gap-3">
@@ -54,6 +55,9 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat }: ChatHeaderPr
         </div>
       </div>
        <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={onStartCall}>
+          <Phone className="h-5 w-5" />
+        </Button>
         <Button variant="ghost" size="icon" onClick={onClearChat}>
             <Trash2 className="h-5 w-5" />
         </Button>

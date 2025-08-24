@@ -195,3 +195,61 @@ export async function clearChatHistory(chatId: string) {
         return { error: 'Failed to clear chat history.' };
     }
 }
+
+// Call actions
+export async function createCall(callerId: string, recipientId: string) {
+    try {
+        const callDocRef = await addDoc(collection(db, 'calls'), {
+            callerId,
+            recipientId,
+            status: 'ringing',
+            createdAt: serverTimestamp()
+        });
+        return { id: callDocRef.id };
+    } catch (error) {
+        console.error("Error creating call:", error);
+        return { error: 'Failed to create call' };
+    }
+}
+
+export async function sendCallSignal(callId: string, signalData: any) {
+    try {
+        const signalsCollection = collection(db, 'calls', callId, 'signals');
+        await addDoc(signalsCollection, {
+            ...signalData,
+            createdAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error sending call signal:", error);
+    }
+}
+
+export async function updateCallStatus(callId: string, status: 'active' | 'ended' | 'declined' | 'ringing') {
+    try {
+        const callDocRef = doc(db, 'calls', callId);
+        await updateDoc(callDocRef, { status });
+    } catch (error) {
+        console.error("Error updating call status:", error);
+    }
+}
+
+export async function endCall(callId: string) {
+    try {
+        if (!callId) return;
+        const callDocRef = doc(db, 'calls', callId);
+        
+        // Delete signals subcollection
+        const signalsSnapshot = await getDocs(collection(callDocRef, 'signals'));
+        const batch = writeBatch(db);
+        signalsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+
+        // Delete the call document itself
+        await deleteDoc(callDocRef);
+    } catch (error) {
+        // It might fail if the other user already deleted it, which is fine.
+        console.log("Could not delete call doc, it might have been deleted already.", error);
+    }
+}

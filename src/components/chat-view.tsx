@@ -112,26 +112,24 @@ export function ChatView({
   useEffect(() => {
     if (!currentUser.id) return;
 
+    // This query is now simplified to avoid needing a composite index.
     const q = query(
       collection(db, 'calls'),
       where('recipientId', '==', currentUser.id),
-      where('status', '==', 'ringing'),
-      orderBy('createdAt', 'desc'),
-      limit(1)
+      where('status', '==', 'ringing')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const callDoc = snapshot.docs[0];
-        const callData = callDoc.data() as Call;
-        // Only show incoming call from the current chat partner
-        if (callData.callerId === chatPartner.id) {
-           setIsReceivingCall({ ...callData, id: callDoc.id });
-           setActiveCallId(callDoc.id);
-           setIsCalling(true);
-           // Unsubscribe after finding a call to prevent loop
-           unsubscribe();
-        }
+      if (snapshot.empty) return;
+      
+      const callDoc = snapshot.docs[0]; // Get the first ringing call
+      const callData = callDoc.data();
+
+      // We add a client-side check to ensure the call is from the current chat partner.
+      if (callData.callerId === chatPartner.id) {
+        setIsReceivingCall({ ...callData, id: callDoc.id } as Call);
+        setActiveCallId(callDoc.id);
+        setIsCalling(true);
       }
     });
 
@@ -213,11 +211,11 @@ export function ChatView({
   }
 
   const handleStartCall = async () => {
-    setIsCalling(true);
-    setIsReceivingCall(null); // Not receiving, we are calling
     const result = await createCall(currentUser.id, chatPartner.id);
     if (result.id) {
         setActiveCallId(result.id);
+        setIsReceivingCall(null);
+        setIsCalling(true);
     } else {
         toast({ title: 'Ошибка', description: 'Не удалось начать звонок.', variant: 'destructive' });
         setIsCalling(false);

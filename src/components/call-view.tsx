@@ -56,7 +56,6 @@ export function CallView({
       localStreamRef.current = null;
     }
     if (pcRef.current) {
-        // Remove all event listeners
         pcRef.current.onicecandidate = null;
         pcRef.current.ontrack = null;
         pcRef.current.onconnectionstatechange = null;
@@ -95,14 +94,13 @@ export function CallView({
         } catch (error) {
             console.error("Error getting user media", error);
             setCallStatus("error");
-            // End call if we can't get media
             setTimeout(handleEndCall, 3000);
             return;
         }
 
         pcRef.current.onicecandidate = event => {
-            if (event.candidate) {
-                sendCallSignal(callId!, { candidate: event.candidate.toJSON() });
+            if (event.candidate && callId) {
+                sendCallSignal(callId, { candidate: event.candidate.toJSON() });
             }
         };
 
@@ -121,6 +119,13 @@ export function CallView({
                 handleEndCall();
             }
         };
+
+        // If we are the caller, create an offer
+        if (!isReceivingCall && callId) {
+            const offer = await pcRef.current.createOffer();
+            await pcRef.current.setLocalDescription(offer);
+            await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
+        }
     };
 
     initialize();
@@ -128,88 +133,75 @@ export function CallView({
     return () => {
         cleanup();
     };
-  }, [callId, micId, handleEndCall, cleanup]);
+  }, [callId, micId, isReceivingCall, handleEndCall, cleanup]);
 
   // Signaling logic
   useEffect(() => {
     if (!callId) return;
 
-    let unsubSignals: () => void;
-    
-    // Listen for remote signals
     const signalsCollection = collection(db, 'calls', callId, 'signals');
-    unsubSignals = onSnapshot(signalsCollection, async (snapshot) => {
-        snapshot.docChanges().forEach(async (change) => {
+    const unsubSignals = onSnapshot(signalsCollection, async (snapshot) => {
+        for (const change of snapshot.docChanges()) {
             if (change.type === 'added') {
                 const data = change.doc.data();
+                if (!pcRef.current || pcRef.current.signalingState === 'closed') continue;
+
                 if (data.sdp) {
                     const sdp = new RTCSessionDescription(data.sdp);
-                    if (sdp.type === 'offer' && pcRef.current?.signalingState === 'stable') {
-                        await pcRef.current?.setRemoteDescription(sdp);
-                        if (!isReceivingCall) return; // Should only happen for callee
-                        const answer = await pcRef.current?.createAnswer();
-                        await pcRef.current?.setLocalDescription(answer);
-                        await sendCallSignal(callId, { sdp: pcRef.current?.localDescription?.toJSON() });
-                        await updateCallStatus(callId, 'active');
-                    } else if (sdp.type === 'answer' && pcRef.current?.signalingState === 'have-local-offer') {
-                        await pcRef.current?.setRemoteDescription(sdp);
-                         await updateCallStatus(callId, 'active');
+                    if (sdp.type === 'offer') {
+                         await pcRef.current.setRemoteDescription(sdp);
+                         if (isReceivingCall) {
+                            const answer = await pcRef.current.createAnswer();
+                            await pcRef.current.setLocalDescription(answer);
+                            await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
+                         }
+                    } else if (sdp.type === 'answer' && pcRef.current.signalingState === 'have-local-offer') {
+                        await pcRef.current.setRemoteDescription(sdp);
                     }
                 } else if (data.candidate) {
-                     if (pcRef.current?.signalingState !== 'closed') {
-                        try {
-                            await pcRef.current?.addIceCandidate(new RTCIceCandidate(data.candidate));
-                        } catch (e) {
-                            console.error("Error adding received ICE candidate", e);
-                        }
+                    try {
+                        await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    } catch (e) {
+                        console.error("Error adding received ICE candidate", e);
                     }
                 }
             }
-        });
+        }
     });
 
     const callDocRef = doc(db, 'calls', callId);
     const unsubCallDoc = onSnapshot(callDocRef, (doc) => {
-        if (!doc.exists()) {
+        const callData = doc.data();
+        if (!doc.exists() || callData?.status === 'ended' || callData?.status === 'declined') {
             handleEndCall();
+        }
+        if (callData?.status === 'active') {
+            setCallStatus('connected');
         }
     });
 
     return () => {
-      unsubSignals?.();
-      unsubCallDoc?.();
+      unsubSignals();
+      unsubCallDoc();
     };
   }, [callId, isReceivingCall, handleEndCall]);
 
-
-  const startCall = useCallback(async () => {
-    if (pcRef.current) {
-      const offer = await pcRef.current.createOffer();
-      await pcRef.current.setLocalDescription(offer);
-      await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
-    }
-  }, [callId]);
-
-
-  useEffect(() => {
-    if (!isReceivingCall && callId && pcRef.current) {
-        startCall();
-    }
-  }, [isReceivingCall, callId, startCall]);
-
   const handleAcceptCall = async () => {
+    if (!callId) return;
     setCallStatus('connecting');
-    // The offer is set via the listener, now create answer
-     if (pcRef.current?.remoteDescription) {
-        const answer = await pcRef.current.createAnswer();
-        await pcRef.current.setLocalDescription(answer);
-        await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
-        await updateCallStatus(callId!, 'active');
+    // The offer should already be set via the listener. Now, we create an answer.
+    if (pcRef.current && pcRef.current.remoteDescription) {
+        await updateCallStatus(callId, 'active');
+    } else {
+        // Offer hasn't been received yet, which is a problem.
+        console.error("Cannot accept call, remote description is not set.");
+        handleEndCall();
     }
   };
 
   const handleDeclineCall = async () => {
-    await updateCallStatus(callId!, 'declined');
+    if (!callId) return;
+    await updateCallStatus(callId, 'declined');
     handleEndCall();
   };
 
@@ -218,7 +210,7 @@ export function CallView({
       localStreamRef.current.getAudioTracks().forEach(track => {
         track.enabled = !track.enabled;
       });
-      setIsMuted(!isMuted);
+      setIsMuted(prev => !prev);
     }
   };
 
@@ -276,7 +268,6 @@ export function CallView({
             <Button onClick={handleEndCall} variant="destructive" size="lg" className="rounded-full h-20 w-20 p-0">
                 <PhoneOff className="h-10 w-10" />
             </Button>
-            {/* Placeholder for future features like speaker */}
             <div className="h-16 w-16"></div> 
         </div>
       )}

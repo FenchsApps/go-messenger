@@ -50,7 +50,28 @@
 
 ---
 
-## Шаг 2: Настройка `AndroidManifest.xml`
+## Шаг 2: Создание макета activity_main.xml
+
+Это ключевой шаг, который отсутствовал ранее. Вам нужно создать файл макета, который будет содержать `WebView`.
+
+1.  В Android Studio в дереве проекта перейдите в `app/src/main/res/layout`.
+2.  Щелкните правой кнопкой мыши по папке `layout` и выберите **New -> XML -> Layout XML File**.
+3.  В качестве **Layout File Name** введите `activity_main`.
+4.  В качестве **Root Tag** введите `android.webkit.WebView`.
+5.  Нажмите **Finish**.
+6.  Замените содержимое созданного файла `activity_main.xml` на следующее:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<android.webkit.WebView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/webView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+```
+
+---
+
+## Шаг 3: Настройка `AndroidManifest.xml`
 
 Откройте `app/manifests/AndroidManifest.xml` и внесите следующие изменения:
 
@@ -78,7 +99,7 @@
 
 ---
 
-## Шаг 3: Создание сервиса для уведомлений
+## Шаг 4: Создание сервиса для уведомлений
 
 1.  В Android Studio, в папке `app/java/com.example.gomessenger`, создайте новый файл Kotlin с именем `MyFirebaseMessagingService.kt`.
 2.  Вставьте в него следующий код:
@@ -152,7 +173,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
 ---
 
-## Шаг 4: Обновление `MainActivity.kt`
+## Шаг 5: Обновление `MainActivity.kt`
 
 Теперь нам нужно связать WebView с нативным кодом, чтобы передать FCM токен в наше веб-приложение.
 
@@ -274,7 +295,7 @@ class MainActivity : AppCompatActivity() {
 
 ---
 
-## Шаг 5: Модификация веб-приложения (клиентская часть)
+## Шаг 6: Модификация веб-приложения (клиентская часть)
 
 Теперь вашему веб-приложению нужно "научиться" принимать токен от Android-приложения.
 

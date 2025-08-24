@@ -124,8 +124,12 @@ export function CallView({
         };
 
         // If we are the caller, create an offer
-        if (!isReceivingCall && callId) {
-            const offer = await pcRef.current.createOffer();
+        if (!isReceivingCall && callId && pcRef.current) {
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: false,
+            };
+            const offer = await pcRef.current.createOffer(offerOptions);
             await pcRef.current.setLocalDescription(offer);
             await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
         }

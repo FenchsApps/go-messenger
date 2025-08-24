@@ -238,16 +238,21 @@ export async function endCall(callId: string) {
         if (!callId) return;
         const callDocRef = doc(db, 'calls', callId);
         
-        // Delete signals subcollection
-        const signalsSnapshot = await getDocs(collection(callDocRef, 'signals'));
-        const batch = writeBatch(db);
-        signalsSnapshot.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
+        // Check if the document exists before trying to delete it and its subcollections
+        const callDocSnap = await getDoc(callDocRef);
+        if (callDocSnap.exists()) {
+             // Delete signals subcollection
+            const signalsSnapshot = await getDocs(collection(callDocRef, 'signals'));
+            const batch = writeBatch(db);
+            signalsSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
 
-        // Delete the call document itself
-        await deleteDoc(callDocRef);
+            // Delete the call document itself
+            await deleteDoc(callDocRef);
+        }
+       
     } catch (error) {
         // It might fail if the other user already deleted it, which is fine.
         console.log("Could not delete call doc, it might have been deleted already.", error);

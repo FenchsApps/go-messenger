@@ -45,102 +45,106 @@ export function CallView({
   const [isMuted, setIsMuted] = useState(false);
   const { micId } = useSettings();
 
-  const handleEndCall = useCallback(async () => {
+  const cleanup = useCallback(() => {
+      if (isCleanedUpRef.current) return;
+      isCleanedUpRef.current = true;
+      
+      if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach(track => track.stop());
+          localStreamRef.current = null;
+      }
+
+      if (pcRef.current) {
+          pcRef.current.onicecandidate = null;
+          pcRef.current.ontrack = null;
+          pcRef.current.onconnectionstatechange = null;
+          
+          if (pcRef.current.signalingState !== 'closed') {
+              pcRef.current.close();
+          }
+          pcRef.current = null;
+      }
+      
+      if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = null;
+      }
+      onEndCall();
+  }, [onEndCall]);
+
+  const handleEndCallAction = useCallback(async () => {
     if (callId) {
       await endCall(callId);
     }
-    onEndCall();
-  }, [callId, onEndCall]);
+  }, [callId]);
+
 
   useEffect(() => {
-    const cleanup = () => {
-        if (isCleanedUpRef.current) return;
-        isCleanedUpRef.current = true;
-        
-        if (localStreamRef.current) {
-            localStreamRef.current.getTracks().forEach(track => track.stop());
-            localStreamRef.current = null;
-        }
-
-        if (pcRef.current) {
-            // Unassign event handlers
-            pcRef.current.onicecandidate = null;
-            pcRef.current.ontrack = null;
-            pcRef.current.onconnectionstatechange = null;
-            
-            // Close the connection
-            if (pcRef.current.signalingState !== 'closed') {
-                pcRef.current.close();
-            }
-            pcRef.current = null;
-        }
-        
-        if (remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = null;
-        }
+    if (!callId) {
+        cleanup();
+        return;
     };
-    
+
+    const pc = new RTCPeerConnection(servers);
+    pcRef.current = pc;
+    const iceCandidateQueue: RTCIceCandidateInit[] = [];
+
     const initialize = async () => {
-        const pc = new RTCPeerConnection(servers);
-        pcRef.current = pc;
-        const iceCandidateQueue: RTCIceCandidateInit[] = [];
         
         // Setup Firestore listeners
-        const unsubCallDoc = onSnapshot(doc(db, 'calls', callId!), (doc) => {
+        const unsubCallDoc = onSnapshot(doc(db, 'calls', callId), (doc) => {
             if (isCleanedUpRef.current) return;
             const callData = doc.data();
             if (!doc.exists() || ['ended', 'declined'].includes(callData?.status)) {
-                handleEndCall();
+                cleanup();
             }
             if (callData?.status === 'active' && callStatus !== 'connected') {
                 setCallStatus('connected');
             }
         });
 
-        const unsubSignals = onSnapshot(collection(db, 'calls', callId!, 'signals'), async (snapshot) => {
+        const unsubSignals = onSnapshot(collection(db, 'calls', callId, 'signals'), async (snapshot) => {
             if (!pcRef.current || pcRef.current.signalingState === 'closed') return;
             
             for (const change of snapshot.docChanges()) {
                 if (change.type === 'added') {
                     const data = change.doc.data();
-                    if (data.sdp) {
-                        const sdp = new RTCSessionDescription(data.sdp);
-                        try {
-                           if (sdp.type === 'offer' && pcRef.current.signalingState !== 'stable') {
-                                console.log("Ignoring subsequent offer in non-stable state.");
-                            } else {
-                                if (pcRef.current) await pcRef.current.setRemoteDescription(sdp);
-                            }
+                    try {
+                      if (data.sdp) {
+                          const sdp = new RTCSessionDescription(data.sdp);
+                          if (sdp.type === 'offer' && pcRef.current.signalingState !== 'stable') {
+                              // Ignore subsequent offers if not stable
+                          } else {
+                              if (pcRef.current) await pcRef.current.setRemoteDescription(sdp);
+                          }
 
-                            if (sdp.type === 'offer' && isReceivingCall) {
-                                if (pcRef.current) {
-                                    const answer = await pcRef.current.createAnswer();
-                                    await pcRef.current.setLocalDescription(answer);
-                                    await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
-                                }
-                            }
-                            
-                            while(iceCandidateQueue.length > 0) {
-                               const candidate = iceCandidateQueue.shift();
-                               if (pcRef.current?.remoteDescription && candidate) {
-                                   await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-                               }
-                            }
-
-                        } catch (error) {
-                            console.error("Error setting session description:", error);
-                        }
-                    } else if (data.candidate) {
-                        if (pcRef.current?.remoteDescription) {
-                            await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-                        } else {
-                            iceCandidateQueue.push(data.candidate);
-                        }
+                          if (sdp.type === 'offer' && isReceivingCall) {
+                              if (pcRef.current) {
+                                  const answer = await pcRef.current.createAnswer();
+                                  await pcRef.current.setLocalDescription(answer);
+                                  await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
+                              }
+                          }
+                          
+                          while(iceCandidateQueue.length > 0) {
+                              const candidate = iceCandidateQueue.shift();
+                              if (pcRef.current?.remoteDescription && candidate) {
+                                  await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+                              }
+                          }
+                      } else if (data.candidate) {
+                          if (pcRef.current?.remoteDescription) {
+                              await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+                          } else {
+                              iceCandidateQueue.push(data.candidate);
+                          }
+                      }
+                    } catch (error) {
+                       console.error("Error processing signal:", error);
                     }
                 }
             }
         });
-
+        
         if (!pcRef.current) return;
         pcRef.current.onicecandidate = event => {
             if (event.candidate && callId) {
@@ -163,7 +167,7 @@ export function CallView({
             if (state === 'connected') {
                 setCallStatus('connected');
             } else if (['disconnected', 'failed', 'closed'].includes(state)) {
-                handleEndCall();
+                cleanup();
             }
         };
 
@@ -172,14 +176,15 @@ export function CallView({
                 audio: { deviceId: micId ? { exact: micId } : undefined }, 
                 video: false 
             });
-            if (isCleanedUpRef.current) return;
+            if (isCleanedUpRef.current || !pcRef.current) {
+                stream.getTracks().forEach(track => track.stop());
+                return;
+            };
 
             localStreamRef.current = stream;
-            stream.getTracks().forEach(track => {
-                if (pcRef.current) {
-                    pcRef.current.addTrack(track, stream);
-                }
-            });
+            for (const track of stream.getTracks()) {
+              pcRef.current.addTrack(track, stream);
+            }
 
             if (!isReceivingCall) {
                 if (isCleanedUpRef.current || !pcRef.current) return;
@@ -189,12 +194,12 @@ export function CallView({
                 };
                 const offer = await pcRef.current.createOffer(offerOptions);
                 await pcRef.current.setLocalDescription(offer);
-                await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
+                await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
             }
         } catch (error) {
             console.error("Error getting user media", error);
             setCallStatus("error");
-            setTimeout(handleEndCall, 3000);
+            setTimeout(handleEndCallAction, 3000);
         }
 
         return () => {
@@ -206,14 +211,14 @@ export function CallView({
     const listenersCleanupPromise = initialize();
 
     return () => {
-        cleanup();
         listenersCleanupPromise.then(cleanupFunc => {
             if (cleanupFunc) {
                 cleanupFunc();
             }
         });
+        cleanup();
     };
-  }, [callId, isReceivingCall, micId, handleEndCall]);
+  }, [callId, isReceivingCall, micId, cleanup, handleEndCallAction]);
 
 
   const handleAcceptCall = async () => {
@@ -225,7 +230,7 @@ export function CallView({
   const handleDeclineCall = async () => {
     if (!callId) return;
     await updateCallStatus(callId, 'declined');
-    handleEndCall();
+    handleEndCallAction();
   };
 
   const toggleMute = () => {
@@ -288,7 +293,7 @@ export function CallView({
             >
                 {isMuted ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
             </Button>
-            <Button onClick={handleEndCall} variant="destructive" size="lg" className="rounded-full h-20 w-20 p-0">
+            <Button onClick={handleEndCallAction} variant="destructive" size="lg" className="rounded-full h-20 w-20 p-0">
                 <PhoneOff className="h-10 w-10" />
             </Button>
             <div className="h-16 w-16"></div> 

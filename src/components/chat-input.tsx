@@ -15,8 +15,23 @@ interface ChatInputProps {
   onSendMessage: (text: string) => Promise<void>;
   onSendSticker: (stickerId: string) => void;
   onSendGif: (gifUrl: string) => void;
-  onSendVoice: (audioBuffer: ArrayBuffer, duration: number) => Promise<void>;
+  onSendVoice: (audioAsBase64: string, duration: number) => Promise<void>;
 }
+
+const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = () => {
+        const base64data = reader.result as string;
+        // remove the "data:audio/webm;base64," part
+        resolve(base64data.split(',')[1]);
+      };
+      reader.onerror = (error) => {
+        reject(error);
+      };
+    });
+};
 
 export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice }: ChatInputProps) {
   const [text, setText] = useState('');
@@ -40,8 +55,8 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     }
     startVoiceTransition(async () => {
       try {
-        const audioBuffer = await blob.arrayBuffer();
-        await onSendVoice(audioBuffer, duration);
+        const audioAsBase64 = await blobToBase64(blob);
+        await onSendVoice(audioAsBase64, duration);
         clearBlobUrl();
       } catch (error) {
         console.error('Error sending voice message:', error);
@@ -180,3 +195,4 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
 
 
     
+

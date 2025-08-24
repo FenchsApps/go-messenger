@@ -4,7 +4,7 @@
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
+import { ref, uploadString, getDownloadURL, uploadBytes, uploadBytesResumable } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
   if (!text.trim()) {
@@ -102,24 +102,21 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
     }
 }
 
-export async function sendVoiceMessage(senderId: string, recipientId: string, audioBuffer: ArrayBuffer, duration: number) {
-    if (!senderId || !recipientId || !audioBuffer) {
+export async function sendVoiceMessage(senderId: string, recipientId: string, audioAsBase64: string, duration: number) {
+    if (!senderId || !recipientId || !audioAsBase64) {
       return { error: 'Invalid voice message data' };
     }
   
     const chatId = getChatId(senderId, recipientId);
-    const audioId = doc(collection(db, 'dummy')).id; // Generate a unique ID for the audio file
+    const audioId = doc(collection(db, 'dummy')).id; 
     const storageRef = ref(storage, `chats/${chatId}/${audioId}.webm`);
   
     try {
-      // Create a Blob from the ArrayBuffer, this is crucial for uploadBytes
-      const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
-
-      // Upload the audio file Blob
-      const uploadResult = await uploadBytes(storageRef, audioBlob);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
+      const audioBuffer = Buffer.from(audioAsBase64, 'base64');
+      const metadata = { contentType: 'audio/webm' };
+      const uploadTask = await uploadBytes(storageRef, audioBuffer, metadata);
+      const downloadURL = await getDownloadURL(uploadTask.ref);
   
-      // Save message to Firestore
       const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId,
         recipientId,

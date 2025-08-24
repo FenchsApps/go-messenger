@@ -149,8 +149,8 @@ export function ChatView({
     }
   };
   
-  const handleSendVoice = async (audioBuffer: ArrayBuffer, duration: number) => {
-    const result = await sendVoiceMessage(currentUser.id, chatPartner.id, audioBuffer, duration);
+  const handleSendVoice = async (audioAsBase64: string, duration: number) => {
+    const result = await sendVoiceMessage(currentUser.id, chatPartner.id, audioAsBase64, duration);
     if(result.error) {
         toast({
             title: "Ошибка отправки аудио",

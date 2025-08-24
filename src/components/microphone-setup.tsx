@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -181,7 +182,7 @@ export function MicrophoneSetup() {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="default">Микрофон по умолчанию</SelectItem>
-                    {audioDevices.map(device => (
+                    {audioDevices.filter(d => d.deviceId).map(device => (
                         <SelectItem key={device.deviceId} value={device.deviceId}>
                             {device.label || `Микрофон ${audioDevices.indexOf(device) + 1}`}
                         </SelectItem>

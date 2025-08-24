@@ -112,11 +112,15 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
     const storageRef = ref(storage, `chats/${chatId}/${audioId}.webm`);
   
     try {
+      // Decode the Base64 string into a Buffer
       const audioBuffer = Buffer.from(audioAsBase64, 'base64');
       const metadata = { contentType: 'audio/webm' };
+      
+      // Upload the buffer to Firebase Storage
       const uploadTask = await uploadBytes(storageRef, audioBuffer, metadata);
       const downloadURL = await getDownloadURL(uploadTask.ref);
   
+      // Create the message document in Firestore
       const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId,
         recipientId,
@@ -259,56 +263,25 @@ export async function updateUserProfile(userId: string, name: string, descriptio
     }
 }
 
-
-// --- NEW CALL ACTIONS ---
-
+// --- Call Actions Removed ---
 export async function createCall(callerId: string, receiverId: string) {
-    if (!callerId || !receiverId) {
-        return { error: "Caller and Receiver IDs are required." };
-    }
-
-    try {
-        const callDocRef = await addDoc(collection(db, 'calls'), {
-            callerId,
-            receiverId,
-            status: 'calling', // initial status
-            timestamp: serverTimestamp(),
-        });
-        return { success: true, callId: callDocRef.id };
-    } catch (error) {
-        console.error("Error creating call:", error);
-        return { error: "Failed to create call." };
-    }
+    console.warn("createCall is deprecated and will be removed.");
+    return { error: "Calling feature is disabled." };
 }
 
-export async function updateCallStatus(callId: string, status: 'answered' | 'rejected' | 'ended') {
-    if (!callId || !status) {
-        return { error: "Call ID and status are required." };
-    }
-
-    try {
-        const callRef = doc(db, 'calls', callId);
-        await updateDoc(callRef, { status: status });
-        return { success: true };
-    } catch (error) {
-        console.error(`Error updating call status to ${status}:`, error);
-        return { error: "Failed to update call status." };
-    }
+export async function updateCallStatus(callId: string, status: string) {
+     console.warn("updateCallStatus is deprecated and will be removed.");
+    return { error: "Calling feature is disabled." };
 }
-
-// Convenience functions
 export async function answerCall(callId: string) {
-    return updateCallStatus(callId, 'answered');
+     console.warn("answerCall is deprecated and will be removed.");
+    return { error: "Calling feature is disabled." };
 }
-
 export async function rejectCall(callId: string) {
-    return updateCallStatus(callId, 'rejected');
+     console.warn("rejectCall is deprecated and will be removed.");
+    return { error: "Calling feature is disabled." };
 }
-
 export async function endCall(callId: string) {
-    return updateCallStatus(callId, 'ended');
+     console.warn("endCall is deprecated and will be removed.");
+    return { error: "Calling feature is disabled." };
 }
-
-    
-
-    

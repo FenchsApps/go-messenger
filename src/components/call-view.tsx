@@ -165,23 +165,25 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                     const signal = change.doc.data().data;
                     
                     if (signal.sdp) {
-                         if (pc.signalingState !== 'stable' && pc.signalingState !== 'have-local-offer') { 
-                            if (signal.sdp.type === 'answer') { 
+                         if (signal.sdp.type === 'answer') { 
+                            if (pc.signalingState === 'have-local-offer') {
                                 await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                             }
                          } else if (signal.sdp.type === 'offer') { 
-                             await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-                             
-                             pc.onicecandidate = async (event) => {
-                               if (event.candidate) {
-                                 await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { candidate: event.candidate.toJSON() });
-                               }
-                             };
+                            if (pc.signalingState === 'stable') {
+                                await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                                
+                                pc.onicecandidate = async (event) => {
+                                  if (event.candidate) {
+                                    await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { candidate: event.candidate.toJSON() });
+                                  }
+                                };
 
-                             const answer = await pc.createAnswer();
-                             await pc.setLocalDescription(answer);
-                             await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
-                             setCallStatus('connecting');
+                                const answer = await pc.createAnswer();
+                                await pc.setLocalDescription(answer);
+                                await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
+                                setCallStatus('connecting');
+                            }
                          }
                     } else if (signal.candidate) {
                         if (pc.remoteDescription && pc.signalingState !== 'closed') {

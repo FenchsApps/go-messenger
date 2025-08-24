@@ -34,8 +34,8 @@ type CallStatus = 'initializing' | 'ringing' | 'connecting' | 'connected' | 'end
 export function CallView({ currentUser, chatPartner, isReceivingCall, initialCallId, onEndCall }: CallViewProps) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const candidateQueue = useRef<RTCIceCandidateInit[]>([]);
   const isCleaningUp = useRef(false);
-  const isSettingRemoteAnswer = useRef(false);
 
   const [callId, setCallId] = useState<string | null>(initialCallId);
   const [callStatus, setCallStatus] = useState<CallStatus>(isReceivingCall ? 'ringing' : 'initializing');
@@ -108,8 +108,8 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       pc.ontrack = (event) => {
         if (remoteVideoRef.current && event.streams[0]) {
           remoteVideoRef.current.srcObject = event.streams[0];
+          setCallStatus('connected');
         }
-        setCallStatus('connected');
       };
       
       // Handle connection state
@@ -118,75 +118,81 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
           hangUp();
         }
+         if (pc.connectionState === 'connected') {
+            setCallStatus('connected');
+        }
+      };
+
+      pc.onicecandidate = async (event) => {
+        if (event.candidate && callId) {
+          await sendCallSignal(callId, currentUser.id, chatPartner.id, { candidate: event.candidate.toJSON() });
+        }
       };
       
       // 3. Signaling logic
       if (!isReceivingCall) { // Caller
         const newCallId = await createCall(currentUser.id, chatPartner.id);
         setCallId(newCallId);
-        
-        pc.onicecandidate = async (event) => {
-          if (event.candidate) {
-            await sendCallSignal(newCallId, currentUser.id, chatPartner.id, { candidate: event.candidate.toJSON() });
-          }
-        };
+        listenForSignals(newCallId);
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await sendCallSignal(newCallId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
         setCallStatus('ringing');
-        listenForSignals(newCallId);
       } else { // Callee
         if (!callId) return;
         listenForSignals(callId);
       }
     };
+
+    const processCandidateQueue = async () => {
+        const pc = pcRef.current;
+        if (!pc || !pc.remoteDescription) return;
+
+        while (candidateQueue.current.length > 0) {
+            const candidate = candidateQueue.current.shift();
+            if (candidate) {
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (e) {
+                     if (pc.signalingState !== 'closed') {
+                        console.error('Error adding queued ICE candidate', e);
+                     }
+                }
+            }
+        }
+    };
     
     const listenForSignals = (currentCallId: string) => {
         const signalsCollection = collection(db, 'calls', currentCallId, 'signals');
-        
         const q = query(signalsCollection, where('to', '==', currentUser.id), orderBy('createdAt', 'asc'));
 
         unsubSignals = onSnapshot(q, async (snapshot) => {
             const pc = pcRef.current;
-            if (!pc || pc.signalingState === 'closed' || isSettingRemoteAnswer.current) return;
+            if (!pc || pc.signalingState === 'closed') return;
             
             for (const change of snapshot.docChanges()) {
                 if (change.type === 'added') {
                     const signal = change.doc.data().data;
                     
                     if (signal.sdp) {
-                         if (signal.sdp.type === 'answer') { // For Caller
-                            if (pc.signalingState === 'have-local-offer') {
-                                await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-                            }
-                         } else if (signal.sdp.type === 'offer') { // For Callee
-                            if (pc.signalingState === 'stable') {
-                                isSettingRemoteAnswer.current = true;
-                                await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-                                
-                                pc.onicecandidate = async (event) => {
-                                  if (event.candidate) {
-                                    await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { candidate: event.candidate.toJSON() });
-                                  }
-                                };
+                         if (signal.sdp.type === 'answer' && pc.signalingState === 'have-local-offer') {
+                            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                            await processCandidateQueue();
+                         } else if (signal.sdp.type === 'offer' && pc.signalingState === 'stable') {
+                            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                            await processCandidateQueue();
 
-                                const answer = await pc.createAnswer();
-                                await pc.setLocalDescription(answer);
-                                await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
-                                setCallStatus('connecting');
-                                isSettingRemoteAnswer.current = false;
-                            }
+                            const answer = await pc.createAnswer();
+                            await pc.setLocalDescription(answer);
+                            await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
+                            setCallStatus('connecting');
                          }
                     } else if (signal.candidate) {
-                        if (pc.remoteDescription && pc.signalingState !== 'closed') {
-                            try {
-                              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-                            } catch (e) {
-                               if (pc.signalingState !== 'closed') {
-                                 console.error('Error adding received ICE candidate', e);
-                               }
-                            }
+                        if (pc.remoteDescription) {
+                            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                        } else {
+                            candidateQueue.current.push(signal.candidate);
                         }
                     }
                 }
@@ -255,11 +261,13 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       }
       if (localVideoRef.current) localVideoRef.current.srcObject = null;
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+      candidateQueue.current = [];
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAcceptCall = () => {
+    // This function is now mainly for UI state change, actual logic is in useEffect
     setCallStatus('connecting');
   };
 
@@ -339,7 +347,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             </Avatar>
             <h2 className="text-2xl font-bold mt-4">{chatPartner.name}</h2>
             <p className="text-white/80">
-              {callStatus === 'ringing' ? 'Набор номера...' : 'Соединение...'}
+              {callStatus === 'ringing' && !isReceivingCall ? 'Набор номера...' : 'Соединение...'}
+              {callStatus === 'ringing' && isReceivingCall ? 'Входящий звонок...' : ''}
+              {callStatus === 'initializing' ? 'Инициализация...' : ''}
+              {callStatus === 'connecting' ? 'Соединение...' : ''}
             </p>
         </div>
       )}
@@ -361,5 +372,3 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
-
-    

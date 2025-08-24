@@ -121,21 +121,20 @@ export function ChatView({
     const q = query(
       callsRef,
       where('recipientId', '==', currentUser.id),
-      where('callerId', '==', chatPartner.id),
       where('status', '==', 'ringing'),
       orderBy('createdAt', 'desc'),
-      limit(1)
+      limit(10) // Fetch a few recent ringing calls
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (!snapshot.empty) {
-        const callDoc = snapshot.docs[0];
-        // Check if we haven't already processed this call
-        if (callDoc.id !== activeCallId) {
+        // Filter on the client to find the call from the current chat partner
+        const callDoc = snapshot.docs.find(doc => doc.data().callerId === chatPartner.id);
+
+        if (callDoc && callDoc.id !== activeCallId) {
             setActiveCallId(callDoc.id);
             setIsReceivingCall(true);
             setIsCalling(true);
-            unsubscribe(); // Stop listening once a call is detected
         }
       }
     });

@@ -10,7 +10,7 @@ import { Messenger } from './messenger';
 import { PigeonIcon } from './icons';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
-import { db } from '@/lib/firebase';
+import { db, getInAppMessaging } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
 import { requestNotificationPermission } from '@/lib/utils';
@@ -57,9 +57,17 @@ export function Login() {
   }, []);
 
   useEffect(() => {
-    // This effect runs when the user is logged in
+    // This effect runs when the user is logged in to initialize FIAM
     if (currentUser) {
-      // Define the function that Android will call
+        getInAppMessaging().then(fiam => {
+            if (fiam) {
+                console.log("Firebase In-App Messaging initialized");
+                // FIAM is now active and listening for campaigns.
+                // You can add logging or specific triggers here if needed.
+            }
+        });
+
+      // Define the function that Android will call for FCM
       window.receiveFcmToken = async (token: string) => {
         console.log("Получен FCM токен от Android:", token);
         if (currentUser.id) {

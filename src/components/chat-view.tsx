@@ -28,7 +28,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, getDocs } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 import { CallView } from './call-view';
 
@@ -40,14 +40,6 @@ interface ChatViewProps {
   chatPartner: User;
   isMobile: boolean;
   onBack: () => void;
-}
-
-// Android WebView JavaScript Interface
-declare global {
-    interface Window {
-        Android?: {
-        };
-    }
 }
 
 export function ChatView({
@@ -105,11 +97,6 @@ export function ChatView({
         newMessages.push(newMessage);
       });
       
-      const newUnreadMessages = querySnapshot.docChanges()
-        .filter(change => change.type === 'added' && !change.doc.metadata.hasPendingWrites)
-        .map(change => change.doc.data() as Message)
-        .filter(msg => msg.senderId !== currentUser.id && !msg.read);
-      
       setMessages(newMessages);
 
       if (isWindowFocused) {
@@ -125,23 +112,25 @@ export function ChatView({
   useEffect(() => {
      if (isCalling) return;
 
-     const q = query(collection(db, 'calls'), where('recipientId', '==', currentUser.id), where('status', '==', 'ringing'));
+     // Listen for calls specifically from the current chat partner to the current user
+     const q = query(
+        collection(db, 'calls'), 
+        where('recipientId', '==', currentUser.id), 
+        where('callerId', '==', chatPartner.id),
+        where('status', '==', 'ringing')
+    );
+
      const unsubscribe = onSnapshot(q, (snapshot) => {
          if (!snapshot.empty) {
              const callDoc = snapshot.docs[0];
-             const callData = callDoc.data();
-             const caller = allUsers.find(u => u.id === callData.callerId);
-             
-             if (caller) {
-                 setActiveCallId(callDoc.id);
-                 setIsReceivingCall(true);
-                 setIsCalling(true);
-             }
+             setActiveCallId(callDoc.id);
+             setIsReceivingCall(true);
+             setIsCalling(true);
          }
      });
 
      return () => unsubscribe();
-  }, [currentUser.id, isCalling]);
+  }, [currentUser.id, chatPartner.id, isCalling]);
 
 
   const handleSendMessage = async (text: string) => {

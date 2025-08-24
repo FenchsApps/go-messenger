@@ -115,14 +115,14 @@ export function ChatView({
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (snapshot.empty) return;
       
-      const callDoc = snapshot.docs[0];
-      const callData = callDoc.data();
-
-      // Only show incoming call if it's from the current chat partner
-      // and we are not already in a call.
-      if (callData.callerId === chatPartner.id && !activeCall) {
-        setActiveCall({ id: callDoc.id, isReceiving: true });
-      }
+      snapshot.docs.forEach(callDoc => {
+        const callData = callDoc.data();
+        // Only show incoming call if it's from the current chat partner
+        // and we are not already in a call.
+        if (callData.callerId === chatPartner.id && !activeCall) {
+          setActiveCall({ id: callDoc.id, isReceiving: true });
+        }
+      });
     });
 
     return () => unsubscribe();

@@ -38,192 +38,157 @@ export function CallView({
 }: CallViewProps) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
-  const isCleanedUpRef = useRef(false);
-  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
-
+  
   const [callStatus, setCallStatus] = useState(isReceivingCall ? 'incoming' : 'calling');
   const [isMuted, setIsMuted] = useState(false);
   const { micId } = useSettings();
 
-  const cleanup = useCallback(() => {
-    if (isCleanedUpRef.current) return;
-    isCleanedUpRef.current = true;
-    
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-      localStreamRef.current = null;
-    }
-    if (pcRef.current) {
-        pcRef.current.onicecandidate = null;
-        pcRef.current.ontrack = null;
-        pcRef.current.onconnectionstatechange = null;
-        pcRef.current.onsignalingstatechange = null;
-
-        if (pcRef.current.signalingState !== 'closed') {
-           pcRef.current.close();
-        }
-        pcRef.current = null;
-    }
-     if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = null;
-    }
-    iceCandidateQueueRef.current = [];
-  }, []);
-
   const handleEndCall = useCallback(async () => {
-    cleanup();
     if (callId) {
       await endCall(callId);
     }
     onEndCall();
-  }, [callId, cleanup, onEndCall]);
+  }, [callId, onEndCall]);
 
   useEffect(() => {
-    const initialize = async () => {
-        isCleanedUpRef.current = false;
+    let isCleanedUp = false;
+    const iceCandidateQueue: RTCIceCandidateInit[] = [];
+    const pc = new RTCPeerConnection(servers);
+    pcRef.current = pc;
+
+    const cleanup = () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
         
-        let stream: MediaStream;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { deviceId: micId ? { exact: micId } : undefined }, 
-                video: false 
-            });
-        } catch (error) {
-            console.warn("Could not get specific mic, trying default", error);
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            } catch (getUserMediaError) {
-                console.error("Error getting user media", getUserMediaError);
-                setCallStatus("error");
-                setTimeout(handleEndCall, 3000);
-                return;
-            }
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => track.stop());
+            localStreamRef.current = null;
+        }
+
+        if (pcRef.current) {
+            pcRef.current.onicecandidate = null;
+            pcRef.current.ontrack = null;
+            pcRef.current.onconnectionstatechange = null;
+            pcRef.current.close();
+            pcRef.current = null;
         }
         
-        if (isCleanedUpRef.current) return;
-
-        localStreamRef.current = stream;
-        pcRef.current = new RTCPeerConnection(servers);
-        
-        stream.getTracks().forEach(track => {
-            pcRef.current?.addTrack(track, stream);
-        });
-
-        if (isCleanedUpRef.current || !pcRef.current) return;
-
-        pcRef.current.onicecandidate = event => {
-            if (event.candidate && callId && !isCleanedUpRef.current) {
-                sendCallSignal(callId, { candidate: event.candidate.toJSON() });
-            }
-        };
-
-        pcRef.current.ontrack = event => {
-            if (isCleanedUpRef.current) return;
-            remoteStreamRef.current = event.streams[0];
-            if (remoteAudioRef.current) {
-                remoteAudioRef.current.srcObject = event.streams[0];
-            }
-        };
-
-        pcRef.current.onconnectionstatechange = () => {
-            if (isCleanedUpRef.current || !pcRef.current) return;
-            if (pcRef.current.connectionState === 'connected') {
-                setCallStatus('connected');
-            }
-            if (['disconnected', 'failed', 'closed'].includes(pcRef.current.connectionState)) {
-                handleEndCall();
-            }
-        };
-
-        if (!isReceivingCall && callId && !isCleanedUpRef.current && pcRef.current) {
-            const offerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: false };
-            const offer = await pcRef.current.createOffer(offerOptions);
-            if (isCleanedUpRef.current || !pcRef.current) return;
-            await pcRef.current.setLocalDescription(offer);
-            if (isCleanedUpRef.current) return;
-            await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
+        if (remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = null;
         }
     };
 
-    initialize();
+    const unsubCallDoc = onSnapshot(doc(db, 'calls', callId!), (doc) => {
+        const callData = doc.data();
+        if (!doc.exists() || ['ended', 'declined'].includes(callData?.status)) {
+            handleEndCall();
+        }
+        if (callData?.status === 'active' && callStatus !== 'connected') {
+            setCallStatus('connected');
+        }
+    });
 
-    return () => {
-        cleanup();
-    };
-  }, [callId, micId, isReceivingCall, handleEndCall, cleanup]);
-
-  // Signaling logic
-  useEffect(() => {
-    if (!callId) return;
-
-    const signalsCollection = collection(db, 'calls', callId, 'signals');
-    const unsubSignals = onSnapshot(signalsCollection, async (snapshot) => {
+    const unsubSignals = onSnapshot(collection(db, 'calls', callId!, 'signals'), async (snapshot) => {
+        if (isCleanedUp || !pcRef.current) return;
+        
         for (const change of snapshot.docChanges()) {
             if (change.type === 'added') {
                 const data = change.doc.data();
-                if (!pcRef.current || pcRef.current.signalingState === 'closed') continue;
-
                 if (data.sdp) {
                     const sdp = new RTCSessionDescription(data.sdp);
                     try {
-                        if (sdp.type === 'offer' && pcRef.current.signalingState !== 'stable') {
-                            continue;
-                        }
-
-                        if (sdp.type === 'offer') {
-                             await pcRef.current.setRemoteDescription(sdp);
-                             if (isReceivingCall) {
-                                if (isCleanedUpRef.current || !pcRef.current) return;
-                                const answer = await pcRef.current.createAnswer();
-                                if (isCleanedUpRef.current || !pcRef.current) return;
-                                await pcRef.current.setLocalDescription(answer);
-                                if (isCleanedUpRef.current) return;
-                                await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
-                             }
-                        } else if (sdp.type === 'answer' && pcRef.current.signalingState === 'have-local-offer') {
+                        if (pcRef.current.signalingState !== 'stable' && sdp.type === 'offer') {
+                            // This is a common issue. We can try to rollback and apply the offer.
+                            await Promise.all([
+                                pcRef.current.setLocalDescription({type: 'rollback'}),
+                                pcRef.current.setRemoteDescription(sdp)
+                            ]);
+                        } else {
                             await pcRef.current.setRemoteDescription(sdp);
-                        } else if (sdp.type === 'answer') {
-                           continue;
                         }
 
-                        iceCandidateQueueRef.current.forEach(candidate => pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)));
-                        iceCandidateQueueRef.current = [];
-                    } catch (e) {
-                         console.error("Error setting session description:", e);
+                        if (sdp.type === 'offer' && isReceivingCall) {
+                            const answer = await pcRef.current.createAnswer();
+                            await pcRef.current.setLocalDescription(answer);
+                            await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
+                        }
+                        
+                        // Process any queued candidates
+                        iceCandidateQueue.forEach(candidate => pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)));
+                        iceCandidateQueue.length = 0; // Clear the queue
+
+                    } catch (error) {
+                        console.error("Error setting session description:", error);
                     }
                 } else if (data.candidate) {
-                    try {
-                        if (pcRef.current.remoteDescription) {
-                            await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-                        } else {
-                            iceCandidateQueueRef.current.push(data.candidate);
-                        }
-                    } catch (e) {
-                        console.error("Error adding received ICE candidate", e);
+                    if (pcRef.current.remoteDescription) {
+                        await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    } else {
+                        iceCandidateQueue.push(data.candidate); // Queue the candidate
                     }
                 }
             }
         }
     });
 
-    const callDocRef = doc(db, 'calls', callId);
-    const unsubCallDoc = onSnapshot(callDocRef, (doc) => {
-        const callData = doc.data();
-        if (!doc.exists() || callData?.status === 'ended' || callData?.status === 'declined') {
+    pc.onicecandidate = event => {
+        if (event.candidate && callId && !isCleanedUp) {
+            sendCallSignal(callId, { candidate: event.candidate.toJSON() });
+        }
+    };
+
+    pc.ontrack = event => {
+        if (remoteAudioRef.current && event.streams[0]) {
+            remoteAudioRef.current.srcObject = event.streams[0];
+        }
+    };
+
+    pc.onconnectionstatechange = () => {
+        if (isCleanedUp || !pcRef.current) return;
+        const state = pcRef.current.connectionState;
+        if (state === 'connected') {
+            setCallStatus('connected');
+        } else if (['disconnected', 'failed', 'closed'].includes(state)) {
             handleEndCall();
         }
-        if (callData?.status === 'active') {
-            setCallStatus('connected');
+    };
+
+    (async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { deviceId: micId ? { exact: micId } : undefined }, 
+                video: false 
+            });
+            if (isCleanedUp) return;
+
+            localStreamRef.current = stream;
+            stream.getTracks().forEach(track => {
+                if (pcRef.current) {
+                    pcRef.current.addTrack(track, stream);
+                }
+            });
+
+            if (!isReceivingCall) {
+                if (isCleanedUp || !pcRef.current) return;
+                const offer = await pcRef.current.createOffer({offerToReceiveAudio: true});
+                await pcRef.current.setLocalDescription(offer);
+                await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
+            }
+        } catch (error) {
+            console.error("Error getting user media", error);
+            setCallStatus("error");
+            setTimeout(handleEndCall, 3000);
         }
-    });
+    })();
 
     return () => {
-      unsubSignals();
-      unsubCallDoc();
+        cleanup();
+        unsubCallDoc();
+        unsubSignals();
     };
-  }, [callId, isReceivingCall, handleEndCall]);
+  }, [callId, micId, isReceivingCall, handleEndCall]);
+
 
   const handleAcceptCall = async () => {
     if (!callId) return;
@@ -245,23 +210,23 @@ export function CallView({
       setIsMuted(prev => !prev);
     }
   };
-
-  const renderContent = () => {
-    switch (callStatus) {
-      case 'calling':
-        return 'Идет вызов...';
-      case 'incoming':
-        return 'Входящий звонок';
-      case 'connecting':
-        return 'Соединение...';
-      case 'connected':
-        return 'Соединено';
-      case 'error':
-        return 'Ошибка доступа к микрофону';
-      default:
-        return 'Звонок';
-    }
-  };
+  
+    const renderContent = () => {
+        switch (callStatus) {
+        case 'calling':
+            return 'Идет вызов...';
+        case 'incoming':
+            return 'Входящий звонок';
+        case 'connecting':
+            return 'Соединение...';
+        case 'connected':
+            return 'Соединено';
+        case 'error':
+            return 'Ошибка доступа к микрофону';
+        default:
+            return 'Звонок';
+        }
+    };
 
   return (
     <div className="flex flex-col h-full bg-background items-center justify-center text-center p-8">
@@ -297,7 +262,7 @@ export function CallView({
             >
                 {isMuted ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
             </Button>
-            <Button onClick={handleEndCall} variant="destructive" size="lg" className="rounded-full h-20 w-20 p-0">
+            <Button onClick={onEndCall} variant="destructive" size="lg" className="rounded-full h-20 w-20 p-0">
                 <PhoneOff className="h-10 w-10" />
             </Button>
             <div className="h-16 w-16"></div> 
@@ -307,5 +272,3 @@ export function CallView({
     </div>
   );
 }
-
-    

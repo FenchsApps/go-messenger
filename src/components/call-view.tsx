@@ -98,6 +98,9 @@ export function CallView({
             return;
         }
 
+        // Add a null check here to prevent race conditions on unmount
+        if (!pcRef.current) return;
+
         pcRef.current.onicecandidate = event => {
             if (event.candidate && callId) {
                 sendCallSignal(callId, { candidate: event.candidate.toJSON() });

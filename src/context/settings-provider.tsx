@@ -10,6 +10,8 @@ interface SettingsContextProps {
   setTheme: (theme: Theme) => void;
   textSize: TextSize;
   setTextSize: (size: TextSize) => void;
+  audioDeviceId: string | null;
+  setAudioDeviceId: (deviceId: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextProps | undefined>(undefined);
@@ -17,15 +19,18 @@ const SettingsContext = createContext<SettingsContextProps | undefined>(undefine
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('system');
   const [textSize, setTextSizeState] = useState<TextSize>('md');
+  const [audioDeviceId, setAudioDeviceIdState] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     const storedTheme = localStorage.getItem('theme') as Theme | null;
     const storedTextSize = localStorage.getItem('textSize') as TextSize | null;
+    const storedAudioDevice = localStorage.getItem('audioDeviceId') as string | null;
     
     if (storedTheme) setThemeState(storedTheme);
     if (storedTextSize) setTextSizeState(storedTextSize);
+    if (storedAudioDevice) setAudioDeviceIdState(storedAudioDevice);
 
   }, []);
 
@@ -38,6 +43,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('textSize', newSize);
     setTextSizeState(newSize);
   };
+
+  const setAudioDeviceId = (deviceId: string) => {
+    localStorage.setItem('audioDeviceId', deviceId);
+    setAudioDeviceIdState(deviceId);
+  }
 
   useEffect(() => {
     if (!isMounted) return;
@@ -76,6 +86,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const contextValue = {
       theme, setTheme,
       textSize, setTextSize,
+      audioDeviceId, setAudioDeviceId,
   };
 
   // Prevent hydration mismatch by returning null on the server

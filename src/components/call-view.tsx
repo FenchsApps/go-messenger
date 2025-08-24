@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { User } from '@/lib/types';
 import { Button } from './ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
-import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff } from 'lucide-react';
 import { createCall, sendCallSignal, endCall } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, collection, query, where, orderBy } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, orderBy, getDocs, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useSettings } from '@/context/settings-provider';
@@ -34,6 +34,7 @@ type CallStatus = 'initializing' | 'ringing_outgoing' | 'ringing_incoming' | 'co
 export function CallView({ currentUser, chatPartner, isReceivingCall, initialCallId, onEndCall }: CallViewProps) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const iceCandidateQueue = useRef<RTCIceCandidate[]>([]);
   const isCleanedUpRef = useRef<boolean>(false);
   
@@ -42,20 +43,15 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isMicOn, setIsMicOn] = useState(true);
-  const [isCameraOn, setIsCameraOn] = useState(true);
   const [micVolume, setMicVolume] = useState(0);
 
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameId = useRef<number>();
   
   const { toast } = useToast();
-  const { videoDeviceId, audioDeviceId } = useSettings();
+  const { audioDeviceId } = useSettings();
   
-  // --- Cleanup and Hang Up ---
   const cleanup = useCallback(() => {
     if (isCleanedUpRef.current) {
         return;
@@ -81,8 +77,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         }
         pcRef.current = null;
     }
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
     iceCandidateQueue.current = [];
 
   }, []);
@@ -95,7 +90,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     onEndCall();
   }, [callId, onEndCall, cleanup]);
 
-  // --- Mic Visualizer ---
   const setupMicVisualizer = (stream: MediaStream) => {
     if (stream.getAudioTracks().length > 0) {
         try {
@@ -123,30 +117,25 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     }
   };
   
-  // --- Main useEffect for Call Logic ---
   useEffect(() => {
-    let unsubCallDoc: () => void | null = null;
-    let unsubSignals: () => void | null = null;
+    let unsubCallDoc: (() => void) | null = null;
+    let unsubSignals: (() => void) | null = null;
     
     const startCall = async () => {
-      // 1. Get media devices
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
+          video: false, // NO VIDEO
           audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true,
         });
         localStreamRef.current = stream;
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
         setHasPermission(true);
         setupMicVisualizer(stream);
       } catch (error) {
         console.error("Error getting media devices:", error);
         setHasPermission(false);
         toast({
-          title: "Ошибка доступа к камере",
-          description: "Не удалось получить доступ к камере или микрофону. Убедитесь, что они не используются другим приложением и что вы дали разрешение в настройках браузера.",
+          title: "Ошибка доступа к микрофону",
+          description: "Не удалось получить доступ к микрофону. Убедитесь, что он не используется другим приложением и что вы дали разрешение в настройках браузера.",
           variant: "destructive",
           duration: 9000
         })
@@ -156,98 +145,83 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       const pc = new RTCPeerConnection(servers);
       pcRef.current = pc;
       
-      // Add local tracks to the connection
       localStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, localStreamRef.current!);
       });
       
-      // Handle remote tracks
       pc.ontrack = (event) => {
-        if (remoteVideoRef.current && event.streams[0]) {
-          remoteVideoRef.current.srcObject = event.streams[0];
+        if (remoteAudioRef.current && event.streams[0]) {
+          remoteAudioRef.current.srcObject = event.streams[0];
           setCallStatus('connected');
         }
       };
 
-      // Handle connection state changes
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+         if (!pcRef.current) return;
+        if (pcRef.current.connectionState === 'failed' || pcRef.current.connectionState === 'disconnected' || pcRef.current.connectionState === 'closed') {
           hangUp();
         }
-        if(pc.connectionState === 'connected') {
+        if(pcRef.current.connectionState === 'connected') {
           setCallStatus('connected');
         }
       };
       
-      // Handle ICE candidates
       pc.onicecandidate = async (event) => {
         if (event.candidate && callId) {
-          await sendCallSignal(callId, currentUser.id, chatPartner.id, { candidate: event.candidate.toJSON() });
+           await sendCallSignal(callId, { candidate: event.candidate.toJSON() });
         }
       };
 
-      // --- Signaling Logic ---
-      
-      // Listen for the other user's signals
       const listenToSignals = (id: string) => {
         const signalsCollection = collection(db, 'calls', id, 'signals');
-        const q = query(signalsCollection, where('to', '==', currentUser.id), orderBy('createdAt', 'asc'));
+        const q = query(signalsCollection, orderBy('createdAt', 'asc'));
         
         return onSnapshot(q, async (snapshot) => {
-          if (!pcRef.current) return;
-
-          for (const change of snapshot.docChanges()) {
-            if (change.type === 'added') {
-              const signal = change.doc.data().data;
-              
-              if (signal.sdp) {
-                try {
-                    if (pcRef.current.signalingState === 'stable' && signal.sdp.type === 'offer') {
-                        await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-                        // Process any queued candidates that arrived before the offer
-                        iceCandidateQueue.current.forEach(candidate => pcRef.current?.addIceCandidate(candidate));
-                        iceCandidateQueue.current = [];
-                        
-                         // Now create an answer
-                        setCallStatus('connecting');
-                        const answer = await pcRef.current.createAnswer();
-                        await pcRef.current.setLocalDescription(answer);
-                        await sendCallSignal(id, currentUser.id, chatPartner.id, { sdp: pcRef.current.localDescription?.toJSON() });
-
-                    } else if (pcRef.current.signalingState === 'have-local-offer' && signal.sdp.type === 'answer') {
-                        await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-                        // Now that remote description is set, process any queued candidates
-                        iceCandidateQueue.current.forEach(candidate => pcRef.current?.addIceCandidate(candidate));
-                        iceCandidateQueue.current = [];
+            if (!pcRef.current || pcRef.current.signalingState === 'closed') return;
+            
+            for (const change of snapshot.docChanges()) {
+                if (change.type === 'added') {
+                    const signal = change.doc.data();
+                    
+                    if (signal.sdp) {
+                        try {
+                            if (signal.sdp.type === 'offer' && pcRef.current.signalingState === 'stable') {
+                                await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                                iceCandidateQueue.current.forEach(candidate => pcRef.current?.addIceCandidate(candidate).catch(e => console.error("Error adding queued ICE candidate", e)));
+                                iceCandidateQueue.current = [];
+                            } else if (signal.sdp.type === 'answer' && pcRef.current.signalingState === 'have-local-offer') {
+                                await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                                iceCandidateQueue.current.forEach(candidate => pcRef.current?.addIceCandidate(candidate).catch(e => console.error("Error adding queued ICE candidate", e)));
+                                iceCandidateQueue.current = [];
+                            }
+                        } catch(e) {
+                            console.error("Error setting remote description", e)
+                        }
+                    } else if (signal.candidate) {
+                        try {
+                            if (pcRef.current.remoteDescription) {
+                                await pcRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                            } else {
+                                iceCandidateQueue.current.push(new RTCIceCandidate(signal.candidate));
+                            }
+                        } catch(e) {
+                            console.error("Error adding ICE candidate", e);
+                        }
                     }
-                } catch(e) {
-                    console.error("Error setting remote description", e)
                 }
-              } else if (signal.candidate) {
-                try {
-                    if (pcRef.current.remoteDescription) {
-                        await pcRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
-                    } else {
-                        // Queue candidates if remote description is not set yet
-                        iceCandidateQueue.current.push(new RTCIceCandidate(signal.candidate));
-                    }
-                } catch(e) {
-                    console.error("Error adding ICE candidate", e);
-                }
-              }
             }
-          }
         });
       };
-
-      // Listen for hang-ups
+      
       const listenToCallDoc = (id: string) => onSnapshot(doc(db, 'calls', id), (docSnapshot) => {
-        if (!docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        if (!docSnapshot.exists() || data?.status === 'ended') {
           hangUp();
         }
       });
       
-      if (!isReceivingCall) { // Caller's logic
+      if (!isReceivingCall) {
+        setCallStatus('ringing_outgoing');
         const newCallId = await createCall(currentUser.id, chatPartner.id);
         setCallId(newCallId);
         unsubSignals = listenToSignals(newCallId);
@@ -257,10 +231,8 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         
-        await sendCallSignal(newCallId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
-        setCallStatus('ringing_outgoing');
-
-      } else { // Callee's logic
+        await sendCallSignal(newCallId, { sdp: pc.localDescription.toJSON() });
+      } else {
         if (callId) {
           unsubSignals = listenToSignals(callId);
           unsubCallDoc = listenToCallDoc(callId);
@@ -278,13 +250,15 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- User Actions ---
-  
   const handleAcceptCall = async () => {
-    // Callee accepts the call. The logic to create and send an answer is now
-    // inside the signal listener, once the offer is set.
-    // This function is now mainly for updating the UI.
+    if (!callId || !pcRef.current || pcRef.current.signalingState !== 'have-remote-offer') {
+        console.error("Cannot accept call in current state", callId, pcRef.current?.signalingState);
+        return;
+    }
     setCallStatus('connecting');
+    const answer = await pcRef.current.createAnswer();
+    await pcRef.current.setLocalDescription(answer);
+    await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
   };
   
   const toggleMic = () => {
@@ -295,17 +269,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         });
     }
   }
-
-  const toggleCamera = () => {
-    if (localStreamRef.current) {
-        localStreamRef.current.getVideoTracks().forEach(track => {
-            track.enabled = !track.enabled;
-            setIsCameraOn(track.enabled);
-        });
-    }
-  }
-  
-  // --- Render Logic ---
   
   if (hasPermission === false) {
     return (
@@ -313,7 +276,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             <Alert variant="destructive">
               <AlertTitle>Звонок не удался</AlertTitle>
               <AlertDescription>
-                Не удалось получить доступ к камере/микрофону. Пожалуйста, проверьте разрешения и попробуйте снова.
+                Не удалось получить доступ к микрофону. Пожалуйста, проверьте разрешения и попробуйте снова.
               </AlertDescription>
             </Alert>
             <Button onClick={onEndCall} variant="secondary" className="mt-4">Назад к чату</Button>
@@ -321,71 +284,69 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     )
   }
 
-  // Ringing screen for the recipient (Callee)
-  if (callStatus === 'ringing_incoming') {
-    return (
-      <div className="flex flex-col items-center justify-between h-full bg-gray-800 text-white p-8">
-        <div className="flex flex-col items-center gap-4 text-center mt-16">
-          <Avatar className="h-24 w-24 border-4 border-white">
-            <AvatarImage src={chatPartner.avatar} />
-            <AvatarFallback>{chatPartner.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <h2 className="text-2xl font-bold">{chatPartner.name}</h2>
-          <p>Входящий звонок...</p>
-        </div>
-        <div className="flex items-center gap-8 mb-16">
-          <div className="flex flex-col items-center gap-2">
-            <Button onClick={hangUp} variant="destructive" size="lg" className="rounded-full h-16 w-16">
-                <PhoneOff />
-            </Button>
-            <span className="text-sm">Отклонить</span>
-          </div>
-          <div className="flex flex-col items-center gap-2">
-            <Button onClick={handleAcceptCall} variant="secondary" size="lg" className="rounded-full h-16 w-16 bg-green-500 hover:bg-green-600">
-                <Phone />
-            </Button>
-            <span className="text-sm">Принять</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Main call view (for both caller and callee after pickup)
-  return (
-    <div className="relative h-full w-full bg-black flex flex-col">
-      <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
-      <video ref={localVideoRef} autoPlay playsInline muted className="absolute bottom-28 md:bottom-4 right-4 h-40 w-32 object-cover rounded-md border-2 border-white/50" />
-      
-      {(callStatus === 'ringing_outgoing' || callStatus === 'connecting' || callStatus === 'initializing') && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white">
-            <Avatar className="h-24 w-24 border-4 border-white">
+  const renderContent = () => {
+      const isConnecting = callStatus === 'initializing' || callStatus === 'connecting' || callStatus === 'ringing_outgoing';
+      if (callStatus === 'ringing_incoming') {
+        return (
+          <div className="flex flex-col items-center justify-between h-full bg-gray-800 text-white p-8">
+            <div className="flex flex-col items-center gap-4 text-center mt-16">
+              <Avatar className="h-24 w-24 border-4 border-white">
                 <AvatarImage src={chatPartner.avatar} />
                 <AvatarFallback>{chatPartner.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <h2 className="text-2xl font-bold mt-4">{chatPartner.name}</h2>
-            <p className="text-white/80 animate-pulse">
-              {callStatus === 'ringing_outgoing' ? 'Набор номера...' : ''}
-              {callStatus === 'initializing' ? 'Инициализация...' : ''}
-              {callStatus === 'connecting' ? 'Соединение...' : ''}
-            </p>
+              </Avatar>
+              <h2 className="text-2xl font-bold">{chatPartner.name}</h2>
+              <p>Входящий звонок...</p>
+            </div>
+            <div className="flex items-center gap-8 mb-16">
+              <div className="flex flex-col items-center gap-2">
+                <Button onClick={hangUp} variant="destructive" size="lg" className="rounded-full h-16 w-16">
+                    <PhoneOff />
+                </Button>
+                <span className="text-sm">Отклонить</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Button onClick={handleAcceptCall} variant="secondary" size="lg" className="rounded-full h-16 w-16 bg-green-500 hover:bg-green-600">
+                    <Phone />
+                </Button>
+                <span className="text-sm">Принять</span>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="relative h-full w-full bg-gray-800 text-white flex flex-col justify-between items-center p-8">
+            <div className="flex flex-col items-center gap-4 text-center mt-16">
+                <Avatar className="h-32 w-32 border-4 border-white">
+                    <AvatarImage src={chatPartner.avatar} />
+                    <AvatarFallback>{chatPartner.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <h2 className="text-3xl font-bold mt-4">{chatPartner.name}</h2>
+                <p className="text-white/80 animate-pulse capitalize">
+                  {callStatus === 'ringing_outgoing' ? 'Набор номера...' : ''}
+                  {callStatus === 'initializing' ? 'Инициализация...' : ''}
+                  {callStatus === 'connecting' ? 'Соединение...' : ''}
+                  {callStatus === 'connected' ? 'Соединено' : ''}
+                </p>
+            </div>
+
+            <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+
+            <div className="flex justify-center items-center gap-4 mb-16">
+                <Button onClick={toggleMic} variant={isMicOn ? 'secondary' : 'destructive'} size="icon" className="rounded-full h-16 w-16 relative">
+                    {isMicOn ? <Mic /> : <MicOff />}
+                    {isMicOn && (
+                        <div className="absolute inset-0 rounded-full border-2 border-green-500" style={{ transform: `scale(${1 + micVolume * 0.5})`, opacity: micVolume > 0.1 ? 1 : 0, transition: 'transform 0.1s, opacity 0.1s' }} />
+                    )}
+                </Button>
+                <Button onClick={hangUp} variant="destructive" size="lg" className="rounded-full h-16 w-28">
+                    <PhoneOff />
+                </Button>
+            </div>
         </div>
-      )}
-      
-      <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 flex justify-center items-center gap-4 bg-gradient-to-t from-black/70 to-transparent">
-        <Button onClick={toggleMic} variant={isMicOn ? 'secondary' : 'destructive'} size="icon" className="rounded-full h-14 w-14 relative">
-            {isMicOn ? <Mic /> : <MicOff />}
-            {isMicOn && (
-                <div className="absolute inset-0 rounded-full border-2 border-green-500" style={{ transform: `scale(${1 + micVolume * 0.5})`, opacity: micVolume > 0.1 ? 1 : 0, transition: 'transform 0.1s, opacity 0.1s' }} />
-            )}
-        </Button>
-        <Button onClick={toggleCamera} variant={isCameraOn ? 'secondary' : 'destructive'} size="icon" className="rounded-full h-14 w-14">
-            {isCameraOn ? <Video /> : <VideoOff />}
-        </Button>
-         <Button onClick={hangUp} variant="destructive" size="lg" className="rounded-full h-14 w-24">
-            <PhoneOff />
-        </Button>
-      </div>
-    </div>
-  );
+      );
+  }
+
+  return renderContent();
 }

@@ -3,7 +3,7 @@
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
@@ -193,5 +193,39 @@ export async function clearChatHistory(chatId: string) {
     } catch (error) {
         console.error("Error clearing chat history: ", error);
         return { error: 'Failed to clear chat history.' };
+    }
+}
+
+
+// Call Actions
+
+export async function createCall(callerId: string, recipientId: string) {
+  const callRef = doc(collection(db, 'calls'));
+  await setDoc(callRef, {
+    callerId,
+    recipientId,
+    status: 'ringing',
+    createdAt: serverTimestamp(),
+  });
+  return callRef.id;
+}
+
+export async function sendCallSignal(callId: string, data: any) {
+  const signalsCollection = collection(db, 'calls', callId, 'signals');
+  await addDoc(signalsCollection, { ...data, createdAt: serverTimestamp() });
+}
+
+export async function endCall(callId: string) {
+    const callRef = doc(db, 'calls', callId);
+    if ((await getDoc(callRef)).exists()) {
+        // Delete signals subcollection
+        const signalsCollection = collection(db, 'calls', callId, 'signals');
+        const signalsSnapshot = await getDocs(signalsCollection);
+        const batch = writeBatch(db);
+        signalsSnapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        
+        // Delete the call document itself
+        await deleteDoc(callRef);
     }
 }

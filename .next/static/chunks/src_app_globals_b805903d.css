@@ -841,6 +841,10 @@ body {
   width: 100vw;
 }
 
+.w-28 {
+  width: 7rem;
+}
+
 .min-w-0 {
   min-width: 0;
 }
@@ -1606,6 +1610,11 @@ body {
   line-height: 1rem;
 }
 
+.text-3xl {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+}
+
 .font-bold {
   font-weight: 700;
 }
@@ -1620,6 +1629,10 @@ body {
 
 .font-semibold {
   font-weight: 600;
+}
+
+.capitalize {
+  text-transform: capitalize;
 }
 
 .italic {

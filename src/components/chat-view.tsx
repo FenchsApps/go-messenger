@@ -1,11 +1,12 @@
 
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Message, User } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
 import { ChatInput } from './chat-input';
+import { CallView } from './call-view';
 import {
   Dialog,
   DialogContent,
@@ -28,7 +29,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 
 function getChatId(userId1: string, userId2: string) {
@@ -54,6 +55,11 @@ export function ChatView({
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
 
+  // Call state
+  const [isCalling, setIsCalling] = useState(false);
+  const [isReceivingCall, setIsReceivingCall] = useState(false);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
@@ -72,12 +78,14 @@ export function ChatView({
   }, []);
 
   useEffect(() => {
-    if (isWindowFocused) {
+    if (isWindowFocused && !isCalling) {
         markMessagesAsRead(chatId, currentUser.id);
     }
-  }, [isWindowFocused, messages, chatId, currentUser.id]);
+  }, [isWindowFocused, messages, chatId, currentUser.id, isCalling]);
   
   useEffect(() => {
+    if (isCalling) return; // Don't fetch messages while in a call
+
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
     const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
@@ -102,8 +110,50 @@ export function ChatView({
     return () => {
         unsubscribeMessages();
     }
-  }, [chatId, currentUser.id, isWindowFocused]);
+  }, [chatId, currentUser.id, isWindowFocused, isCalling]);
 
+
+  // Listen for incoming calls from the chat partner
+  useEffect(() => {
+    if (isCalling) return;
+
+    const callsRef = collection(db, 'calls');
+    const q = query(
+      callsRef,
+      where('recipientId', '==', currentUser.id),
+      where('callerId', '==', chatPartner.id),
+      where('status', '==', 'ringing'),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const callDoc = snapshot.docs[0];
+        // Check if we haven't already processed this call
+        if (callDoc.id !== activeCallId) {
+            setActiveCallId(callDoc.id);
+            setIsReceivingCall(true);
+            setIsCalling(true);
+            unsubscribe(); // Stop listening once a call is detected
+        }
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [currentUser.id, chatPartner.id, isCalling, activeCallId]);
+
+
+  const handleEndCall = useCallback(() => {
+    setIsCalling(false);
+    setIsReceivingCall(false);
+    setActiveCallId(null);
+  }, []);
+
+  const handleStartCall = () => {
+    setIsCalling(true);
+    setIsReceivingCall(false);
+  };
 
   const handleSendMessage = async (text: string) => {
     const result = await sendMessage(currentUser.id, chatPartner.id, text);
@@ -178,6 +228,18 @@ export function ChatView({
     setIsClearingChat(false);
   }
 
+  if (isCalling) {
+    return (
+      <CallView
+        currentUser={currentUser}
+        chatPartner={chatPartner}
+        isReceivingCall={isReceivingCall}
+        initialCallId={activeCallId}
+        onEndCall={handleEndCall}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-background">
       <ChatHeader 
@@ -185,6 +247,7 @@ export function ChatView({
         isMobile={isMobile} 
         onBack={onBack}
         onClearChat={() => setIsClearingChat(true)}
+        onStartCall={handleStartCall}
       />
       <ChatMessages
         messages={messages}

@@ -7,7 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { createCall, sendCallSignal, endCall } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, collection, query, where, orderBy, addDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useSettings } from '@/context/settings-provider';
@@ -67,7 +67,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       localStreamRef.current = null;
     }
     if (pcRef.current) {
-        // Detach all event handlers
+        // Detach all event handlers before closing
         pcRef.current.onicecandidate = null;
         pcRef.current.ontrack = null;
         pcRef.current.onconnectionstatechange = null;
@@ -188,22 +188,33 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
               const signal = change.doc.data().data;
               
               if (signal.sdp) {
-                if(pc.signalingState === 'stable' && signal.sdp.type === 'offer') {
-                    // Callee receives offer
-                    await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-                } else if (pc.signalingState === 'have-local-offer' && signal.sdp.type === 'answer') {
-                    // Caller receives answer
-                    await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-                    // Now that remote description is set, process any queued candidates
-                    iceCandidateQueue.current.forEach(candidate => pc.addIceCandidate(candidate));
-                    iceCandidateQueue.current = [];
+                try {
+                    if (pc.signalingState === 'stable' && signal.sdp.type === 'offer') {
+                        // Callee receives offer
+                        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                        // Process any queued candidates that arrived before the offer
+                        iceCandidateQueue.current.forEach(candidate => pc.addIceCandidate(candidate));
+                        iceCandidateQueue.current = [];
+                    } else if (pc.signalingState === 'have-local-offer' && signal.sdp.type === 'answer') {
+                        // Caller receives answer
+                        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                        // Now that remote description is set, process any queued candidates
+                        iceCandidateQueue.current.forEach(candidate => pc.addIceCandidate(candidate));
+                        iceCandidateQueue.current = [];
+                    }
+                } catch(e) {
+                    console.error("Error setting remote description", e)
                 }
               } else if (signal.candidate) {
-                if (pc.remoteDescription) {
-                    await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-                } else {
-                    // Queue candidates if remote description is not set yet
-                    iceCandidateQueue.current.push(new RTCIceCandidate(signal.candidate));
+                try {
+                    if (pc.remoteDescription) {
+                        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                    } else {
+                        // Queue candidates if remote description is not set yet
+                        iceCandidateQueue.current.push(new RTCIceCandidate(signal.candidate));
+                    }
+                } catch(e) {
+                    console.error("Error adding ICE candidate", e);
                 }
               }
             }
@@ -224,6 +235,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         unsubSignals = listenToSignals(newCallId);
         unsubCallDoc = listenToCallDoc(newCallId);
         
+        if (pc.signalingState === 'closed') return; // Prevent offer creation on closed connection
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         
@@ -246,19 +258,18 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       cleanup();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callId, isReceivingCall]); // Only re-run if these change initially
+  }, []); // Only re-run if these change initially
 
   // --- User Actions ---
   
   const handleAcceptCall = async () => {
     const pc = pcRef.current;
-    if (!pc || !callId) return;
+    if (!pc || !callId || pc.signalingState !== 'have-remote-offer') {
+       console.error("Cannot accept call in current state:", pc?.signalingState);
+       return;
+    }
 
     setCallStatus('connecting');
-
-    // Process queued candidates that arrived before the offer was set
-    iceCandidateQueue.current.forEach(candidate => pc.addIceCandidate(candidate));
-    iceCandidateQueue.current = [];
     
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);

@@ -35,6 +35,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const isCleaningUp = useRef(false);
+  const isSettingRemoteAnswer = useRef(false);
 
   const [callId, setCallId] = useState<string | null>(initialCallId);
   const [callStatus, setCallStatus] = useState<CallStatus>(isReceivingCall ? 'ringing' : 'initializing');
@@ -144,33 +145,24 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     const listenForSignals = (currentCallId: string) => {
         const signalsCollection = collection(db, 'calls', currentCallId, 'signals');
         
-        // =================================================================================
-        //  CRITICAL STEP FOR FIRESTORE
-        // =================================================================================
-        // This query requires a composite index in Firestore. If you see a 'failed-precondition'
-        // error in your console, it means the index is missing.
-        // 
-        // PLEASE CLICK THE LINK IN THE ERROR MESSAGE to go to the Firebase Console and
-        // create the required index. This is a one-time setup step. The app will not
-        // function correctly without it.
-        // =================================================================================
         const q = query(signalsCollection, where('to', '==', currentUser.id), orderBy('createdAt', 'asc'));
 
         unsubSignals = onSnapshot(q, async (snapshot) => {
             const pc = pcRef.current;
-            if (!pc || pc.signalingState === 'closed') return;
+            if (!pc || pc.signalingState === 'closed' || isSettingRemoteAnswer.current) return;
             
             for (const change of snapshot.docChanges()) {
                 if (change.type === 'added') {
                     const signal = change.doc.data().data;
                     
                     if (signal.sdp) {
-                         if (signal.sdp.type === 'answer') { 
+                         if (signal.sdp.type === 'answer') { // For Caller
                             if (pc.signalingState === 'have-local-offer') {
                                 await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                             }
-                         } else if (signal.sdp.type === 'offer') { 
+                         } else if (signal.sdp.type === 'offer') { // For Callee
                             if (pc.signalingState === 'stable') {
+                                isSettingRemoteAnswer.current = true;
                                 await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                                 
                                 pc.onicecandidate = async (event) => {
@@ -183,6 +175,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                                 await pc.setLocalDescription(answer);
                                 await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
                                 setCallStatus('connecting');
+                                isSettingRemoteAnswer.current = false;
                             }
                          }
                     } else if (signal.candidate) {
@@ -368,3 +361,5 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
+
+    

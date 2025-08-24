@@ -404,28 +404,42 @@ class FullScreenCallActivity : AppCompatActivity() {
 Для `SYSTEM_ALERT_WINDOW` на Android 6.0+ требуется явный запрос разрешения у пользователя. Добавьте эту логику в вашу `MainActivity`.
 
 ```kotlin
-// В MainActivity.kt
+// В MainActivity.kt (из файла ANDROID_WEBVIEW_GUIDE.md)
 
-private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 1234
+import android.provider.Settings
+import android.net.Uri
 
-private fun checkOverlayPermission() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-        val intent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")
-        )
-        startActivityForResult(intent, ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
+// ...
+
+class MainActivity : AppCompatActivity() {
+
+    // ... ваш существующий код
+    private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 1234
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // ... ваш существующий код onCreate
+
+        // Запрос разрешения на уведомления (уже должен быть)
+        askNotificationPermission()
+        // НОВЫЙ ВЫЗОВ для проверки разрешения наложения
+        checkOverlayPermission()
     }
-}
 
-// Вызовите checkOverlayPermission() в onCreate() вашей MainActivity
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    // ... ваш код
-    checkOverlayPermission()
+    private fun checkOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            // Использование startActivityForResult устарело, но для простоты примера
+            // можно оставить так. В проде лучше использовать registerForActivityResult.
+            startActivityForResult(intent, ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
+        }
+    }
+    
+    // ... остальной код MainActivity
 }
 ```
 
 Теперь у вас есть полная система для отображения полноэкранных уведомлений о звонках.
-
-    

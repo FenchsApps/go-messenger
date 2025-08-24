@@ -112,10 +112,10 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
     const storageRef = ref(storage, `chats/${chatId}/${id}.webm`);
   
     try {
-      // Create a Blob from the ArrayBuffer
+      // Create a Blob from the ArrayBuffer, this is crucial for uploadBytes
       const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
 
-      // Upload the audio file
+      // Upload the audio file Blob
       const uploadResult = await uploadBytes(storageRef, audioBlob);
       const downloadURL = await getDownloadURL(uploadResult.ref);
   

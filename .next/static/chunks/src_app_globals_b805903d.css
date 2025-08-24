@@ -1968,6 +1968,10 @@ body {
   animation-timing-function: linear;
 }
 
+.running {
+  animation-play-state: running;
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }

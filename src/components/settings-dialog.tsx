@@ -28,15 +28,21 @@ export function SettingsDialog() {
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
 
   useEffect(() => {
+    // This function now only runs once when the component mounts
     const getDevices = async () => {
       try {
-        // Request permission to list devices
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        // We only need to enumerate devices, no need to keep the stream running.
+        // A one-time permission request is enough if not granted.
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
         setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
         setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
+        // IMPORTANT: Stop the tracks immediately after we get the list
+        stream.getTracks().forEach(track => track.stop());
       } catch (err) {
-        console.error("Could not get media devices.", err);
+        console.error("Could not get media devices for settings.", err);
+        // We don't want to bother the user with a toast here,
+        // as the call-view will handle permission errors more gracefully.
       }
     };
     getDevices();

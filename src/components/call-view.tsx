@@ -144,6 +144,12 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       } catch (error) {
         console.error("Error getting media devices:", error);
         setHasPermission(false);
+        toast({
+          title: "Ошибка доступа к камере",
+          description: "Не удалось получить доступ к камере или микрофону. Убедитесь, что они не используются другим приложением и что вы дали разрешение в настройках браузера.",
+          variant: "destructive",
+          duration: 9000
+        })
         return;
       }
       

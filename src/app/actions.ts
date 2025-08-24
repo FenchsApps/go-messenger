@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
@@ -101,8 +102,8 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
     }
 }
 
-export async function sendVoiceMessage(senderId: string, recipientId: string, audioAsDataUrl: string, duration: number) {
-    if (!senderId || !recipientId || !audioAsDataUrl) {
+export async function sendVoiceMessage(senderId: string, recipientId: string, audioBlob: Blob, duration: number) {
+    if (!senderId || !recipientId || !audioBlob) {
       return { error: 'Invalid voice message data' };
     }
   
@@ -112,7 +113,7 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
   
     try {
       // Upload the audio file
-      const uploadResult = await uploadString(storageRef, audioAsDataUrl, 'data_url');
+      const uploadResult = await uploadBytes(storageRef, audioBlob);
       const downloadURL = await getDownloadURL(uploadResult.ref);
   
       // Save message to Firestore

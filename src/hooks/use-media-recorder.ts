@@ -65,8 +65,11 @@ export function useMediaRecorder({
       onError(err);
       return;
     }
+    
+    // Set mimeType to ensure consistency
+    const options = { mimeType: 'audio/webm' };
+    mediaRecorder.current = new MediaRecorder(mediaStream.current, options);
 
-    mediaRecorder.current = new MediaRecorder(mediaStream.current);
     mediaRecorder.current.ondataavailable = (e) => {
       if (e.data.size > 0) {
         mediaChunks.current.push(e.data);

@@ -15,7 +15,7 @@ interface ChatInputProps {
   onSendMessage: (text: string) => Promise<void>;
   onSendSticker: (stickerId: string) => void;
   onSendGif: (gifUrl: string) => void;
-  onSendVoice: (audioUrl: string, duration: number) => Promise<void>;
+  onSendVoice: (audioBlob: Blob, duration: number) => Promise<void>;
 }
 
 export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice }: ChatInputProps) {
@@ -33,22 +33,15 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     }
   }, []);
 
-  const handleSendVoiceMessage = async (blobUrl: string, duration: number) => {
-    if (!blobUrl) {
+  const handleSendVoiceMessage = async (blob: Blob, duration: number) => {
+    if (!blob) {
       toast({ title: 'Ошибка', description: 'Нет аудио для отправки.' });
       return;
     }
     startVoiceTransition(async () => {
       try {
-        const response = await fetch(blobUrl);
-        const blob = await response.blob();
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = async () => {
-          const base64data = reader.result as string;
-          await onSendVoice(base64data, duration);
-          clearBlobUrl();
-        };
+        await onSendVoice(blob, duration);
+        clearBlobUrl();
       } catch (error) {
         console.error('Error sending voice message:', error);
         toast({ title: 'Ошибка отправки', description: 'Не удалось отправить голосовое сообщение.', variant: 'destructive' });
@@ -64,8 +57,8 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     recordingTime,
   } = useMediaRecorder({
     audio: { deviceId: selectedMicId === 'default' ? undefined : selectedMicId },
-    onStop: (blobUrl) => {
-        handleSendVoiceMessage(blobUrl, recordingTime);
+    onStop: (blobUrl, blob) => {
+        handleSendVoiceMessage(blob, recordingTime);
     },
     onError: (err) => {
         toast({ title: 'Ошибка записи', description: err.message, variant: 'destructive' });

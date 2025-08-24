@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
@@ -32,7 +33,12 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
-const inAppMessaging = getInAppMessaging(app);
+
+// Only initialize in the browser
+let inAppMessaging;
+if (typeof window !== 'undefined') {
+    inAppMessaging = getInAppMessaging(app);
+}
 
 
 // This enables offline persistence. It's best to call this only once.

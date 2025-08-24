@@ -616,7 +616,10 @@ async function updateUserFcmToken(userId, fcmToken) {
             success: true
         };
     } catch (error) {
-        console;
+        console.error("Error updating FCM token:", error);
+        return {
+            error: "Failed to update FCM token."
+        };
     }
 }
 ;

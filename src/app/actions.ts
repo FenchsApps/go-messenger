@@ -205,4 +205,7 @@ export async function updateUserFcmToken(userId: string, fcmToken: string) {
         await updateDoc(userRef, { fcmToken: fcmToken });
         return { success: true };
     } catch (error) {
-        console
+        console.error("Error updating FCM token:", error);
+        return { error: "Failed to update FCM token." };
+    }
+}

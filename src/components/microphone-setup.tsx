@@ -5,12 +5,17 @@ import { Button } from './ui/button';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Loader2, Mic, MicOff, ServerCrash } from 'lucide-react';
 import { AudioVisualizer } from './audio-visualizer';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Label } from './ui/label';
 
 type Status = 'idle' | 'pending' | 'success' | 'error' | 'no-mics';
 
 export function MicrophoneSetup() {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [audioDevices, setAudioDevices] = useState<InputDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('default');
+  
   const audioStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -26,9 +31,10 @@ export function MicrophoneSetup() {
         audioContextRef.current = null;
     }
      analyserRef.current = null;
+     setStatus('idle');
   };
 
-  const getMicrophone = async () => {
+  const getMicrophone = async (deviceId: string = 'default') => {
     setStatus('pending');
     setError(null);
     cleanup();
@@ -38,20 +44,9 @@ export function MicrophoneSetup() {
         setError("Ваш браузер не поддерживает доступ к медиа-устройствам. Пожалуйста, попробуйте другой браузер.");
         return;
     }
-    
-    // Check for available microphones
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
-
-    if (audioInputDevices.length === 0) {
-        setStatus('no-mics');
-        setError("Микрофоны не найдены. Пожалуйста, подключите микрофон и попробуйте снова.");
-        return;
-    }
-
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId === 'default' ? undefined : deviceId } });
       audioStreamRef.current = stream;
 
       const context = new AudioContext();
@@ -69,6 +64,8 @@ export function MicrophoneSetup() {
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setError('Доступ к микрофону заблокирован. Пожалуйста, разрешите его в настройках вашего браузера и попробуйте снова.');
+        } else if (err.name === 'NotFoundError') {
+             setError('Выбранный микрофон не найден. Пожалуйста, выберите другое устройство.');
         } else {
           setError(`Произошла ошибка: ${err.message}`);
         }
@@ -78,15 +75,47 @@ export function MicrophoneSetup() {
     }
   };
 
+  const getAudioDevices = async () => {
+     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        setStatus('no-mics');
+        setError("Не удалось получить список микрофонов. Ваш браузер может не поддерживать эту функцию.");
+        return;
+    }
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
+    
+    if (audioInputDevices.length === 0) {
+        setStatus('no-mics');
+        setError("Микрофоны не найдены. Пожалуйста, подключите микрофон и попробуйте снова.");
+    } else {
+        setAudioDevices(audioInputDevices);
+        const savedDeviceId = localStorage.getItem('selectedMicId');
+        if (savedDeviceId && audioInputDevices.some(d => d.deviceId === savedDeviceId)) {
+            setSelectedDeviceId(savedDeviceId);
+            getMicrophone(savedDeviceId);
+        } else {
+            getMicrophone();
+        }
+    }
+  }
+
+
   useEffect(() => {
     // Automatically try to get mic on component mount
-    getMicrophone();
+    getAudioDevices();
 
     // Cleanup on unmount
     return () => {
       cleanup();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleDeviceChange = (deviceId: string) => {
+    setSelectedDeviceId(deviceId);
+    localStorage.setItem('selectedMicId', deviceId);
+    getMicrophone(deviceId);
+  }
 
   const renderStatus = () => {
     switch (status) {
@@ -144,8 +173,26 @@ export function MicrophoneSetup() {
         )}
       </div>
 
+       <div className="space-y-2">
+            <Label htmlFor="mic-select">Выберите микрофон</Label>
+            <Select onValueChange={handleDeviceChange} value={selectedDeviceId} disabled={audioDevices.length === 0}>
+                <SelectTrigger id="mic-select">
+                    <SelectValue placeholder="Выберите устройство..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="default">Микрофон по умолчанию</SelectItem>
+                    {audioDevices.map(device => (
+                        <SelectItem key={device.deviceId} value={device.deviceId}>
+                            {device.label || `Микрофон ${audioDevices.indexOf(device) + 1}`}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+       </div>
+
+
       {(status === 'error' || status === 'no-mics') && (
-        <Button onClick={getMicrophone} className="w-full">
+        <Button onClick={() => getMicrophone(selectedDeviceId)} className="w-full">
             Попробовать снова
         </Button>
       )}

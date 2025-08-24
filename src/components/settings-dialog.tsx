@@ -88,7 +88,7 @@ export function SettingsDialog({ user }: SettingsDialogProps) {
                 <DialogTrigger asChild>
                     <Button variant="outline" className="w-full">Проверить микрофон</Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Настройка микрофона</DialogTitle>
                     </DialogHeader>

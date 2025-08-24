@@ -2,7 +2,7 @@
 import { useState, useTransition, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, Mic, Trash2, Square } from 'lucide-react';
+import { Send, Loader2, Mic, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/context/settings-provider';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +23,14 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
   const { textSize } = useSettings();
   const { toast } = useToast();
   const [isVoicePending, startVoiceTransition] = useTransition();
+  const [selectedMicId, setSelectedMicId] = useState('default');
+
+  useEffect(() => {
+    const savedMicId = localStorage.getItem('selectedMicId');
+    if (savedMicId) {
+      setSelectedMicId(savedMicId);
+    }
+  }, []);
 
   const {
     status,
@@ -30,10 +38,9 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     stopRecording,
     mediaBlobUrl,
     clearBlobUrl,
-    error: recorderError,
     recordingTime,
   } = useMediaRecorder({
-    audio: true,
+    audio: { deviceId: selectedMicId === 'default' ? undefined : selectedMicId },
     onStop: (blobUrl, blob) => {
         // We will send the blob from here.
     },

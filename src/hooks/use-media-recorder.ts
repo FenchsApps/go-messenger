@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useRef } from 'react';
 
@@ -6,7 +5,7 @@ type Status = 'idle' | 'recording' | 'stopped' | 'error';
 type MediaRecorderError = Error & { name: 'NotAllowedError' | 'NotFoundError' | 'NotReadableError' | string };
 
 interface UseMediaRecorderOptions {
-  audio?: boolean;
+  audio?: boolean | { deviceId?: string };
   video?: boolean;
   onStop?: (blobUrl: string, blob: Blob) => void;
   onError?: (error: MediaRecorderError) => void;

@@ -1,7 +1,7 @@
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Crown, MoreVertical, Phone, Settings, Trash2 } from 'lucide-react';
+import { ArrowLeft, Crown, MoreVertical, Phone, Settings, Trash2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -21,9 +21,10 @@ interface ChatHeaderProps {
   onClearChat: () => void;
   onInitiateCall: () => void;
   onOpenSettings: () => void;
+  onOpenContactInfo: () => void;
 }
 
-export function ChatHeader({ user, isMobile, onBack, onClearChat, onInitiateCall, onOpenSettings }: ChatHeaderProps) {
+export function ChatHeader({ user, isMobile, onBack, onClearChat, onInitiateCall, onOpenSettings, onOpenContactInfo }: ChatHeaderProps) {
   return (
     <div className="flex items-center justify-between p-2 md:p-4 border-b bg-card">
       <div className="flex items-center gap-3">
@@ -72,7 +73,8 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onInitiateCall
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => alert('Просмотр информации о пользователе (скоро)')}>
+                <DropdownMenuItem onClick={onOpenContactInfo}>
+                    <Info className="mr-2 h-4 w-4" />
                     Информация
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onOpenSettings}>

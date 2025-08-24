@@ -32,6 +32,7 @@ import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestor
 import { ForwardMessageDialog } from './forward-message-dialog';
 import { useRouter } from 'next/navigation';
 import { ChatSettings } from './chat/chat-settings';
+import { ContactInfoSheet } from './chat/contact-info-sheet';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -56,6 +57,7 @@ export function ChatView({
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
   const [isChatSettingsOpen, setIsChatSettingsOpen] = useState(false);
+  const [isContactInfoOpen, setIsContactInfoOpen] = useState(false);
   const [chatBackground, setChatBackground] = useState('');
 
   const router = useRouter();
@@ -233,6 +235,7 @@ export function ChatView({
         onClearChat={() => setIsClearingChat(true)}
         onInitiateCall={handleInitiateCall}
         onOpenSettings={() => setIsChatSettingsOpen(true)}
+        onOpenContactInfo={() => setIsContactInfoOpen(true)}
       />
       <ChatMessages
         messages={messages}
@@ -254,6 +257,12 @@ export function ChatView({
         onOpenChange={setIsChatSettingsOpen}
         onBackgroundChange={handleBackgroundChange}
         currentBackground={chatBackground}
+      />
+
+      <ContactInfoSheet
+        isOpen={isContactInfoOpen}
+        onOpenChange={setIsContactInfoOpen}
+        user={chatPartner}
       />
 
       <Dialog open={!!editingMessage} onOpenChange={() => setEditingMessage(null)}>

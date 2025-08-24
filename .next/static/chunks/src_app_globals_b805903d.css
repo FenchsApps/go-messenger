@@ -699,6 +699,10 @@ body {
   height: 2.25rem;
 }
 
+.h-\[100svh\] {
+  height: 100svh;
+}
+
 .h-\[1px\] {
   height: 1px;
 }
@@ -731,7 +735,7 @@ body {
   height: 100vh;
 }
 
-.h-svh, .h-\[100svh\] {
+.h-svh {
   height: 100svh;
 }
 
@@ -839,6 +843,10 @@ body {
   width: 1.5rem;
 }
 
+.w-64 {
+  width: 16rem;
+}
+
 .w-7 {
   width: 1.75rem;
 }
@@ -873,10 +881,6 @@ body {
 
 .w-screen {
   width: 100vw;
-}
-
-.w-64 {
-  width: 16rem;
 }
 
 .min-w-0 {

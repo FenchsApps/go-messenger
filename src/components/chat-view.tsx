@@ -46,8 +46,6 @@ interface ChatViewProps {
 declare global {
     interface Window {
         Android?: {
-            showNewMessageNotification(senderName: string, messageText: string, senderAvatar: string): void;
-            showCallNotification(callerName: string, callerAvatar: string): void;
         };
     }
 }
@@ -112,16 +110,6 @@ export function ChatView({
         .map(change => change.doc.data() as Message)
         .filter(msg => msg.senderId !== currentUser.id && !msg.read);
       
-      if (newUnreadMessages.length > 0) {
-        const lastMessage = newUnreadMessages[newUnreadMessages.length - 1];
-        const sender = allUsers.find(u => u.id === lastMessage.senderId);
-
-        if (sender && window.Android?.showNewMessageNotification) {
-            const notificationText = lastMessage.stickerId ? 'Отправил(а) стикер' : lastMessage.gifUrl ? 'Отправил(а) GIF' : lastMessage.text;
-            window.Android.showNewMessageNotification(sender.name, notificationText, sender.avatar);
-        }
-      }
-
       setMessages(newMessages);
 
       if (isWindowFocused) {
@@ -148,10 +136,6 @@ export function ChatView({
                  setActiveCallId(callDoc.id);
                  setIsReceivingCall(true);
                  setIsCalling(true);
-                 
-                 if (window.Android?.showCallNotification) {
-                    window.Android.showCallNotification(caller.name, caller.avatar);
-                 }
              }
          }
      });

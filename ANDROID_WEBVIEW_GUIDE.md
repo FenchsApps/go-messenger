@@ -1,6 +1,6 @@
 # Руководство по созданию Android-приложения с WebView
 
-Это руководство поможет вам "обернуть" ваш веб-сайт (Go Messenger) в простое Android-приложение с помощью `WebView`, а также настроить нативные уведомления о новых сообщениях и корректно запрашивать разрешения на доступ к камере и микрофону.
+Это руководство поможет вам "обернуть" ваш веб-сайт (Go Messenger) в простое Android-приложение с помощью `WebView`, а также корректно запрашивать разрешения на доступ к камере и микрофону.
 
 ## Необходимые инструменты
 
@@ -49,7 +49,7 @@
 
 ## Шаг 3: Настройка разрешений в манифесте
 
-Чтобы ваше приложение могло выходить в интернет, отправлять уведомления и использовать камеру/микрофон, ему нужны соответствующие разрешения.
+Чтобы ваше приложение могло выходить в интернет и использовать камеру/микрофон, ему нужны соответствующие разрешения.
 
 1.  Откройте `app > manifests > AndroidManifest.xml`.
 2.  Добавьте следующие разрешения прямо перед тегом `<application>`:
@@ -63,9 +63,6 @@
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
 <!-- Это разрешение нужно, чтобы изменять настройки звука (например, включать громкую связь) -->
 <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-
-<!-- Разрешение для отправки уведомлений (необходимо для Android 13 и выше) -->
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 ```
 3. Убедитесь, что ваш тег `<application>` включает `android:usesCleartextTraffic="true"`, чтобы избежать проблем с загрузкой ресурсов на некоторых версиях Android.
 
@@ -86,7 +83,6 @@
         android:exported="true">
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
-
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
     </activity>
@@ -95,7 +91,7 @@
 
 ## Шаг 4: Настройка MainActivity и WebView
 
-Теперь самое главное — напишем код, который загрузит ваш сайт, настроит `WebView`, создаст "мост" между JavaScript и Kotlin, а также запросит все необходимые разрешения при запуске.
+Теперь напишем код, который загрузит ваш сайт, настроит `WebView` и запросит все необходимые разрешения при запуске.
 
 1.  Откройте `app > java > com.example.gomessenger > MainActivity.kt`. (Путь может немного отличаться, если вы указали другой package name).
 2.  Замените содержимое этого файла на следующий код:
@@ -104,13 +100,8 @@
 package com.example.gomessenger // <-- УБЕДИТЕСЬ, ЧТО ВАШ PACKAGE NAME ПРАВИЛЬНЫЙ!
 
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
-import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -119,14 +110,10 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private val NOTIFICATION_CHANNEL_ID = "new_message_channel"
-    private var notificationIdCounter = 1
 
     // --- ОБРАБОТЧИК ЗАПРОСА НЕСКОЛЬКИХ РАЗРЕШЕНИЙ ---
     private val requestMultiplePermissionsLauncher =
@@ -147,8 +134,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Создаем канал уведомлений и запрашиваем все разрешения при запуске
-        createNotificationChannel()
+        // Запрашиваем все разрешения при запуске
         askForPermissions()
 
         webView = findViewById(R.id.webView)
@@ -161,9 +147,6 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = false
             setAppCacheEnabled(false)
         }
-
-        // --- JavaScript Interface для уведомлений ---
-        webView.addJavascriptInterface(WebAppInterface(this), "Android")
 
         webView.webViewClient = WebViewClient()
 
@@ -197,59 +180,6 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(webUrl)
     }
 
-    // --- Класс для связи JavaScript и Kotlin ---
-    inner class WebAppInterface(private val mContext: Context) {
-        @JavascriptInterface
-        fun showNewMessageNotification(senderName: String, messageText: String, senderAvatar: String) {
-            if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                return
-            }
-            val builder = NotificationCompat.Builder(mContext, NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setContentTitle(senderName)
-                .setContentText(messageText)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-
-            with(NotificationManagerCompat.from(mContext)) {
-                notify(notificationIdCounter++, builder.build())
-            }
-        }
-
-        @JavascriptInterface
-        fun showCallNotification(callerName: String, callerAvatar: String) {
-            if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                return
-            }
-            val builder = NotificationCompat.Builder(mContext, NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setContentTitle("Входящий звонок")
-                .setContentText("$callerName звонит вам")
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setAutoCancel(true)
-
-            with(NotificationManagerCompat.from(mContext)) {
-                notify(notificationIdCounter++, builder.build())
-            }
-        }
-    }
-
-    // --- Создание канала для уведомлений ---
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Новые сообщения и звонки"
-            val descriptionText = "Уведомления о новых сообщениях и звонках"
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
-                description = descriptionText
-            }
-            val notificationManager: NotificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
-    }
-
     // --- Запрос всех необходимых разрешений ---
     private fun askForPermissions() {
         val permissionsToRequest = mutableListOf<String>()
@@ -259,11 +189,6 @@ class MainActivity : AppCompatActivity() {
         }
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
         }
 
         if (permissionsToRequest.isNotEmpty()) {
@@ -276,14 +201,13 @@ class MainActivity : AppCompatActivity() {
 **Важно**:
 1.  Не забудьте заменить `"https://your-deployed-app-url.com"` на реальный URL вашего мессенджера.
 2.  `onPermissionRequest` в `WebChromeClient` очень важен. Без него ваш сайт внутри `WebView` не сможет запросить доступ к камере или микрофону.
-3.  Код уведомлений использует стандартную иконку `ic_launcher_foreground`. Вы можете заменить её на свою.
 
 ## Шаг 5: Решение ошибки "Unresolved reference: R"
 
 Если Android Studio подсвечивает `R` красным цветом и пишет "Unresolved reference", попробуйте следующие шаги:
 
 1.  **Проверьте package name:** Убедитесь, что `package com.example.gomessenger` вверху файла `MainActivity.kt` **в точности** совпадает с тем, что вы указали при создании проекта.
-2.  **Добавьте импорт:** Убедитесь, что строка `import com.example.gomessenger.R` присутствует. Если у вас другой package name, исправьте этот импорт.
+2.  **Добавьте импорт:** Android Studio обычно добавляет импорт `R` автоматически, но если этого не произошло, добавьте `import com.example.gomessenger.R` (заменив `com.example.gomessenger` на ваш package name).
 3.  **Очистка и пересборка проекта:** Это самый частый способ решения проблемы. В верхнем меню Android Studio выберите **Build -> Clean Project**, а после завершения очистки выберите **Build -> Rebuild Project**.
 
 ## Шаг 6: Сборка APK

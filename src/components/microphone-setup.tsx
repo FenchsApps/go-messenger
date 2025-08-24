@@ -32,8 +32,26 @@ export function MicrophoneSetup() {
         audioContextRef.current = null;
     }
      analyserRef.current = null;
-     setStatus('idle');
   };
+
+  const populateAudioDevices = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+       console.log("enumerateDevices() not supported.");
+       return;
+    }
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
+        setAudioDevices(audioInputDevices);
+
+        if (audioInputDevices.length === 0) {
+            setStatus('no-mics');
+            setError("Микрофоны не найдены. Пожалуйста, подключите микрофон и попробуйте снова.");
+        }
+    } catch(err) {
+        console.error("Error enumerating devices:", err);
+    }
+  }
 
   const getMicrophone = async (deviceId: string = 'default') => {
     setStatus('pending');
@@ -60,6 +78,9 @@ export function MicrophoneSetup() {
       analyserRef.current = analyser;
 
       setStatus('success');
+      // Populate devices only after getting permission
+      await populateAudioDevices();
+
     } catch (err) {
       setStatus('error');
       if (err instanceof Error) {
@@ -76,36 +97,11 @@ export function MicrophoneSetup() {
     }
   };
 
-  const getAudioDevices = async () => {
-     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-        setStatus('no-mics');
-        setError("Не удалось получить список микрофонов. Ваш браузер может не поддерживать эту функцию.");
-        return;
-    }
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
-    
-    if (audioInputDevices.length === 0) {
-        setStatus('no-mics');
-        setError("Микрофоны не найдены. Пожалуйста, подключите микрофон и попробуйте снова.");
-    } else {
-        setAudioDevices(audioInputDevices);
-        const savedDeviceId = localStorage.getItem('selectedMicId');
-        if (savedDeviceId && audioInputDevices.some(d => d.deviceId === savedDeviceId)) {
-            setSelectedDeviceId(savedDeviceId);
-            getMicrophone(savedDeviceId);
-        } else {
-            getMicrophone();
-        }
-    }
-  }
-
-
   useEffect(() => {
-    // Automatically try to get mic on component mount
-    getAudioDevices();
-
-    // Cleanup on unmount
+    const savedDeviceId = localStorage.getItem('selectedMicId') || 'default';
+    setSelectedDeviceId(savedDeviceId);
+    getMicrophone(savedDeviceId);
+    
     return () => {
       cleanup();
     };
@@ -176,15 +172,15 @@ export function MicrophoneSetup() {
 
        <div className="space-y-2">
             <Label htmlFor="mic-select">Выберите микрофон</Label>
-            <Select onValueChange={handleDeviceChange} value={selectedDeviceId} disabled={audioDevices.length === 0}>
+            <Select onValueChange={handleDeviceChange} value={selectedDeviceId} disabled={status !== 'success' || audioDevices.length === 0}>
                 <SelectTrigger id="mic-select">
                     <SelectValue placeholder="Выберите устройство..." />
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="default">Микрофон по умолчанию</SelectItem>
-                    {audioDevices.filter(d => d.deviceId).map(device => (
+                    {audioDevices.filter(d => d.deviceId).map((device, index) => (
                         <SelectItem key={device.deviceId} value={device.deviceId}>
-                            {device.label || `Микрофон ${audioDevices.indexOf(device) + 1}`}
+                            {device.label || `Микрофон ${index + 1}`}
                         </SelectItem>
                     ))}
                 </SelectContent>

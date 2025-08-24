@@ -359,7 +359,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             </Avatar>
             <h2 className="text-2xl font-bold mt-4">{chatPartner.name}</h2>
             <p className="text-white/80">
-              {callStatus === 'ringing' ? 'Набор номера...' : 'Соединение...'}
+              {callStatus === 'ringing' ? 'Набор номера...' : ''}
               {callStatus === 'initializing' ? 'Инициализация...' : ''}
               {callStatus === 'connecting' ? 'Соединение...' : ''}
             </p>
@@ -383,3 +383,5 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     </div>
   );
 }
+
+    

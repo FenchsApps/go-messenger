@@ -52,15 +52,18 @@ export function CallView({
     isCleanedUpRef.current = true;
 
     console.log('Cleaning up call resources...');
-    iceCandidateQueueRef.current = [];
+    
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
     }
     if (pcRef.current) {
+        // Remove all event listeners to prevent zombie listeners
         pcRef.current.onicecandidate = null;
         pcRef.current.ontrack = null;
         pcRef.current.onconnectionstatechange = null;
+        pcRef.current.onsignalingstatechange = null;
+
         if (pcRef.current.signalingState !== 'closed') {
            pcRef.current.close();
         }
@@ -69,6 +72,7 @@ export function CallView({
      if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null;
     }
+    iceCandidateQueueRef.current = [];
   }, []);
 
   const handleEndCall = useCallback(async () => {
@@ -85,14 +89,12 @@ export function CallView({
         
         let stream: MediaStream;
         try {
-            // First, try with the specific micId
             stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { deviceId: micId ? { exact: micId } : undefined }, 
                 video: false 
             });
         } catch (error) {
             console.warn("Could not get specific mic, trying default", error);
-            // If that fails, try with any available audio input
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             } catch (getUserMediaError) {
@@ -103,17 +105,14 @@ export function CallView({
             }
         }
         
-        // Only proceed if we have a stream
         localStreamRef.current = stream;
-
-        // Now create the peer connection
         pcRef.current = new RTCPeerConnection(servers);
+        if (!pcRef.current) return; // Guard against race condition on cleanup
 
         stream.getTracks().forEach(track => {
             pcRef.current?.addTrack(track, stream);
         });
 
-        // Add a null check here to prevent race conditions on unmount
         if (!pcRef.current) return;
 
         pcRef.current.onicecandidate = event => {
@@ -139,12 +138,8 @@ export function CallView({
             }
         };
 
-        // If we are the caller, create an offer
         if (!isReceivingCall && callId && pcRef.current) {
-             const offerOptions = {
-                offerToReceiveAudio: true,
-                offerToReceiveVideo: false,
-            };
+            const offerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: false };
             const offer = await pcRef.current.createOffer(offerOptions);
             await pcRef.current.setLocalDescription(offer);
             await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
@@ -172,6 +167,12 @@ export function CallView({
                 if (data.sdp) {
                     const sdp = new RTCSessionDescription(data.sdp);
                     try {
+                        if (sdp.type === 'offer' && pcRef.current.signalingState !== 'stable') {
+                            console.log('Ignoring offer in non-stable state:', pcRef.current.signalingState);
+                            // Optional: Rollback logic if needed
+                            continue;
+                        }
+
                         if (sdp.type === 'offer') {
                              await pcRef.current.setRemoteDescription(sdp);
                              if (isReceivingCall) {
@@ -181,8 +182,11 @@ export function CallView({
                              }
                         } else if (sdp.type === 'answer' && pcRef.current.signalingState === 'have-local-offer') {
                             await pcRef.current.setRemoteDescription(sdp);
+                        } else if (sdp.type === 'answer') {
+                           console.log('Ignoring answer in wrong state:', pcRef.current.signalingState);
+                           continue;
                         }
-                        // Process any queued candidates
+
                         iceCandidateQueueRef.current.forEach(candidate => pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)));
                         iceCandidateQueueRef.current = [];
                     } catch (e) {
@@ -193,7 +197,6 @@ export function CallView({
                         if (pcRef.current.remoteDescription) {
                             await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
                         } else {
-                            // Queue the candidate if remote description is not set yet
                             iceCandidateQueueRef.current.push(data.candidate);
                         }
                     } catch (e) {
@@ -224,9 +227,8 @@ export function CallView({
   const handleAcceptCall = async () => {
     if (!callId) return;
     setCallStatus('connecting');
-    // The offer is handled by the onSnapshot listener.
-    // Here we just update the call status.
     await updateCallStatus(callId, 'active');
+    // The answer is now created automatically when the offer is received in onSnapshot.
   };
 
   const handleDeclineCall = async () => {
@@ -305,5 +307,3 @@ export function CallView({
     </div>
   );
 }
-
-    

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useTransition } from 'react';
@@ -8,19 +7,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
-  DialogClose
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Settings, Moon, Sun, Monitor, CaseSensitive, User as UserIcon, Loader2 } from 'lucide-react';
+import { Settings, Moon, Sun, Monitor, CaseSensitive, User as UserIcon, Loader2, Mic } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
 import type { User } from '@/lib/types';
 import { updateUserProfile } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
+import { MicrophoneSetup } from './microphone-setup';
+import { Separator } from './ui/separator';
 
 interface SettingsDialogProps {
     user: User;
@@ -35,10 +34,11 @@ export function SettingsDialog({ user }: SettingsDialogProps) {
 
   const [name, setName] = useState(user.name);
   const [description, setDescription] = useState(user.description || '');
-  const [isPending, startTransition] = useTransition();
+  const [isProfilePending, startProfileTransition] = useTransition();
+  const [isMicSetupOpen, setIsMicSetupOpen] = useState(false);
 
   const handleSaveProfile = () => {
-    startTransition(async () => {
+    startProfileTransition(async () => {
       const result = await updateUserProfile(user.id, name, description);
       if (result.error) {
         toast({ title: "Ошибка", description: result.error, variant: 'destructive' });
@@ -67,17 +67,37 @@ export function SettingsDialog({ user }: SettingsDialogProps) {
             <Label className="font-semibold flex items-center gap-2"><UserIcon className="h-4 w-4"/>Профиль</Label>
              <div className="grid gap-2">
               <Label htmlFor="name">Имя</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} disabled={isPending} />
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} disabled={isProfilePending} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description">Описание</Label>
-              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Расскажите о себе..." disabled={isPending}/>
+              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Расскажите о себе..." disabled={isProfilePending}/>
             </div>
-            <Button onClick={handleSaveProfile} disabled={isPending}>
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button onClick={handleSaveProfile} disabled={isProfilePending}>
+              {isProfilePending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Сохранить профиль
             </Button>
           </div>
+
+          <Separator />
+
+          {/* Device Settings */}
+          <div className="space-y-3">
+             <Label className="font-semibold flex items-center gap-2"><Mic className="h-4 w-4"/>Устройства</Label>
+             <Dialog open={isMicSetupOpen} onOpenChange={setIsMicSetupOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full">Проверить микрофон</Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Настройка микрофона</DialogTitle>
+                    </DialogHeader>
+                    <MicrophoneSetup />
+                </DialogContent>
+             </Dialog>
+          </div>
+
+          <Separator />
 
           <div className="grid gap-3">
             <Label className="font-semibold">Тема</Label>

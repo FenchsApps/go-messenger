@@ -52,7 +52,7 @@
 
 ## Шаг 2: Создание макета activity_main.xml
 
-Это ключевой шаг, который отсутствовал ранее. Вам нужно создать файл макета, который будет содержать `WebView`.
+Этот шаг нужен для отображения вашего веб-приложения внутри Android-приложения.
 
 1.  В Android Studio в дереве проекта перейдите в `app/src/main/res/layout`.
 2.  Щелкните правой кнопкой мыши по папке `layout` и выберите **New -> XML -> Layout XML File**.
@@ -73,7 +73,7 @@
 
 ## Шаг 3: Настройка `AndroidManifest.xml`
 
-Откройте `app/manifests/AndroidManifest.xml` и внесите следующие изменения:
+Откройте `app/src/main/manifests/AndroidManifest.xml` и внесите следующие изменения:
 
 1.  **Добавьте разрешения:**
     ```xml
@@ -83,7 +83,15 @@
 2.  **Добавьте сервис для обработки уведомлений** внутри тега `<application>`:
     ```xml
     <application ...>
-        <activity ...>...</activity>
+        <!-- Ваша MainActivity должна иметь такой intent-filter, чтобы ее можно было запустить -->
+        <activity 
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <!-- Сервис для обработки уведомлений в фоновом режиме -->
         <service
@@ -99,7 +107,9 @@
 
 ---
 
-## Шаг 4: Создание сервиса для уведомлений
+## Шаг 4: Создание сервиса для уведомлений (`MyFirebaseMessagingService.kt`)
+
+Этот сервис будет принимать и отображать push-уведомления.
 
 1.  В Android Studio, в папке `app/java/com.example.gomessenger`, создайте новый файл Kotlin с именем `MyFirebaseMessagingService.kt`.
 2.  Вставьте в него следующий код:
@@ -117,6 +127,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import java.util.concurrent.atomic.AtomicInteger
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -124,25 +135,36 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         Log.d(TAG, "From: ${remoteMessage.from}")
 
         // Проверяем, есть ли в уведомлении данные
-        remoteMessage.notification?.let {
-            Log.d(TAG, "Message Notification Body: ${it.body}")
-            sendNotification(it.title, it.body)
+        remoteMessage.notification?.let { notification ->
+            Log.d(TAG, "Message Notification Body: ${notification.body}")
+            // Получаем данные, которые мы отправили из Cloud Function
+            val chatPartnerId = remoteMessage.data["chatPartnerId"]
+            sendNotification(notification.title, notification.body, chatPartnerId)
         }
     }
 
     override fun onNewToken(token: String) {
         Log.d(TAG, "Refreshed token: $token")
         // Здесь мы должны отправить токен на наш веб-сервер.
-        // Мы сделаем это через JavaScript Interface в WebView.
+        // MainActivity будет запрашивать его и отправлять через JavascriptInterface.
         // Сохраняем токен, чтобы MainActivity мог его забрать.
         getSharedPreferences("_", MODE_PRIVATE).edit().putString("fcm_token", token).apply()
     }
 
-    private fun sendNotification(title: String?, messageBody: String?) {
-        val intent = Intent(this, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent,
-            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE)
+    private fun sendNotification(title: String?, messageBody: String?, chatPartnerId: String?) {
+        // Интент, который откроется при нажатии на уведомление
+        val intent = Intent(this, MainActivity::class.java).apply {
+            // Добавляем доп. данные, чтобы знать, какой чат открыть
+            putExtra("chatPartnerId", chatPartnerId)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            chatPartnerId?.hashCode() ?: 0, // Уникальный requestCode для каждого чата
+            intent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
         val channelId = "fcm_default_channel"
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
@@ -151,22 +173,30 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             .setContentText(messageBody)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // Для Android 8.0 и выше требуется Notification Channel
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId,
+            val channel = NotificationChannel(
+                channelId,
                 "Уведомления о сообщениях",
-                NotificationManager.IMPORTANCE_DEFAULT)
+                NotificationManager.IMPORTANCE_HIGH
+            )
             notificationManager.createNotificationChannel(channel)
         }
-
-        notificationManager.notify(0, notificationBuilder.build())
+        
+        // Используем уникальный ID для каждого уведомления из одного чата,
+        // чтобы они обновлялись, а не создавались новые
+        val notificationId = chatPartnerId?.hashCode() ?: NotificationId.incrementAndGet()
+        notificationManager.notify(notificationId, notificationBuilder.build())
     }
 
     companion object {
         private const val TAG = "MyFirebaseMsgService"
+        // Генератор уникальных ID для уведомлений без chatPartnerId
+        private val NotificationId = AtomicInteger(0)
     }
 }
 ```
@@ -175,7 +205,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
 ## Шаг 5: Обновление `MainActivity.kt`
 
-Теперь нам нужно связать WebView с нативным кодом, чтобы передать FCM токен в наше веб-приложение.
+Это главный экран вашего приложения. Он будет содержать `WebView` и логику для связи с веб-частью.
 
 1.  Откройте `MainActivity.kt` и замените его содержимое на следующий код:
 
@@ -184,11 +214,13 @@ package com.example.gomessenger // <-- УБЕДИТЕСЬ, ЧТО ВАШ PACKAGE
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
@@ -201,7 +233,8 @@ import com.google.firebase.messaging.FirebaseMessaging
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private val webUrl = "https://your-deployed-app-url.com" // <-- ВАЖНО! ЗАМЕНИТЕ URL
+    // ВАЖНО! ЗАМЕНИТЕ URL НА ВАШ РЕАЛЬНЫЙ URL
+    private var webUrl = "https://your-deployed-app-url.com"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -214,16 +247,19 @@ class MainActivity : AppCompatActivity() {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
+            // Для отладки в Chrome DevTools (опционально)
+            WebView.setWebContentsDebuggingEnabled(true)
         }
 
         // Добавляем JavaScript Interface, чтобы веб-страница могла вызывать Kotlin-код
         webView.addJavascriptInterface(WebAppInterface(), "Android")
+        webView.webChromeClient = WebChromeClient() // Нужен для работы console.log в WebView
 
         webView.webViewClient = object : WebViewClient() {
             // Эта функция будет вызвана после полной загрузки страницы
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                // Запрашиваем FCM токен и передаем его в WebView
+                // Запрашиваем FCM токен и передаем его в WebView после загрузки страницы
                 getAndSendFcmToken()
             }
         }
@@ -239,12 +275,34 @@ class MainActivity : AppCompatActivity() {
             }
         })
         
-        // Загружаем URL
-        webView.loadUrl(webUrl)
+        // Загружаем URL, который пришел из уведомления, или базовый
+        val targetUrl = getUrlFromIntent(intent)
+        webView.loadUrl(targetUrl)
         
         // Запрос разрешения на уведомления для Android 13+
         askNotificationPermission()
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Вызывается, когда Activity уже запущена и в нее приходит новый Intent (например, по клику на уведомление)
+        val targetUrl = getUrlFromIntent(intent)
+        webView.loadUrl(targetUrl)
+    }
+
+    private fun getUrlFromIntent(intent: Intent): String {
+        // Проверяем, есть ли в интенте ID собеседника
+        val chatPartnerId = intent.getStringExtra("chatPartnerId")
+        return if (!chatPartnerId.isNullOrEmpty()) {
+            Log.d("MainActivity", "Opening chat with partner ID: $chatPartnerId")
+            // Формируем URL для конкретного чата.
+            // Вам нужно будет реализовать такую логику в вашем веб-приложении (например, через query-параметры)
+            "$webUrl?chatWith=$chatPartnerId"
+        } else {
+            webUrl // URL по умолчанию
+        }
+    }
+
 
     private fun getAndSendFcmToken() {
         FirebaseMessaging.getInstance().token.addOnCompleteListener(OnCompleteListener { task ->
@@ -256,7 +314,8 @@ class MainActivity : AppCompatActivity() {
             Log.d("FCM", "Current token: $token")
 
             // Вызываем JavaScript-функцию в WebView, чтобы передать ей токен
-            webView.evaluateJavascript("javascript: window.receiveFcmToken('$token');", null)
+            // Убедитесь, что функция window.receiveFcmToken существует в вашем JS-коде
+            webView.evaluateJavascript("javascript: if(window.receiveFcmToken) { window.receiveFcmToken('$token'); }", null)
         })
     }
 
@@ -270,6 +329,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- Логика запроса разрешений ---
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { isGranted: Boolean ->
@@ -295,28 +355,34 @@ class MainActivity : AppCompatActivity() {
 
 ---
 
-## Шаг 6: Модификация веб-приложения (клиентская часть)
+## Шаг 6: Модификация веб-приложения
 
-Теперь вашему веб-приложению нужно "научиться" принимать токен от Android-приложения.
+Теперь вашему веб-приложению нужно "научиться" принимать токен от Android-приложения и открывать нужный чат по параметру в URL.
 
-1.  **Создайте функцию для приема токена:**
-    Добавьте в ваш JavaScript-код (например, в компонент, отвечающий за логин или в главный компонент) следующую логику:
+1.  **Прием токена:**
+    Я уже добавил необходимый код в `src/components/login.tsx`. Функция `window.receiveFcmToken` будет вызвана из Android-кода и сохранит токен в Firestore через `updateUserFcmToken` action.
+
+2.  **Открытие нужного чата (Deep Link):**
+    Вам нужно будет доработать логику навигации в вашем веб-приложении. В `MainActivity.kt` я формирую URL вида `https://your-app.com?chatWith=someUserId`.
+
+    В вашем главном компоненте (например, `src/components/messenger.tsx`) вам нужно будет добавить логику для чтения этого параметра при загрузке:
 
     ```javascript
-    // Эта функция будет вызвана из Android-кода
-    window.receiveFcmToken = function(token) {
-        console.log("Получен FCM токен от Android:", token);
-        // TODO: Сохраните этот токен в Firestore для текущего пользователя.
-        // Например: updateUserProfile( { fcmToken: token } );
-    };
+    // в src/components/messenger.tsx
+    useEffect(() => {
+      // Эта логика должна выполниться один раз при загрузке компонента
+      const urlParams = new URLSearchParams(window.location.search);
+      const chatWithId = urlParams.get('chatWith');
+      
+      if (chatWithId) {
+        // Проверяем, есть ли такой пользователь в списке
+        const userExists = users.some(user => user.id === chatWithId);
+        if (userExists) {
+          setSelectedUserId(chatWithId);
+        }
+      }
+    }, [users]); // Запускаем эффект, когда список пользователей загрузится
     ```
+    Вам нужно будет интегрировать этот `useEffect` в ваш компонент `Messenger.tsx`.
 
-2.  **Сохранение токена в Firestore:**
-    Вам нужно будет создать или обновить серверную функцию (например, в `actions.ts`), которая будет сохранять полученный `fcmToken` в документе пользователя в Firestore.
-
-    Когда вы захотите отправить уведомление, ваша серверная логика должна будет:
-    1.  Найти пользователя-получателя в Firestore.
-    2.  Взять его сохраненный `fcmToken`.
-    3.  Использовать Firebase Admin SDK (на вашем бэкенде, например, в Cloud Function), чтобы отправить сообщение на этот токен.
-
-Теперь, когда ваше веб-приложение отправит push-уведомление через Firebase, Android-устройство получит его, и сервис `MyFirebaseMessagingService` отобразит нативное уведомление.
+Теперь ваше Android-приложение будет получать нативные push-уведомления, и по клику на них будет открываться правильный чат в вашем веб-приложении, обернутом в WebView.

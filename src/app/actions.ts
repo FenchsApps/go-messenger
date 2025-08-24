@@ -202,10 +202,7 @@ export async function updateUserFcmToken(userId: string, fcmToken: string) {
     }
     try {
         const userRef = doc(db, 'users', userId);
-        await updateDoc(userRef, { fcmToken });
+        await updateDoc(userRef, { fcmToken: fcmToken });
         return { success: true };
     } catch (error) {
-        console.error("Error updating FCM token:", error);
-        return { error: "Failed to update FCM token." };
-    }
-}
+        console

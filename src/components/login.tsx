@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -10,13 +9,12 @@ import { Messenger } from './messenger';
 import { PigeonIcon } from './icons';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
-import { db, getInAppMessaging } from '@/lib/firebase';
-import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
 import { requestNotificationPermission } from '@/lib/utils';
 import { updateUserFcmToken } from '@/app/actions';
 
-const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
 
 // Augment the Window interface
 declare global {
@@ -25,12 +23,39 @@ declare global {
   }
 }
 
+const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
+
 export function Login() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  const setupFcmTokenReceiver = (user: User) => {
+    // This function will be called by the native Android code
+    window.receiveFcmToken = async (token: string) => {
+        console.log("FCM token received from Android:", token);
+        if (user.id) {
+            const result = await updateUserFcmToken(user.id, token);
+            if (result.error) {
+                console.error("Failed to save FCM token:", result.error);
+                toast({
+                    title: "Ошибка",
+                    description: "Не удалось сохранить токен для уведомлений.",
+                    variant: "destructive"
+                });
+            } else {
+                console.log("FCM token successfully saved for user:", user.id);
+            }
+        }
+    };
+     // For Android WebView, check if the native interface is available and request the token
+     if ((window as any).Android && typeof (window as any).Android.getFcmToken === 'function') {
+        (window as any).Android.getFcmToken();
+    }
+  };
+
 
   useEffect(() => {
     const checkLoggedInUser = async () => {
@@ -45,6 +70,7 @@ export function Login() {
             }, { merge: true });
             setCurrentUser(user);
             await requestNotificationPermission(); // Request permission after auto-login
+            setupFcmTokenReceiver(user);
           }
         }
       } catch (error) {
@@ -54,43 +80,14 @@ export function Login() {
       }
     };
     checkLoggedInUser();
-  }, []);
-
-  useEffect(() => {
-    // This effect runs when the user is logged in to initialize FIAM
-    if (currentUser) {
-        getInAppMessaging().then(fiam => {
-            if (fiam !== undefined) { // Check for undefined to confirm execution
-                console.log("Firebase In-App Messaging is active and listening for campaigns.");
-            }
-        });
-
-      // Define the function that Android will call for FCM
-      window.receiveFcmToken = async (token: string) => {
-        console.log("Получен FCM токен от Android:", token);
-        if (currentUser.id) {
-          const result = await updateUserFcmToken(currentUser.id, token);
-          if (result.error) {
-            console.error("Failed to save FCM token:", result.error);
-            toast({
-              title: "Ошибка",
-              description: "Не удалось сохранить токен для уведомлений.",
-              variant: "destructive"
-            });
-          } else {
-             console.log("FCM token successfully saved for user:", currentUser.id);
-          }
-        }
-      };
-    }
-    // Cleanup function when component unmounts or user logs out
+    
+    // Cleanup on unmount
     return () => {
-      if (window.receiveFcmToken) {
-        delete window.receiveFcmToken;
-      }
+        if (window.receiveFcmToken) {
+            delete window.receiveFcmToken;
+        }
     }
-  }, [currentUser, toast]);
-
+  }, []);
 
   const handleLogin = async () => {
     const user = allUsers.find(
@@ -117,6 +114,7 @@ export function Login() {
       setCookie(LOGGED_IN_USER_COOKIE, user.id, 7);
       setCurrentUser(user);
       await requestNotificationPermission(); // Request permission on manual login
+      setupFcmTokenReceiver(user);
     } else {
       toast({
         title: 'Ошибка входа',

@@ -11,6 +11,12 @@ exports.sendPushNotification = functions.firestore
     const recipientId = message.recipientId;
     const senderId = message.senderId;
 
+    // Не отправляем уведомление, если пользователь отправил сообщение сам себе
+    if (senderId === recipientId) {
+        console.log("Пользователь отправил сообщение сам себе, уведомление не требуется.");
+        return null;
+    }
+
     // 1. Получаем данные отправителя
     const senderDoc = await admin.firestore().collection("users").doc(senderId).get();
     if (!senderDoc.exists) {
@@ -50,11 +56,14 @@ exports.sendPushNotification = functions.firestore
         title: `Новое сообщение от ${senderName}`,
         body: notificationBody,
       },
-      // Вы можете добавить данные, если хотите обрабатывать их в приложении
-      // data: {
-      //   chatId: context.params.chatId,
-      //   senderId: senderId,
-      // }
+      // Добавляем данные для обработки в приложении
+      data: {
+        chatId: context.params.chatId,
+        senderId: senderId,
+        // Дополнительно можно передать ID получателя для открытия нужного чата
+        // Например, если в приложении логика открытия чата требует ID собеседника
+        chatPartnerId: senderId
+      }
     };
 
     // 4. Отправляем уведомление
@@ -65,10 +74,6 @@ exports.sendPushNotification = functions.firestore
     } catch (error) {
       console.error("Ошибка при отправке уведомления:", error);
       // Если токен недействителен, его можно удалить из профиля пользователя
-      if (error.code === 'messaging/registration-token-not-registered') {
+      if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-registration-token') {
         await admin.firestore().collection('users').doc(recipientId).update({ fcmToken: admin.firestore.FieldValue.delete() });
-        console.log(`Недействительный токен для ${recipientId} был удален.`);
-      }
-    }
-    return null;
-  });
+        console.

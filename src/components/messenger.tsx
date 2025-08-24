@@ -21,9 +21,22 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
+  const [localCurrentUser, setLocalCurrentUser] = useState<User>(currentUser);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+    // Listen for changes to the current user's document
+    const unsubCurrentUser = onSnapshot(doc(db, "users", currentUser.id), (doc) => {
+        if (doc.exists()) {
+            const data = doc.data();
+            setLocalCurrentUser(prev => ({
+                ...prev,
+                name: data.name,
+                description: data.description
+            }));
+        }
+    });
+
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData: User[] = [];
       snapshot.forEach((doc) => {
         if (doc.id !== currentUser.id) {
@@ -35,7 +48,8 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
             status: data.status,
             phone: data.phone,
             lastSeen: data.lastSeen?.toDate().getTime(),
-            isCreator: data.isCreator
+            isCreator: data.isCreator,
+            description: data.description,
           });
         }
       });
@@ -66,7 +80,8 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
-        unsubscribe();
+        unsubCurrentUser();
+        unsubUsers();
         window.removeEventListener('beforeunload', handleBeforeUnload);
     }
   }, [currentUser.id]);
@@ -108,6 +123,7 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
         >
           <ContactList
             users={users}
+            currentUser={localCurrentUser}
             selectedUserId={selectedUserId}
             onSelectUser={handleSelectUser}
             onLogout={onLogout}
@@ -123,7 +139,7 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
           {selectedUser ? (
             <ChatView
               key={selectedUserId}
-              currentUser={currentUser}
+              currentUser={localCurrentUser}
               chatPartner={selectedUser}
               isMobile={isMobile}
               onBack={handleBack}

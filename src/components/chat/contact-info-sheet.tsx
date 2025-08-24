@@ -58,7 +58,7 @@ export function ContactInfoSheet({ isOpen, onOpenChange, user }: ContactInfoShee
         <Separator />
         <div className="py-4 space-y-4">
             <InfoRow icon={UserIcon} label="Описание">
-                 <p className="text-sm text-muted-foreground italic">Пользователь еще не добавил описание.</p>
+                 <p className="text-sm text-muted-foreground italic">{user.description || 'Пользователь еще не добавил описание.'}</p>
             </InfoRow>
              <InfoRow icon={Phone} label="Номер телефона">
                  <p className="text-sm font-mono">{user.phone}</p>

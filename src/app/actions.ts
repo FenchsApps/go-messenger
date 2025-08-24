@@ -210,6 +210,23 @@ export async function updateUserFcmToken(userId: string, fcmToken: string) {
     }
 }
 
+export async function updateUserProfile(userId: string, name: string, description: string) {
+    if (!userId) return { error: "User ID is required." };
+    if (!name.trim()) return { error: "Name cannot be empty." };
+
+    try {
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, { 
+            name: name,
+            description: description 
+        });
+        return { success: true };
+    } catch(error) {
+        console.error("Error updating user profile:", error);
+        return { error: "Failed to update profile." };
+    }
+}
+
 
 // --- NEW CALL ACTIONS ---
 

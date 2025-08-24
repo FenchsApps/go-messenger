@@ -1,25 +1,52 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogClose
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Settings, Moon, Sun, Monitor, CaseSensitive } from 'lucide-react';
+import { Settings, Moon, Sun, Monitor, CaseSensitive, User as UserIcon, Loader2 } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
+import type { User } from '@/lib/types';
+import { updateUserProfile } from '@/app/actions';
+import { useToast } from '@/hooks/use-toast';
+import { Textarea } from './ui/textarea';
 
-export function SettingsDialog() {
+interface SettingsDialogProps {
+    user: User;
+}
+
+export function SettingsDialog({ user }: SettingsDialogProps) {
   const { 
     theme, setTheme, 
     textSize, setTextSize,
   } = useSettings();
+  const { toast } = useToast();
+
+  const [name, setName] = useState(user.name);
+  const [description, setDescription] = useState(user.description || '');
+  const [isPending, startTransition] = useTransition();
+
+  const handleSaveProfile = () => {
+    startTransition(async () => {
+      const result = await updateUserProfile(user.id, name, description);
+      if (result.error) {
+        toast({ title: "Ошибка", description: result.error, variant: 'destructive' });
+      } else {
+        toast({ title: "Успех", description: "Профиль успешно обновлен." });
+      }
+    });
+  };
 
   return (
     <Dialog>
@@ -29,11 +56,29 @@ export function SettingsDialog() {
           <span className="sr-only">Настройки</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Настройки</DialogTitle>
         </DialogHeader>
         <div className="grid gap-6 py-4">
+          
+          {/* Profile Settings */}
+          <div className="space-y-4">
+            <Label className="font-semibold flex items-center gap-2"><UserIcon className="h-4 w-4"/>Профиль</Label>
+             <div className="grid gap-2">
+              <Label htmlFor="name">Имя</Label>
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} disabled={isPending} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Описание</Label>
+              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Расскажите о себе..." disabled={isPending}/>
+            </div>
+            <Button onClick={handleSaveProfile} disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Сохранить профиль
+            </Button>
+          </div>
+
           <div className="grid gap-3">
             <Label className="font-semibold">Тема</Label>
             <RadioGroup

@@ -13,13 +13,14 @@ import { SettingsDialog } from './settings-dialog';
 
 interface ContactListProps {
   users: User[];
+  currentUser: User;
   selectedUserId: string | null;
   onSelectUser: (userId: string) => void;
   onLogout: () => void;
   isLoading: boolean;
 }
 
-export function ContactList({ users, selectedUserId, onSelectUser, onLogout, isLoading }: ContactListProps) {
+export function ContactList({ users, currentUser, selectedUserId, onSelectUser, onLogout, isLoading }: ContactListProps) {
   return (
     <div className="flex flex-col h-full bg-card border-r">
       <div className="p-4 border-b">
@@ -28,7 +29,7 @@ export function ContactList({ users, selectedUserId, onSelectUser, onLogout, isL
                 <PigeonIcon className="h-8 w-8 text-primary" />
                 <h1 className="text-2xl font-bold">Go Messenger</h1>
             </div>
-            <SettingsDialog />
+            <SettingsDialog user={currentUser} />
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">

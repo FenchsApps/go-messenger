@@ -8,6 +8,7 @@ export type User = {
   password?: string;
   lastSeen?: number;
   isCreator?: boolean;
+  description?: string;
 };
 
 export type Message = {

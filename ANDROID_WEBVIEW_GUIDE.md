@@ -21,6 +21,29 @@
 4.  **Скачайте `google-services.json`**: Нажмите кнопку, чтобы скачать файл конфигурации.
 5.  **Переместите `google-services.json`**: В Android Studio переключитесь на вид **Project** (вместо Android) и переместите скачанный файл в папку `app/`.
 6.  **Добавьте SDK Firebase**: Android Studio может предложить сделать это автоматически. Если нет, откройте ваши `build.gradle.kts` файлы и убедитесь, что нужные зависимости добавлены.
+
+    **ВАЖНО: Настройте репозитории!**
+    Откройте файл `settings.gradle.kts` (в корне вашего Android проекта) и убедитесь, что репозиторий `google()` присутствует в блоке `pluginManagement` и `dependencyResolutionManagement`. Это критически важно, чтобы Gradle мог найти библиотеки Firebase.
+
+    ```kotlin
+    // settings.gradle.kts
+    
+    pluginManagement {
+        repositories {
+            google() // <-- УБЕДИТЕСЬ, ЧТО ЭТА СТРОКА ЕСТЬ
+            mavenCentral()
+            gradlePluginPortal()
+        }
+    }
+    dependencyResolutionManagement {
+        repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+        repositories {
+            google() // <-- И ЗДЕСЬ ТОЖЕ
+            mavenCentral()
+        }
+    }
+    ```
+    
     *   В файле `build.gradle.kts` (уровень проекта) добавьте плагин:
         ```kotlin
         // Top-level build file

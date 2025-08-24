@@ -101,50 +101,6 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
     }
 }
 
-export async function sendVoiceMessage(formData: FormData) {
-    const audioBlob = formData.get('audio') as Blob | null;
-    const senderId = formData.get('senderId') as string;
-    const recipientId = formData.get('recipientId') as string;
-    const duration = Number(formData.get('duration'));
-
-    if (!audioBlob || !senderId || !recipientId) {
-      return { error: 'Invalid voice message data' };
-    }
-  
-    const chatId = getChatId(senderId, recipientId);
-    const audioId = doc(collection(db, 'dummy')).id; 
-    const storageRef = ref(storage, `voice_messages/${chatId}/${audioId}.webm`);
-  
-    try {
-      // Convert Blob to ArrayBuffer, then to Buffer for upload.
-      // This is the key step to correctly handle the file on the server.
-      const audioBuffer = await audioBlob.arrayBuffer();
-      const buffer = Buffer.from(audioBuffer);
-
-      // Upload the file to Firebase Storage with correct metadata
-      const uploadTask = await uploadBytes(storageRef, buffer, { 
-        contentType: audioBlob.type || 'audio/webm' 
-      });
-      const downloadURL = await getDownloadURL(uploadTask.ref);
-  
-      // Add the message metadata to Firestore
-      const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
-        senderId,
-        recipientId,
-        timestamp: serverTimestamp(),
-        type: 'audio',
-        audioUrl: downloadURL,
-        audioDuration: duration,
-        read: false,
-      });
-  
-      return { success: true, data: { id: docRef.id } };
-    } catch (error) {
-      console.error('Error sending voice message:', error);
-      return { error: 'Failed to send voice message' };
-    }
-}
-
 export async function searchGifs(query: string) {
   const apiKey = process.env.GIPHY_API_KEY;
   if (!apiKey) {

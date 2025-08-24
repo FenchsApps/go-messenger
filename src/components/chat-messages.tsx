@@ -9,7 +9,6 @@ import { MessageMenu } from './message-menu';
 import { stickers } from '@/lib/data';
 import { Check, CheckCheck } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
-import { VoiceMessagePlayer } from './chat/voice-message-player';
 
 
 interface ChatMessagesProps {
@@ -87,8 +86,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                   'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
                 },
                  message.type === 'sticker' && 'p-1 bg-transparent shadow-none',
-                 message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden shadow-none',
-                 message.type === 'audio' && 'p-2 w-full max-w-[280px]'
+                 message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden shadow-none'
               )}
             >
               {message.forwardedFrom && (
@@ -121,9 +119,6 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                     'text-lg': textSize === 'lg',
                   }
                   )}>{message.text}</p>
-              )}
-              {message.type === 'audio' && message.audioUrl && (
-                <VoiceMessagePlayer audioUrl={message.audioUrl} duration={message.audioDuration} />
               )}
               <div className={cn(
                   "flex items-center justify-end gap-1.5 text-xs text-muted-foreground/80 pt-1",

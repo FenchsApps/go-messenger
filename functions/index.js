@@ -45,8 +45,6 @@ exports.sendPushNotification = functions.firestore
         notificationBody = 'Стикер';
     } else if (message.type === 'gif') {
         notificationBody = 'GIF';
-    } else if (message.type === 'audio') {
-        notificationBody = 'Голосовое сообщение';
     }
 
     const payload = {

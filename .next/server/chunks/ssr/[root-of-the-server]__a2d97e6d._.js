@@ -296,7 +296,7 @@ __turbopack_context__.s({
     "app": (()=>app),
     "auth": (()=>auth),
     "db": (()=>db),
-    "inAppMessaging": (()=>inAppMessaging),
+    "getInAppMessaging": (()=>getInAppMessaging),
     "storage": (()=>storage)
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$firebase$2f$app$2f$dist$2f$index$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$module__evaluation$3e$__ = __turbopack_context__.i("[project]/node_modules/firebase/app/dist/index.mjs [app-rsc] (ecmascript) <module evaluation>");
@@ -312,16 +312,13 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2
 ;
 ;
 // Your web app's Firebase configuration
-// IMPORTANT: Replace this with your own Firebase project configuration!
-// You can get this from the Firebase console:
-// Project settings > General > Your apps > Web app > Firebase SDK snippet > Config
 const firebaseConfig = {
     apiKey: "AIzaSyCJhbJ9Hx4ZzDneeSrPE-W1Hh7ifI1Ydxw",
     authDomain: "coo-messenger-dut4g.firebaseapp.com",
     projectId: "coo-messenger-dut4g",
     storageBucket: "coo-messenger-dut4g.appspot.com",
     messagingSenderId: "289105120218",
-    appId: "1:289105120218:web:0a828e96df9dc829edcee3"
+    appId: "1:289105120218:web:0a828e96df9cee3"
 };
 const app = !(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$app$2f$dist$2f$esm$2f$index$2e$esm2017$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$locals$3e$__["getApps"])().length ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$app$2f$dist$2f$esm$2f$index$2e$esm2017$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$locals$3e$__["initializeApp"])(firebaseConfig) : (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$app$2f$dist$2f$esm$2f$index$2e$esm2017$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$locals$3e$__["getApp"])();
 const db = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getFirestore"])(app);
@@ -335,8 +332,15 @@ try {
 } catch (e) {
     console.error("Firebase persistence error", e);
 }
-// For now, we are removing In-App-Messaging to fix the build.
-const inAppMessaging = undefined;
+// In-App Messaging is initialized automatically by the Firebase SDK.
+// We provide a wrapper function that can be called from client components
+// to ensure code depending on it runs, but it doesn't need to do anything.
+const getInAppMessaging = async ()=>{
+    if ("TURBOPACK compile-time falsy", 0) {
+        "TURBOPACK unreachable";
+    }
+    return Promise.resolve(null);
+};
 ;
 }}),
 "[project]/src/app/actions.ts [app-rsc] (ecmascript)": ((__turbopack_context__) => {

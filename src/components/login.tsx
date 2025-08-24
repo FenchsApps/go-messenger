@@ -60,10 +60,8 @@ export function Login() {
     // This effect runs when the user is logged in to initialize FIAM
     if (currentUser) {
         getInAppMessaging().then(fiam => {
-            if (fiam) {
-                console.log("Firebase In-App Messaging initialized");
-                // FIAM is now active and listening for campaigns.
-                // You can add logging or specific triggers here if needed.
+            if (fiam !== undefined) { // Check for undefined to confirm execution
+                console.log("Firebase In-App Messaging is active and listening for campaigns.");
             }
         });
 

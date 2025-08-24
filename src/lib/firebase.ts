@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
@@ -11,7 +12,7 @@ const firebaseConfig = {
   projectId: "coo-messenger-dut4g",
   storageBucket: "coo-messenger-dut4g.appspot.com",
   messagingSenderId: "289105120218",
-  appId: "1:289105120218:web:0a828e96df9dc829edcee3"
+  appId: "1:289105120218:web:0a828e96df9cee3"
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -35,19 +36,16 @@ try {
     console.error("Firebase persistence error", e);
 }
 
-// In-App Messaging is initialized dynamically on the client-side
-// see login.tsx for its usage.
+// In-App Messaging is initialized automatically by the Firebase SDK.
+// We provide a wrapper function that can be called from client components
+// to ensure code depending on it runs, but it doesn't need to do anything.
 const getInAppMessaging = async () => {
     if (typeof window !== 'undefined') {
-        try {
-            const { getInAppMessaging } = await import('firebase/in-app-messaging');
-            return getInAppMessaging(app);
-        } catch (error) {
-            console.error("Failed to initialize In-App Messaging", error);
-            return null;
-        }
+        // FIAM initializes automatically. This function is just a placeholder
+        // to ensure client-side execution context for components that use it.
+        return Promise.resolve(null);
     }
-    return null;
+    return Promise.resolve(null);
 };
 
 

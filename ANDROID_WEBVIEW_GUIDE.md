@@ -363,9 +363,9 @@ class MainActivity : AppCompatActivity() {
     Я уже добавил необходимый код в `src/components/login.tsx`. Функция `window.receiveFcmToken` будет вызвана из Android-кода и сохранит токен в Firestore через `updateUserFcmToken` action.
 
 2.  **Открытие нужного чата (Deep Link):**
-    Вам нужно будет доработать логику навигации в вашем веб-приложении. В `MainActivity.kt` я формирую URL вида `https://your-app.com?chatWith=someUserId`.
+    В `MainActivity.kt` я формирую URL вида `https://your-app.com?chatWith=someUserId`. Теперь вашему главному компоненту (`src/components/messenger.tsx`) нужно прочитать этот параметр.
 
-    В вашем главном компоненте (например, `src/components/messenger.tsx`) вам нужно будет добавить логику для чтения этого параметра при загрузке:
+    Добавьте следующий `useEffect` в ваш компонент `src/components/messenger.tsx`:
 
     ```javascript
     // в src/components/messenger.tsx

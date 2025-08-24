@@ -59,9 +59,7 @@ exports.sendPushNotification = functions.firestore
       // Добавляем данные для обработки в приложении
       data: {
         chatId: context.params.chatId,
-        senderId: senderId,
-        // Дополнительно можно передать ID получателя для открытия нужного чата
-        // Например, если в приложении логика открытия чата требует ID собеседника
+        // Передаем ID собеседника, чтобы приложение знало, какой чат открыть
         chatPartnerId: senderId
       }
     };
@@ -76,4 +74,7 @@ exports.sendPushNotification = functions.firestore
       // Если токен недействителен, его можно удалить из профиля пользователя
       if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-registration-token') {
         await admin.firestore().collection('users').doc(recipientId).update({ fcmToken: admin.firestore.FieldValue.delete() });
-        console.
+        console.log(`Удален недействительный токен для пользователя ${recipientId}`);
+      }
+    }
+  });

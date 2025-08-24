@@ -47,7 +47,10 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
       })
 
       setUsers(usersData);
-      if (usersData.length > 0) {
+      // Don't auto-select a user if a chat is being opened from a notification
+      const urlParams = new URLSearchParams(window.location.search);
+      const chatWithId = urlParams.get('chatWith');
+      if (!chatWithId && usersData.length > 0) {
         setSelectedUserId(currentSelectedId => currentSelectedId ?? usersData[0].id)
       }
       setIsLoading(false);
@@ -67,6 +70,22 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
         window.removeEventListener('beforeunload', handleBeforeUnload);
     }
   }, [currentUser.id]);
+
+  // Handle opening chat from notification
+  useEffect(() => {
+    if (users.length > 0) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const chatWithId = urlParams.get('chatWith');
+      if (chatWithId) {
+        const userExists = users.some(user => user.id === chatWithId);
+        if (userExists) {
+          setSelectedUserId(chatWithId);
+          // Optional: clear the query param from URL
+          // window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+    }
+  }, [users]);
   
   const selectedUser = users.find((user) => user.id === selectedUserId);
 

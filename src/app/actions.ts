@@ -116,7 +116,7 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
       const audioBuffer = Buffer.from(audioAsBase64, 'base64');
       const metadata = { contentType: 'audio/webm' };
       
-      // Upload the buffer to Firebase Storage
+      // Upload the buffer to Firebase Storage with metadata
       const uploadTask = await uploadBytes(storageRef, audioBuffer, metadata);
       const downloadURL = await getDownloadURL(uploadTask.ref);
   
@@ -285,3 +285,6 @@ export async function endCall(callId: string) {
      console.warn("endCall is deprecated and will be removed.");
     return { error: "Calling feature is disabled." };
 }
+
+
+    

@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '4mb', // Increase for voice messages
+      bodySizeLimit: '10mb',
     },
   },
   images: {
@@ -71,7 +71,7 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
       {
-        protocol: 'https' ,
+        protocol: 'https',
         hostname: 'media4.giphy.com',
         port: '',
         pathname: '/**',

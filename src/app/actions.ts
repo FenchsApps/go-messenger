@@ -1,4 +1,3 @@
-
 // @ts-nocheck
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
@@ -99,6 +98,38 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
     } catch (error) {
         console.error("Error sending GIF:", error);
         return { error: 'Failed to send GIF' };
+    }
+}
+
+export async function sendVoiceMessage(senderId: string, recipientId: string, audioAsDataUrl: string, duration: number) {
+    if (!senderId || !recipientId || !audioAsDataUrl) {
+      return { error: 'Invalid voice message data' };
+    }
+  
+    const chatId = getChatId(senderId, recipientId);
+    const id = doc(collection(db, 'chats')).id;
+    const storageRef = ref(storage, `chats/${chatId}/${id}.webm`);
+  
+    try {
+      // Upload the audio file
+      const uploadResult = await uploadString(storageRef, audioAsDataUrl, 'data_url');
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+  
+      // Save message to Firestore
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        senderId,
+        recipientId,
+        timestamp: serverTimestamp(),
+        type: 'audio',
+        audioUrl: downloadURL,
+        audioDuration: duration,
+        read: false,
+      });
+  
+      return { success: true, data: { id } };
+    } catch (error) {
+      console.error('Error sending voice message:', error);
+      return { error: 'Failed to send voice message' };
     }
 }
 

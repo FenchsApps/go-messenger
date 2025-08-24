@@ -1,10 +1,9 @@
-
 // @ts-nocheck
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-import { getInAppMessaging } from "firebase/in-app-messaging";
+// DO NOT import getInAppMessaging from the top level
 
 // Your web app's Firebase configuration
 // IMPORTANT: Replace this with your own Firebase project configuration!
@@ -26,9 +25,6 @@ const firebaseConfig = {
 
 };
 
-
-
-
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -37,7 +33,18 @@ const storage = getStorage(app);
 // Only initialize in the browser
 let inAppMessaging;
 if (typeof window !== 'undefined') {
-    inAppMessaging = getInAppMessaging(app);
+    // Dynamically import and initialize In-App Messaging
+    import('firebase/app').then(() => {
+        return import('firebase/in-app-messaging');
+    }).then(({ getInAppMessaging }) => {
+        try {
+            inAppMessaging = getInAppMessaging(app);
+        } catch (err) {
+            console.error("Failed to initialize In-App Messaging", err);
+        }
+    }).catch(err => {
+        console.error("Failed to load In-App Messaging module", err);
+    });
 }
 
 

@@ -3,6 +3,7 @@ import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { getInAppMessaging } from "firebase/in-app-messaging";
 
 // Your web app's Firebase configuration
 // IMPORTANT: Replace this with your own Firebase project configuration!
@@ -31,6 +32,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
+const inAppMessaging = getInAppMessaging(app);
 
 
 // This enables offline persistence. It's best to call this only once.
@@ -51,4 +53,4 @@ try {
 }
 
 
-export { app, db, auth, storage };
+export { app, db, auth, storage, inAppMessaging };

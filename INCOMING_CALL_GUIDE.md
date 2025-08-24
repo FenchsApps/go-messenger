@@ -95,6 +95,22 @@
 </resources>
 ```
 
+## Шаг 2.5: Добавление зависимости Firestore (ВАЖНО)
+
+Откройте файл `app/build.gradle.kts` и убедитесь, что у вас добавлена зависимость для Firestore. **Без этого следующий шаг не будет работать.**
+
+```kotlin
+dependencies {
+    // ... другие зависимости
+    implementation(platform("com.google.firebase:firebase-bom:33.1.1"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    // ДОБАВЬТЕ ЭТУ СТРОКУ, ЕСЛИ ЕЕ НЕТ
+    implementation("com.google.firebase:firebase-firestore-ktx") 
+}
+```
+После добавления этой строки, нажмите **Sync Now** в Android Studio.
+
+
 ## Шаг 3: Сервис для обработки сообщений (`CallNotificationService.kt`)
 
 Создайте новый Kotlin файл `CallNotificationService.kt`. Этот сервис будет отличать обычные сообщения от звонков.
@@ -411,3 +427,5 @@ override fun onCreate(savedInstanceState: Bundle?) {
 ```
 
 Теперь у вас есть полная система для отображения полноэкранных уведомлений о звонках.
+
+    

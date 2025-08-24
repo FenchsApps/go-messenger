@@ -1,5 +1,16 @@
 {
   "node": {
+    "608b696c67776a7d50b36162282f3f75350d607212": {
+      "workers": {
+        "app/page": {
+          "moduleId": "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/page": "action-browser"
+      }
+    },
     "78aa2447a300bdb474f91bdc8f096d1589fc2797dc": {
       "workers": {
         "app/page": {

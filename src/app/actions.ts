@@ -195,3 +195,17 @@ export async function clearChatHistory(chatId: string) {
         return { error: 'Failed to clear chat history.' };
     }
 }
+
+export async function updateUserFcmToken(userId: string, fcmToken: string) {
+    if (!userId || !fcmToken) {
+        return { error: "User ID and FCM Token are required." };
+    }
+    try {
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, { fcmToken });
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating FCM token:", error);
+        return { error: "Failed to update FCM token." };
+    }
+}

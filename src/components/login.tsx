@@ -14,8 +14,16 @@ import { db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
 import { requestNotificationPermission } from '@/lib/utils';
+import { updateUserFcmToken } from '@/app/actions';
 
 const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
+
+// Augment the Window interface
+declare global {
+  interface Window {
+    receiveFcmToken?: (token: string) => void;
+  }
+}
 
 export function Login() {
   const [phone, setPhone] = useState('');
@@ -47,6 +55,36 @@ export function Login() {
     };
     checkLoggedInUser();
   }, []);
+
+  useEffect(() => {
+    // This effect runs when the user is logged in
+    if (currentUser) {
+      // Define the function that Android will call
+      window.receiveFcmToken = async (token: string) => {
+        console.log("Получен FCM токен от Android:", token);
+        if (currentUser.id) {
+          const result = await updateUserFcmToken(currentUser.id, token);
+          if (result.error) {
+            console.error("Failed to save FCM token:", result.error);
+            toast({
+              title: "Ошибка",
+              description: "Не удалось сохранить токен для уведомлений.",
+              variant: "destructive"
+            });
+          } else {
+             console.log("FCM token successfully saved for user:", currentUser.id);
+          }
+        }
+      };
+    }
+    // Cleanup function when component unmounts or user logs out
+    return () => {
+      if (window.receiveFcmToken) {
+        delete window.receiveFcmToken;
+      }
+    }
+  }, [currentUser, toast]);
+
 
   const handleLogin = async () => {
     const user = allUsers.find(

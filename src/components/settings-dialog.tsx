@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Settings, Moon, Sun, Monitor, CaseSensitive, Mic } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { MicVisualizer } from './mic-visualizer';
 
 export function SettingsDialog() {
   const { 
@@ -24,24 +25,34 @@ export function SettingsDialog() {
   } = useSettings();
 
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
-    const getDevices = async () => {
-      try {
-        // Request permission
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
-        setAudioDevices(audioInputDevices);
-      } catch (err) {
-        console.error("Error enumerating audio devices:", err);
-      }
-    };
-    getDevices();
-  }, []);
+    // Only enumerate devices when the dialog is open to avoid unnecessary permission requests
+    if (isDialogOpen) {
+      const getDevices = async () => {
+        try {
+          // Request permission first to ensure we get device labels
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
+          setAudioDevices(audioInputDevices);
+
+          // If no mic is selected, or the selected one is gone, select the first available one
+          if ((!micId || !audioInputDevices.find(d => d.deviceId === micId)) && audioInputDevices.length > 0) {
+              setMicId(audioInputDevices[0].deviceId);
+          }
+        } catch (err) {
+          console.error("Error enumerating audio devices:", err);
+          setAudioDevices([]); // Clear list on error
+        }
+      };
+      getDevices();
+    }
+  }, [isDialogOpen, micId, setMicId]);
 
   return (
-    <Dialog>
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon">
           <Settings className="h-5 w-5" />
@@ -137,17 +148,22 @@ export function SettingsDialog() {
               Микрофон
             </Label>
             <Select value={micId} onValueChange={setMicId}>
-              <SelectTrigger id="mic-select">
+              <SelectTrigger id="mic-select" disabled={audioDevices.length === 0}>
                 <SelectValue placeholder="Выберите микрофон" />
               </SelectTrigger>
               <SelectContent>
-                {audioDevices.map(device => (
+                {audioDevices.length > 0 ? audioDevices.map(device => (
                   <SelectItem key={device.deviceId} value={device.deviceId}>
                     {device.label || `Микрофон ${audioDevices.indexOf(device) + 1}`}
                   </SelectItem>
-                ))}
+                )) : (
+                    <SelectItem value="no-devices" disabled>
+                        Микрофоны не найдены
+                    </SelectItem>
+                )}
               </SelectContent>
             </Select>
+            <MicVisualizer deviceId={micId} isOpen={isDialogOpen} />
           </div>
         </div>
       </DialogContent>

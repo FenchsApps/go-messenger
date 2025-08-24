@@ -22,7 +22,6 @@ const backgroundOptions = [
   { id: 'default', name: 'По умолчанию', class: 'chat-background' },
   { id: 'bg1', name: 'Горы', url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba' },
   { id: 'bg2', name: 'Абстракция', url: 'https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d' },
-  { id: 'bg3', name: 'Пляж', url: 'https://images.unsplash.com/photo-1507525428034-b723a996f6ea' },
   { id: 'bg4', name: 'Лес', url: 'https://images.unsplash.com/photo-1448375240586-882707db888b' },
   { id: 'bg5', name: 'Звезды', url: 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986' },
 ];

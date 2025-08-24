@@ -113,7 +113,7 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
   }
 
   return (
-    <main className="h-screen w-screen flex items-center justify-center p-0 md:p-4">
+    <main className="h-[100svh] w-screen flex items-center justify-center p-0 md:p-4">
       <div className="h-full w-full max-w-7xl md:rounded-2xl shadow-2xl flex overflow-hidden border">
         <div
           className={cn('w-full md:w-1/3 md:flex flex-col', {

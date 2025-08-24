@@ -108,8 +108,8 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
     }
   
     const chatId = getChatId(senderId, recipientId);
-    const id = doc(collection(db, 'chats')).id;
-    const storageRef = ref(storage, `chats/${chatId}/${id}.webm`);
+    const audioId = doc(collection(db, 'dummy')).id; // Generate a unique ID for the audio file
+    const storageRef = ref(storage, `chats/${chatId}/${audioId}.webm`);
   
     try {
       // Create a Blob from the ArrayBuffer, this is crucial for uploadBytes
@@ -311,5 +311,7 @@ export async function rejectCall(callId: string) {
 export async function endCall(callId: string) {
     return updateCallStatus(callId, 'ended');
 }
+
+    
 
     

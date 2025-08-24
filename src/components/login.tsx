@@ -27,7 +27,7 @@ declare global {
 
 const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
 // This key is safe to be exposed in the client-side code.
-const VAPID_KEY = "BA8S9zIN5xR_m8FkC6cK-5Bej8o2DSEMOs8eWfS-s8V6u5bW2kCUNhOt06DaxO3yAicY9h1voEYQe5lY4o-F01s";
+const VAPID_KEY = "BDx082Bltm_UXLQ22aNyzr-dAjLw4HkG7DcePAdyN8t2u52mChFYoEToPLjZvjEDJv-bS8aO5Ze_oJjU0uAFJ-I";
 
 export function Login() {
   const [phone, setPhone] = useState('');

@@ -3,7 +3,6 @@ import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-// DO NOT import getInAppMessaging from the top level
 
 // Your web app's Firebase configuration
 // IMPORTANT: Replace this with your own Firebase project configuration!
@@ -17,7 +16,7 @@ const firebaseConfig = {
 
   projectId: "coo-messenger-dut4g",
 
-  storageBucket: "coo-messenger-dut4g.firebasestorage.app",
+  storageBucket: "coo-messenger-dut4g.appspot.com",
 
   messagingSenderId: "289105120218",
 
@@ -30,40 +29,26 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// Only initialize in the browser
-let inAppMessaging;
-if (typeof window !== 'undefined') {
-    // Dynamically import and initialize In-App Messaging
-    import('firebase/app').then(() => {
-        return import('firebase/in-app-messaging');
-    }).then(({ getInAppMessaging }) => {
-        try {
-            inAppMessaging = getInAppMessaging(app);
-        } catch (err) {
-            console.error("Failed to initialize In-App Messaging", err);
-        }
-    }).catch(err => {
-        console.error("Failed to load In-App Messaging module", err);
-    });
-}
-
-
 // This enables offline persistence. It's best to call this only once.
 try {
-  enableMultiTabIndexedDbPersistence(db)
-    .catch((err) => {
-      if (err.code === 'failed-precondition') {
-        // Multiple tabs open, persistence can only be enabled in one tab at a time.
-        console.log('Firebase persistence failed: multiple tabs open.');
-      } else if (err.code === 'unimplemented') {
-        // The current browser does not support all of the
-        // features required to enable persistence
-         console.log('Firebase persistence failed: browser does not support it.');
-      }
-    });
+    if (typeof window !== 'undefined') {
+        enableMultiTabIndexedDbPersistence(db)
+            .catch((err) => {
+              if (err.code === 'failed-precondition') {
+                // Multiple tabs open, persistence can only be enabled in one tab at a time.
+                console.log('Firebase persistence failed: multiple tabs open.');
+              } else if (err.code === 'unimplemented') {
+                // The current browser does not support all of the
+                // features required to enable persistence
+                 console.log('Firebase persistence failed: browser does not support it.');
+              }
+            });
+    }
 } catch(e) {
     console.error("Firebase persistence error", e);
 }
 
+// For now, we are removing In-App-Messaging to fix the build.
+const inAppMessaging = undefined;
 
 export { app, db, auth, storage, inAppMessaging };

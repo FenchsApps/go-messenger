@@ -84,7 +84,7 @@ export function ChatView({
   }, [isWindowFocused, messages, chatId, currentUser.id, isCalling]);
   
   useEffect(() => {
-    if (isCalling) return; // Don't fetch messages while in a call
+    if (isCalling) return;
 
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
@@ -118,24 +118,25 @@ export function ChatView({
     if (isCalling) return;
 
     const callsRef = collection(db, 'calls');
+    // Simplified query to avoid needing a composite index
     const q = query(
       callsRef,
-      where('recipientId', '==', currentUser.id),
-      where('status', '==', 'ringing'),
-      orderBy('createdAt', 'desc'),
-      limit(10) // Fetch a few recent ringing calls
+      where('recipientId', '==', currentUser.id)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        // Filter on the client to find the call from the current chat partner
-        const callDoc = snapshot.docs.find(doc => doc.data().callerId === chatPartner.id);
+      if (snapshot.empty) return;
 
-        if (callDoc && callDoc.id !== activeCallId) {
-            setActiveCallId(callDoc.id);
-            setIsReceivingCall(true);
-            setIsCalling(true);
-        }
+      // Filter on the client to find the correct ringing call from the current chat partner
+      const callDoc = snapshot.docs.find(doc => {
+        const data = doc.data();
+        return data.callerId === chatPartner.id && data.status === 'ringing';
+      });
+
+      if (callDoc && callDoc.id !== activeCallId) {
+        setActiveCallId(callDoc.id);
+        setIsReceivingCall(true);
+        setIsCalling(true);
       }
     });
     

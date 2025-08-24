@@ -66,17 +66,21 @@ export function ChatView({
     window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);
 
+    // Mark messages as read when chat becomes visible
+    if (isWindowFocused) {
+        markMessagesAsRead(chatId, currentUser.id);
+    }
+
     return () => {
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
     };
-  }, []);
+  }, [isWindowFocused, chatId, currentUser.id]);
 
   useEffect(() => {
-    if (isWindowFocused && messages.length > 0) {
-        markMessagesAsRead(chatId, currentUser.id);
-    }
-  }, [isWindowFocused, messages, chatId, currentUser.id]);
+    // Mark messages as read when component mounts or chatPartner changes
+    markMessagesAsRead(chatId, currentUser.id);
+  }, [chatId, currentUser.id]);
   
   useEffect(() => {
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
@@ -97,7 +101,8 @@ export function ChatView({
       
       const lastMessage = newMessages[newMessages.length - 1];
 
-      if (!isInitialLoad && lastMessage && lastMessage.senderId !== currentUser.id && !isWindowFocused && Notification.permission === 'granted') {
+      // Check if there are new messages and window is not focused or it's not an initial load
+      if (!isInitialLoad && lastMessage && lastMessage.senderId !== currentUser.id && (!isWindowFocused || document.hidden) && Notification.permission === 'granted') {
           const notification = new Notification(chatPartner.name, {
               body: lastMessage.text || (lastMessage.type === 'sticker' ? 'Стикер' : 'GIF'),
               icon: chatPartner.avatar,
@@ -106,11 +111,16 @@ export function ChatView({
           // Optional: close notification on click and focus window
           notification.onclick = () => {
               window.focus();
+              router.push(`/?chatWith=${lastMessage.senderId}`);
               notification.close();
           };
       }
       
       setMessages(newMessages);
+
+      if (isWindowFocused) {
+        markMessagesAsRead(chatId, currentUser.id);
+      }
     });
 
     return () => unsubscribeMessages();

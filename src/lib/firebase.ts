@@ -4,6 +4,7 @@ import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { getMessaging, onMessage } from 'firebase/messaging';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -19,6 +20,16 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
+
+// Initialize Firebase Cloud Messaging and get a reference to the service
+const getMessagingInstance = () => {
+    if (typeof window !== 'undefined' && getApps().length > 0) {
+        return getMessaging(app);
+    }
+    return null;
+}
+
+const messaging = getMessagingInstance();
 
 // This enables offline persistence. It's best to call this only once.
 try {
@@ -36,17 +47,5 @@ try {
     console.error("Firebase persistence error", e);
 }
 
-// In-App Messaging is initialized automatically by the Firebase SDK.
-// We provide a wrapper function that can be called from client components
-// to ensure code depending on it runs, but it doesn't need to do anything.
-const getInAppMessaging = async () => {
-    if (typeof window !== 'undefined') {
-        // FIAM initializes automatically. This function is just a placeholder
-        // to ensure client-side execution context for components that use it.
-        return Promise.resolve(null);
-    }
-    return Promise.resolve(null);
-};
 
-
-export { app, db, auth, storage, getInAppMessaging };
+export { app, db, auth, storage, messaging, getMessaging, onMessage };

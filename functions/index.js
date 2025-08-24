@@ -42,7 +42,7 @@ exports.sendPushNotification = functions.firestore
     if (message.type === 'text' && message.text) {
         notificationBody = message.text;
     } else if (message.type === 'sticker') {
-        notificationBody = 'Sticker';
+        notificationBody = 'Стикер';
     } else if (message.type === 'gif') {
         notificationBody = 'GIF';
     }
@@ -50,12 +50,22 @@ exports.sendPushNotification = functions.firestore
     const payload = {
       token: fcmToken,
       notification: {
-        title: `New message from ${senderName}`,
+        title: `Новое сообщение от ${senderName}`,
         body: notificationBody,
       },
       data: {
         chatId: context.params.chatId,
-        chatPartnerId: senderId
+        chatPartnerId: senderId,
+        url: `/?chatWith=${senderId}` // URL to open on notification click
+      },
+      webpush: {
+        fcm_options: {
+            link: `/?chatWith=${senderId}`
+        },
+        notification: {
+            icon: sender.avatar || '/favicon.ico',
+            body: notificationBody,
+        }
       }
     };
 

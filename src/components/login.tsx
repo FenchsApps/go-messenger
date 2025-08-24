@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,11 +10,12 @@ import { Messenger } from './messenger';
 import { PigeonIcon } from './icons';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
-import { db } from '@/lib/firebase';
+import { db, getMessaging, onMessage } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
 import { requestNotificationPermission } from '@/lib/utils';
 import { updateUserFcmToken } from '@/app/actions';
+import { getToken } from 'firebase/messaging';
 
 
 // Augment the Window interface
@@ -31,6 +33,32 @@ export function Login() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  const setupFcm = async (user: User) => {
+    await requestNotificationPermission();
+
+    const messaging = getMessaging();
+    if (!messaging) return;
+
+    // Handle foreground messages
+    onMessage(messaging, (payload) => {
+        console.log('Foreground message received.', payload);
+        // We can show an in-app notification here if needed,
+        // but ChatView already handles live updates.
+    });
+
+    try {
+        const currentToken = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE' });
+        if (currentToken) {
+            console.log('FCM Web Token:', currentToken);
+            await updateUserFcmToken(user.id, currentToken);
+        } else {
+            console.log('No registration token available. Request permission to generate one.');
+        }
+    } catch (err) {
+        console.error('An error occurred while retrieving token. ', err);
+    }
+  }
 
   const setupFcmTokenReceiver = (user: User) => {
     // This function will be called by the native Android code
@@ -53,6 +81,9 @@ export function Login() {
      // For Android WebView, check if the native interface is available and request the token
      if ((window as any).Android && typeof (window as any).Android.getFcmToken === 'function') {
         (window as any).Android.getFcmToken();
+    } else {
+        // Fallback for regular web browsers
+        setupFcm(user);
     }
   };
 
@@ -69,7 +100,6 @@ export function Login() {
               lastSeen: serverTimestamp()
             }, { merge: true });
             setCurrentUser(user);
-            await requestNotificationPermission(); // Request permission after auto-login
             setupFcmTokenReceiver(user);
           }
         }
@@ -113,7 +143,6 @@ export function Login() {
 
       setCookie(LOGGED_IN_USER_COOKIE, user.id, 7);
       setCurrentUser(user);
-      await requestNotificationPermission(); // Request permission on manual login
       setupFcmTokenReceiver(user);
     } else {
       toast({
@@ -126,10 +155,11 @@ export function Login() {
 
   const handleLogout = async () => {
     if(currentUser) {
-        await setDoc(doc(db, 'users', currentUser.id), {
+        await updateDoc(doc(db, 'users', currentUser.id), {
             status: 'Offline',
-            lastSeen: serverTimestamp()
-        }, { merge: true });
+            lastSeen: serverTimestamp(),
+            fcmToken: '' // Clear the token on logout
+        });
     }
     removeCookie(LOGGED_IN_USER_COOKIE);
     setCurrentUser(null);

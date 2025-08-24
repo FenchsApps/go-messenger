@@ -28,7 +28,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, createCall } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, doc, getDoc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 import { CallView } from './call-view';
 
@@ -54,9 +54,9 @@ export function ChatView({
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
-  const [isCalling, setIsCalling] = useState(false);
-  const [isReceivingCall, setIsReceivingCall] = useState<Call | null>(null);
-  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+
+  // Consolidated call state
+  const [activeCall, setActiveCall] = useState<{ id: string; isReceiving: boolean } | null>(null);
 
   const { toast } = useToast();
   
@@ -76,7 +76,7 @@ export function ChatView({
   }, []);
 
   useEffect(() => {
-    if (isWindowFocused) {
+    if (isWindowFocused && messages.length > 0) {
         markMessagesAsRead(chatId, currentUser.id);
     }
   }, [isWindowFocused, messages, chatId, currentUser.id]);
@@ -97,22 +97,15 @@ export function ChatView({
       });
       
       setMessages(newMessages);
-
-      if (isWindowFocused) {
-          markMessagesAsRead(chatId, currentUser.id);
-      }
     });
 
-    return () => {
-        unsubscribeMessages();
-    }
-  }, [chatId, currentUser.id, isWindowFocused]);
+    return () => unsubscribeMessages();
+  }, [chatId]);
 
-    // Listen for incoming calls
+  // Listen for incoming calls
   useEffect(() => {
     if (!currentUser.id) return;
 
-    // This query is now simplified to avoid needing a composite index.
     const q = query(
       collection(db, 'calls'),
       where('recipientId', '==', currentUser.id),
@@ -122,19 +115,18 @@ export function ChatView({
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (snapshot.empty) return;
       
-      const callDoc = snapshot.docs[0]; // Get the first ringing call
+      const callDoc = snapshot.docs[0];
       const callData = callDoc.data();
 
-      // We add a client-side check to ensure the call is from the current chat partner.
-      if (callData.callerId === chatPartner.id) {
-        setIsReceivingCall({ ...callData, id: callDoc.id } as Call);
-        setActiveCallId(callDoc.id);
-        setIsCalling(true);
+      // Only show incoming call if it's from the current chat partner
+      // and we are not already in a call.
+      if (callData.callerId === chatPartner.id && !activeCall) {
+        setActiveCall({ id: callDoc.id, isReceiving: true });
       }
     });
 
     return () => unsubscribe();
-  }, [currentUser.id, chatPartner.id]);
+  }, [currentUser.id, chatPartner.id, activeCall]);
 
 
   const handleSendMessage = async (text: string) => {
@@ -213,28 +205,23 @@ export function ChatView({
   const handleStartCall = async () => {
     const result = await createCall(currentUser.id, chatPartner.id);
     if (result.id) {
-        setActiveCallId(result.id);
-        setIsReceivingCall(null);
-        setIsCalling(true);
+        setActiveCall({ id: result.id, isReceiving: false });
     } else {
         toast({ title: 'Ошибка', description: 'Не удалось начать звонок.', variant: 'destructive' });
-        setIsCalling(false);
     }
   };
 
-  const handleEndCall = () => {
-    setIsCalling(false);
-    setIsReceivingCall(null);
-    setActiveCallId(null);
-  };
-
-  if (isCalling) {
+  const handleEndCall = useCallback(() => {
+    setActiveCall(null);
+  }, []);
+  
+  if (activeCall) {
     return (
       <CallView
         currentUser={currentUser}
         chatPartner={chatPartner}
-        callId={activeCallId}
-        isReceivingCall={!!isReceivingCall}
+        callId={activeCall.id}
+        isReceivingCall={activeCall.isReceiving}
         onEndCall={handleEndCall}
       />
     );

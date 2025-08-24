@@ -240,21 +240,14 @@ export async function endCall(callId: string) {
         const callDocSnap = await getDoc(callDocRef);
 
         if (callDocSnap.exists()) {
-            // First, update the status to 'ended' to notify the other user
-            await updateDoc(callDocRef, { status: 'ended' });
-
-            // Then, delete signals subcollection
-            const signalsSnapshot = await getDocs(collection(callDocRef, 'signals'));
-            const batch = writeBatch(db);
-            signalsSnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-            await batch.commit();
-
-            // Finally, delete the call document itself
-            await deleteDoc(callDocRef);
+             const currentStatus = callDocSnap.data().status;
+             // Don't delete immediately. Just mark as ended.
+             // A cleanup job could delete old 'ended' calls later.
+             if (currentStatus !== 'ended') {
+                await updateDoc(callDocRef, { status: 'ended' });
+             }
         }
     } catch (error) {
-        console.log("Could not update/delete call doc, it might have been handled already.", error);
+        console.log("Could not update call doc, it might have been handled already.", error);
     }
 }

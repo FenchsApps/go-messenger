@@ -3,11 +3,11 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, addDoc } from 'firebase/firestore';
 import { endCall, sendCallSignal, updateCallStatus } from '@/app/actions';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
-import { Mic, MicOff, PhoneOff, Phone, Annoyed } from 'lucide-react';
+import { Mic, MicOff, PhoneOff, Phone, Annoyed, Loader2 } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
 import type { User } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -24,7 +24,7 @@ const servers = {
 interface CallViewProps {
   currentUser: User;
   chatPartner: User;
-  callId: string | null;
+  callId: string;
   isReceivingCall: boolean;
   onEndCall: () => void;
 }
@@ -68,78 +68,96 @@ export function CallView({
         remoteAudioRef.current.srcObject = null;
     }
 
-    // This is the final step, ensuring the parent component knows the call is over.
     onEndCall();
   }, [onEndCall]);
 
   const handleEndCallAction = useCallback(async () => {
     if (callId) {
-      // This will trigger the onSnapshot listener for the other user,
-      // which will then call cleanup on their end.
       await endCall(callId);
     }
-    // The local cleanup will be triggered by the onSnapshot listener as well.
+    // The local cleanup is now triggered reliably by the onSnapshot listener below
   }, [callId]);
 
   useEffect(() => {
-    if (!callId) {
-      cleanup();
-      return;
-    }
-
     const pc = new RTCPeerConnection(servers);
     pcRef.current = pc;
-    const iceCandidateQueue: RTCIceCandidateInit[] = [];
+    const iceCandidateQueue: RTCIceCandidate[] = [];
 
+    const signalsCollectionRef = collection(db, 'calls', callId, 'signals');
+    
     let unsubCallDoc: () => void;
     let unsubSignals: () => void;
-
+    
     const initialize = async () => {
         // 1. Listen for call status changes (e.g., ended, declined)
-        unsubCallDoc = onSnapshot(doc(db, 'calls', callId), (doc) => {
-            const callData = doc.data();
-            if (!doc.exists() || ['ended', 'declined'].includes(callData?.status)) {
+        unsubCallDoc = onSnapshot(doc(db, 'calls', callId), (docSnapshot) => {
+            const callData = docSnapshot.data();
+            if (isCleanedUpRef.current) return;
+
+            if (!docSnapshot.exists() || ['ended', 'declined'].includes(callData?.status)) {
                 cleanup();
             } else if (callData?.status === 'active' && callStatus !== 'connected') {
                 setCallStatus('connected');
             }
         });
 
-        // 2. Listen for WebRTC signals (offer, answer, candidates)
-        unsubSignals = onSnapshot(collection(db, 'calls', callId, 'signals'), async (snapshot) => {
-            if (!pcRef.current || pcRef.current.signalingState === 'closed') return;
-            
+        // 2. Setup PC event handlers
+        pc.onicecandidate = event => {
+            if (event.candidate) {
+                addDoc(signalsCollectionRef, { candidate: event.candidate.toJSON() });
+            }
+        };
+
+        pc.ontrack = event => {
+            if (remoteAudioRef.current && event.streams[0]) {
+                remoteAudioRef.current.srcObject = event.streams[0];
+                remoteAudioRef.current.play().catch(e => console.error("Error playing remote audio:", e));
+            }
+        };
+        
+        pc.onconnectionstatechange = () => {
+            if (isCleanedUpRef.current || !pcRef.current) return;
+            const state = pcRef.current.connectionState;
+            if (state === 'connected' && callStatus !== 'connected') {
+                setCallStatus('connected');
+            } else if (['disconnected', 'failed', 'closed'].includes(state)) {
+                handleEndCallAction();
+            }
+        };
+        
+        // 3. Listen for WebRTC signals (offer, answer, candidates)
+        unsubSignals = onSnapshot(signalsCollectionRef, async (snapshot) => {
+            if (isCleanedUpRef.current || !pcRef.current) return;
+
             for (const change of snapshot.docChanges()) {
                 if (change.type === 'added') {
                     const data = change.doc.data();
                     try {
                       if (data.sdp) {
                           const sdp = new RTCSessionDescription(data.sdp);
-                           if (pcRef.current.signalingState !== 'stable' && sdp.type === 'offer') {
-                                // Ignore subsequent offers if not stable
-                           } else {
-                                await pcRef.current.setRemoteDescription(sdp);
-                           }
+                          if (pc.signalingState !== 'stable' && sdp.type === 'offer') {
+                              // Ignore subsequent offers if not stable to prevent glare
+                          } else {
+                              await pc.setRemoteDescription(sdp);
+                          }
 
                           if (sdp.type === 'offer' && isReceivingCall) {
-                              if (pcRef.current) {
-                                  const answer = await pcRef.current.createAnswer();
-                                  await pcRef.current.setLocalDescription(answer);
-                                  await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
-                              }
+                              const answer = await pc.createAnswer();
+                              await pc.setLocalDescription(answer);
+                              await addDoc(signalsCollectionRef, { sdp: pc.localDescription?.toJSON() });
                           }
                           
+                          // Process any queued candidates
                           while(iceCandidateQueue.length > 0) {
                               const candidate = iceCandidateQueue.shift();
-                              if (pcRef.current?.remoteDescription && candidate) {
-                                  await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-                              }
+                              if (candidate) await pc.addIceCandidate(candidate);
                           }
                       } else if (data.candidate) {
-                          if (pcRef.current?.remoteDescription) {
-                              await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+                          const candidate = new RTCIceCandidate(data.candidate);
+                           if (pc.remoteDescription) {
+                              await pc.addIceCandidate(candidate);
                           } else {
-                              iceCandidateQueue.push(data.candidate);
+                              iceCandidateQueue.push(candidate);
                           }
                       }
                     } catch (error) {
@@ -149,59 +167,32 @@ export function CallView({
             }
         });
 
-        // 3. Setup PC event handlers
-        if (!pcRef.current) return;
-        pcRef.current.onicecandidate = event => {
-            if (event.candidate && callId) {
-                sendCallSignal(callId, { candidate: event.candidate.toJSON() });
-            }
-        };
-
-        pcRef.current.ontrack = event => {
-            if (remoteAudioRef.current && event.streams[0]) {
-                remoteAudioRef.current.srcObject = event.streams[0];
-                remoteAudioRef.current.play().catch(e => console.error("Error playing remote audio:", e));
-            }
-        };
-        
-        pcRef.current.onconnectionstatechange = () => {
-            if (!pcRef.current) return;
-            const state = pcRef.current.connectionState;
-            if (state === 'connected') {
-                setCallStatus('connected');
-            } else if (['disconnected', 'failed', 'closed'].includes(state)) {
-                // Use the main end call action to ensure cleanup is synchronized
-                handleEndCallAction();
-            }
-        };
-
-        // 4. Get user media
+        // 4. Get user media and start the call process
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { deviceId: micId ? { exact: micId } : undefined }, 
                 video: false 
             });
-
-            if (isCleanedUpRef.current) { // Check if cleaned up during await
+            
+            if (isCleanedUpRef.current) {
                 stream.getTracks().forEach(track => track.stop());
                 return;
             };
 
             localStreamRef.current = stream;
             for (const track of stream.getTracks()) {
-              if (pcRef.current) pcRef.current.addTrack(track, stream);
+              pc.addTrack(track, stream);
             }
 
             // 5. Create offer if we are the caller
             if (!isReceivingCall) {
-                 if (!pcRef.current) return;
                 const offerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: false };
-                const offer = await pcRef.current.createOffer(offerOptions);
-                await pcRef.current.setLocalDescription(offer);
-                await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
+                const offer = await pc.createOffer(offerOptions);
+                await pc.setLocalDescription(offer);
+                await addDoc(signalsCollectionRef, { sdp: pc.localDescription?.toJSON() });
             }
         } catch (error) {
-            console.error("Error getting user media", error);
+            console.error("Error getting user media or creating offer", error);
             setCallStatus("error");
             setTimeout(handleEndCallAction, 3000);
         }
@@ -218,18 +209,16 @@ export function CallView({
 
 
   const handleAcceptCall = async () => {
-    if (!callId || !pcRef.current) return;
+    if (!callId) return;
     setCallStatus('connecting');
-    // The answer will be created automatically by the onSnapshot listener
-    // once the offer is received. This just updates the status.
     await updateCallStatus(callId, 'active');
+    // Answer will be created by the onSnapshot listener when the offer is received.
   };
 
   const handleDeclineCall = async () => {
     if (!callId) return;
     await updateCallStatus(callId, 'declined');
-    // The `onSnapshot` listener will see the 'declined' status and trigger cleanup.
-    // No need to call `handleEndCallAction` here directly.
+    // The onSnapshot listener will see 'declined' and trigger cleanup for both users.
   };
 
   const toggleMute = () => {
@@ -266,7 +255,9 @@ export function CallView({
       </Avatar>
       <h2 className="text-3xl font-bold mb-2">{chatPartner.name}</h2>
       <p className="text-muted-foreground mb-12 flex items-center gap-2">
-         {callStatus === 'error' ? <Annoyed className="w-5 h-5 text-destructive" /> : <Phone className="w-5 h-5" />}
+         {callStatus === 'error' && <Annoyed className="w-5 h-5 text-destructive" />}
+         {['calling', 'connecting'].includes(callStatus) && <Loader2 className="w-5 h-5 animate-spin"/>}
+         {['incoming', 'connected'].includes(callStatus) && <Phone className="w-5 h-5" />}
         {renderContent()}
       </p>
 
@@ -289,6 +280,7 @@ export function CallView({
                     "rounded-full h-16 w-16 p-0",
                     isMuted && "bg-primary text-primary-foreground"
                 )}
+                disabled={callStatus !== 'connected'}
             >
                 {isMuted ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
             </Button>

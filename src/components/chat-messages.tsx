@@ -9,7 +9,6 @@ import { MessageMenu } from './message-menu';
 import { stickers } from '@/lib/data';
 import { Check, CheckCheck } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
-import { VoiceMessagePlayer } from './chat/voice-message-player';
 
 
 interface ChatMessagesProps {
@@ -35,7 +34,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
   }, [messages]);
 
   return (
-    <div className="relative flex-1 bg-background">
+    <div className="relative h-full bg-background">
         <div className={cn(
            "absolute inset-0",
            !background && defaultBackgroundClass
@@ -129,9 +128,6 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                             'text-lg': textSize === 'lg',
                         }
                         )}>{message.text}</p>
-                    )}
-                    {message.type === 'audio' && message.audioUrl && (
-                        <VoiceMessagePlayer audioUrl={message.audioUrl} duration={message.audioDuration}/>
                     )}
                     <div className={cn(
                         "flex items-center justify-end gap-1.5 text-xs text-muted-foreground/80 pt-1",

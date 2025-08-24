@@ -33,6 +33,7 @@ import { ForwardMessageDialog } from './forward-message-dialog';
 import { useRouter } from 'next/navigation';
 import { ChatSettings } from './chat/chat-settings';
 import { ContactInfoSheet } from './chat/contact-info-sheet';
+import { ScrollArea } from './ui/scroll-area';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -226,15 +227,17 @@ export function ChatView({
         onOpenSettings={() => setIsChatSettingsOpen(true)}
         onOpenContactInfo={() => setIsContactInfoOpen(true)}
       />
-      <ChatMessages
-        messages={messages}
-        currentUser={currentUser}
-        chatPartner={chatPartner}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onForward={handleForward}
-        background={chatBackground}
-      />
+       <div className="flex-1 min-h-0">
+          <ChatMessages
+            messages={messages}
+            currentUser={currentUser}
+            chatPartner={chatPartner}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onForward={handleForward}
+            background={chatBackground}
+          />
+      </div>
       <ChatInput 
         onSendMessage={handleSendMessage} 
         onSendSticker={handleSendSticker}

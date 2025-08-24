@@ -10,10 +10,6 @@ interface SettingsContextProps {
   setTheme: (theme: Theme) => void;
   textSize: TextSize;
   setTextSize: (size: TextSize) => void;
-  videoDeviceId: string | undefined;
-  setVideoDeviceId: (deviceId: string) => void;
-  audioDeviceId: string | undefined;
-  setAudioDeviceId: (deviceId: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextProps | undefined>(undefined);
@@ -21,21 +17,15 @@ const SettingsContext = createContext<SettingsContextProps | undefined>(undefine
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('system');
   const [textSize, setTextSizeState] = useState<TextSize>('md');
-  const [videoDeviceId, setVideoDeviceIdState] = useState<string | undefined>();
-  const [audioDeviceId, setAudioDeviceIdState] = useState<string | undefined>();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     const storedTheme = localStorage.getItem('theme') as Theme | null;
     const storedTextSize = localStorage.getItem('textSize') as TextSize | null;
-    const storedVideoDevice = localStorage.getItem('videoDeviceId');
-    const storedAudioDevice = localStorage.getItem('audioDeviceId');
     
     if (storedTheme) setThemeState(storedTheme);
     if (storedTextSize) setTextSizeState(storedTextSize);
-    if (storedVideoDevice) setVideoDeviceIdState(storedVideoDevice);
-    if (storedAudioDevice) setAudioDeviceIdState(storedAudioDevice);
 
   }, []);
 
@@ -48,17 +38,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('textSize', newSize);
     setTextSizeState(newSize);
   };
-  
-  const setVideoDeviceId = (deviceId: string) => {
-    localStorage.setItem('videoDeviceId', deviceId);
-    setVideoDeviceIdState(deviceId);
-  };
-
-  const setAudioDeviceId = (deviceId: string) => {
-    localStorage.setItem('audioDeviceId', deviceId);
-    setAudioDeviceIdState(deviceId);
-  };
-
 
   useEffect(() => {
     if (!isMounted) return;
@@ -97,8 +76,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const contextValue = {
       theme, setTheme,
       textSize, setTextSize,
-      videoDeviceId, setVideoDeviceId,
-      audioDeviceId, setAudioDeviceId
   };
 
   // Prevent hydration mismatch by returning null on the server

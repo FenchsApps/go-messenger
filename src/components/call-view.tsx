@@ -41,6 +41,7 @@ export function CallView({
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const isCleanedUpRef = useRef(false);
+  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
 
   const [callStatus, setCallStatus] = useState(isReceivingCall ? 'incoming' : 'calling');
   const [isMuted, setIsMuted] = useState(false);
@@ -51,6 +52,7 @@ export function CallView({
     isCleanedUpRef.current = true;
 
     console.log('Cleaning up call resources...');
+    iceCandidateQueueRef.current = [];
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
@@ -115,17 +117,18 @@ export function CallView({
         };
 
         pcRef.current.onconnectionstatechange = () => {
-            if (pcRef.current?.connectionState === 'connected') {
+            if (!pcRef.current) return;
+            if (pcRef.current.connectionState === 'connected') {
                 setCallStatus('connected');
             }
-            if (pcRef.current?.connectionState === 'disconnected' || pcRef.current?.connectionState === 'failed' || pcRef.current?.connectionState === 'closed') {
+            if (['disconnected', 'failed', 'closed'].includes(pcRef.current.connectionState)) {
                 handleEndCall();
             }
         };
 
         // If we are the caller, create an offer
         if (!isReceivingCall && callId && pcRef.current) {
-            const offerOptions = {
+             const offerOptions = {
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: false,
             };
@@ -155,19 +158,31 @@ export function CallView({
 
                 if (data.sdp) {
                     const sdp = new RTCSessionDescription(data.sdp);
-                    if (sdp.type === 'offer') {
-                         await pcRef.current.setRemoteDescription(sdp);
-                         if (isReceivingCall) {
-                            const answer = await pcRef.current.createAnswer();
-                            await pcRef.current.setLocalDescription(answer);
-                            await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
-                         }
-                    } else if (sdp.type === 'answer' && pcRef.current.signalingState === 'have-local-offer') {
-                        await pcRef.current.setRemoteDescription(sdp);
+                    try {
+                        if (sdp.type === 'offer') {
+                             await pcRef.current.setRemoteDescription(sdp);
+                             if (isReceivingCall) {
+                                const answer = await pcRef.current.createAnswer();
+                                await pcRef.current.setLocalDescription(answer);
+                                await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
+                             }
+                        } else if (sdp.type === 'answer' && pcRef.current.signalingState === 'have-local-offer') {
+                            await pcRef.current.setRemoteDescription(sdp);
+                        }
+                        // Process any queued candidates
+                        iceCandidateQueueRef.current.forEach(candidate => pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)));
+                        iceCandidateQueueRef.current = [];
+                    } catch (e) {
+                         console.error("Error setting session description:", e);
                     }
                 } else if (data.candidate) {
                     try {
-                        await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        if (pcRef.current.remoteDescription) {
+                            await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        } else {
+                            // Queue the candidate if remote description is not set yet
+                            iceCandidateQueueRef.current.push(data.candidate);
+                        }
                     } catch (e) {
                         console.error("Error adding received ICE candidate", e);
                     }
@@ -282,3 +297,5 @@ export function CallView({
     </div>
   );
 }
+
+    

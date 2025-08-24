@@ -39,7 +39,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
            "absolute inset-0",
            !background && defaultBackgroundClass
         )} 
-        style={background ? { backgroundImage: `url("${background}")`, backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' } : {}}
+        style={background ? { backgroundImage: `url("${background}")`, backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : {}}
        >
         <div className="absolute inset-0 bg-black/20 dark:bg-black/50" />
        </div>

@@ -110,42 +110,35 @@ export function ChatView({
   }, [chatId, currentUser.id, isWindowFocused]);
 
   useEffect(() => {
-    // This effect should only run when we are NOT in a call.
     if (isCalling) {
       return;
     }
-
-    // Listen for calls from the current chat partner to the current user that are "ringing"
-    // and created in the last 30 seconds to avoid picking up stale/old calls.
-    const thirtySecondsAgo = Timestamp.fromMillis(Date.now() - 30000);
+    
     const q = query(
       collection(db, 'calls'),
       where('recipientId', '==', currentUser.id),
-      where('callerId', '==', chatPartner.id),
-      where('status', '==', 'ringing'),
-      where('createdAt', '>=', thirtySecondsAgo)
+      where('status', '==', 'ringing')
     );
-
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const callDoc = snapshot.docs[0]; // Get the first ringing call
-        // If we are already processing a call, ignore.
-        if (isCalling) return;
+      const callDoc = snapshot.docs.find(doc => doc.data().callerId === chatPartner.id);
+
+      if (callDoc && !isCalling) {
+        const thirtySecondsAgo = Date.now() - 30000;
+        const callTime = callDoc.data().createdAt?.toMillis() || 0;
         
+        if (callTime < thirtySecondsAgo) {
+            return;
+        }
+
         setActiveCallId(callDoc.id);
         setIsReceivingCall(true);
         setIsCalling(true);
-        
-        // IMPORTANT: Unsubscribe immediately after detecting the call to prevent re-triggers.
-        unsubscribe();
+        unsubscribe(); 
       }
     });
-
-    // Cleanup function for the effect.
-    return () => {
-      unsubscribe();
-    };
-    // Re-run this listener if the chat partner changes.
+    
+    return () => unsubscribe();
   }, [currentUser.id, chatPartner.id, isCalling]);
 
 
@@ -308,5 +301,3 @@ export function ChatView({
     </div>
   );
 }
-
-    

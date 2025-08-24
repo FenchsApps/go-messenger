@@ -532,6 +532,10 @@ body {
   margin-bottom: .5rem;
 }
 
+.mb-3 {
+  margin-bottom: .75rem;
+}
+
 .ml-auto {
   margin-left: auto;
 }
@@ -550,10 +554,6 @@ body {
 
 .mt-4 {
   margin-top: 1rem;
-}
-
-.mb-3 {
-  margin-bottom: .75rem;
 }
 
 .block {
@@ -669,6 +669,10 @@ body {
   height: 300px;
 }
 
+.h-\[calc\(100\%-80px\)\] {
+  height: calc(100% - 80px);
+}
+
 .h-\[var\(--radix-select-trigger-height\)\] {
   height: var(--radix-select-trigger-height);
 }
@@ -691,10 +695,6 @@ body {
 
 .h-svh {
   height: 100svh;
-}
-
-.h-\[calc\(100\%-80px\)\] {
-  height: calc(100% - 80px);
 }
 
 .max-h-40 {
@@ -992,16 +992,16 @@ body {
   resize: none;
 }
 
+.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .grid-cols-3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .grid-cols-4 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.grid-cols-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .flex-col {
@@ -1298,6 +1298,14 @@ body {
   background-color: hsl(var(--background) / .8);
 }
 
+.bg-black\/20 {
+  background-color: #0003;
+}
+
+.bg-black\/30 {
+  background-color: #0000004d;
+}
+
 .bg-black\/50 {
   background-color: #00000080;
 }
@@ -1367,10 +1375,6 @@ body {
 
 .bg-transparent {
   background-color: #0000;
-}
-
-.bg-black\/30 {
-  background-color: #0000004d;
 }
 
 .fill-current {
@@ -1790,12 +1794,12 @@ body {
   box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
 }
 
-.ring-sidebar-ring {
-  --tw-ring-color: hsl(var(--sidebar-ring));
-}
-
 .ring-primary {
   --tw-ring-color: hsl(var(--primary));
+}
+
+.ring-sidebar-ring {
+  --tw-ring-color: hsl(var(--sidebar-ring));
 }
 
 .ring-offset-background {
@@ -2692,8 +2696,8 @@ body {
   border-color: hsl(var(--destructive));
 }
 
-.dark\:opacity-100:is(.dark *) {
-  opacity: 1;
+.dark\:bg-black\/50:is(.dark *) {
+  background-color: #00000080;
 }
 
 @media (width >= 640px) {
@@ -2721,12 +2725,12 @@ body {
     max-width: 425px;
   }
 
-  .sm\:max-w-sm {
-    max-width: 24rem;
-  }
-
   .sm\:max-w-md {
     max-width: 28rem;
+  }
+
+  .sm\:max-w-sm {
+    max-width: 24rem;
   }
 
   .sm\:flex-row {

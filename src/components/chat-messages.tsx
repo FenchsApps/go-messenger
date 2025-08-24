@@ -34,11 +34,13 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
   return (
     <div ref={scrollAreaRef} className="relative flex-1 overflow-y-auto p-4 space-y-4">
        <div className={cn(
-           "absolute inset-0 opacity-70 dark:opacity-100",
+           "absolute inset-0",
            !background && defaultBackgroundClass
         )} 
-        style={background ? { backgroundImage: `url("${background}")`, backgroundSize: 'cover', backgroundRepeat: 'repeat', backgroundPosition: 'center' } : {}}
-       />
+        style={background ? { backgroundImage: `url("${background}")`, backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' } : {}}
+       >
+        <div className="absolute inset-0 bg-black/20 dark:bg-black/50" />
+       </div>
       {messages.map((message, index) => {
         const isCurrentUser = message.senderId === currentUser.id;
         const sender = isCurrentUser ? currentUser : chatPartner;

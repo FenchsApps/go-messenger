@@ -399,30 +399,31 @@ class FullScreenCallActivity : AppCompatActivity() {
 }
 ```
 
-## Шаг 5: Проверка разрешений
+## Шаг 5: Обновление `MainActivity.kt` для запроса разрешений
 
-Для `SYSTEM_ALERT_WINDOW` на Android 6.0+ требуется явный запрос разрешения у пользователя. Добавьте эту логику в вашу `MainActivity`.
+Наконец, убедитесь, что ваша `MainActivity` запрашивает все необходимые разрешения при запуске. Замените код `MainActivity` на тот, что находится в файле `ANDROID_WEBVIEW_GUIDE.md`. Он уже содержит логику запроса разрешений на уведомления. Мы добавим в него проверку для `SYSTEM_ALERT_WINDOW`.
+
+**Важно:** Код для `MainActivity` находится в файле `ANDROID_WEBVIEW_GUIDE.md`. Просто убедитесь, что он содержит следующие функции для запроса разрешений.
 
 ```kotlin
-// В MainActivity.kt (из файла ANDROID_WEBVIEW_GUIDE.md)
+// В MainActivity.kt
 
+// ... (другие импорты)
 import android.provider.Settings
 import android.net.Uri
 
-// ...
-
 class MainActivity : AppCompatActivity() {
 
-    // ... ваш существующий код
+    // ... (остальной код)
+
     private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 1234
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // ... ваш существующий код onCreate
+        // ... (остальной код onCreate)
 
-        // Запрос разрешения на уведомления (уже должен быть)
+        // Запрос всех необходимых разрешений
         askNotificationPermission()
-        // НОВЫЙ ВЫЗОВ для проверки разрешения наложения
         checkOverlayPermission()
     }
 
@@ -438,7 +439,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // ... остальной код MainActivity
+    // ... (остальной код MainActivity, включая askNotificationPermission)
 }
 ```
 

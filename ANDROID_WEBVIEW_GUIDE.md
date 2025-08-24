@@ -216,8 +216,10 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -235,6 +237,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     // ВАЖНО! ЗАМЕНИТЕ URL НА ВАШ РЕАЛЬНЫЙ URL
     private var webUrl = "https://your-deployed-app-url.com"
+    private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 1234
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -279,8 +282,9 @@ class MainActivity : AppCompatActivity() {
         val targetUrl = getUrlFromIntent(intent)
         webView.loadUrl(targetUrl)
         
-        // Запрос разрешения на уведомления для Android 13+
+        // Запрос разрешений при старте
         askNotificationPermission()
+        checkOverlayPermission()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -302,7 +306,6 @@ class MainActivity : AppCompatActivity() {
             webUrl // URL по умолчанию
         }
     }
-
 
     private fun getAndSendFcmToken() {
         FirebaseMessaging.getInstance().token.addOnCompleteListener(OnCompleteListener { task ->
@@ -347,6 +350,16 @@ class MainActivity : AppCompatActivity() {
             ) {
                  requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+    }
+    
+    private fun checkOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivityForResult(intent, ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
         }
     }
 }

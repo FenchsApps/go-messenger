@@ -29,7 +29,8 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
   }, [messages]);
 
   return (
-    <div ref={scrollAreaRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div ref={scrollAreaRef} className="relative flex-1 overflow-y-auto p-4 space-y-4">
+       <div className="absolute inset-0 chat-background opacity-70 dark:opacity-100" />
       {messages.map((message, index) => {
         const isCurrentUser = message.senderId === currentUser.id;
         const sender = isCurrentUser ? currentUser : chatPartner;
@@ -40,7 +41,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
         return (
           <div
             key={message.id}
-            className={cn('group flex items-end gap-2', {
+            className={cn('group flex items-end gap-2 z-10 relative', {
               'justify-end': isCurrentUser,
               'justify-start': !isCurrentUser,
             })}
@@ -67,13 +68,13 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
             )}
             <div
               className={cn(
-                'relative max-w-sm rounded-2xl px-3 py-2 transition-all duration-300 animate-in fade-in-25 slide-in-from-bottom-4',
+                'relative max-w-sm rounded-2xl px-3 py-2 transition-all duration-300 animate-in fade-in-25 slide-in-from-bottom-4 shadow-md',
                 {
                   'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser && message.type === 'text',
                   'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser && message.type === 'text',
                 },
-                 message.type === 'sticker' && 'p-1 bg-transparent',
-                 message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden'
+                 message.type === 'sticker' && 'p-1 bg-transparent shadow-none',
+                 message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden shadow-none'
               )}
             >
               {message.forwardedFrom && (

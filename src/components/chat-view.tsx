@@ -211,7 +211,7 @@ export function ChatView({
   }
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-transparent">
       <ChatHeader 
         user={chatPartner} 
         isMobile={isMobile} 

@@ -8,7 +8,7 @@ type MediaRecorderError = Error & { name: 'NotAllowedError' | 'NotFoundError' | 
 interface UseMediaRecorderOptions {
   audio?: boolean | { deviceId?: string };
   video?: boolean;
-  onStop?: (blobUrl: string, blob: Blob) => void;
+  onStop?: (blob: Blob, duration: number) => void;
   onError?: (error: MediaRecorderError) => void;
   mediaStream?: MediaStream | null;
 }
@@ -30,6 +30,7 @@ export function useMediaRecorder({
   // Recording timer
   const timerInterval = useRef<NodeJS.Timeout | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
+  const startTimeRef = useRef<number>(0);
 
   const getMediaStream = async () => {
     if (externalStream) {
@@ -76,11 +77,12 @@ export function useMediaRecorder({
       }
     };
     mediaRecorder.current.onstop = () => {
+      const duration = (Date.now() - startTimeRef.current) / 1000;
       const blob = new Blob(mediaChunks.current, { type: 'audio/webm' });
       const url = URL.createObjectURL(blob);
       setStatus('stopped');
       setMediaBlobUrl(url);
-      onStop(url, blob);
+      onStop(blob, duration);
       mediaChunks.current = [];
 
       // Stop timer
@@ -96,6 +98,7 @@ export function useMediaRecorder({
     }
 
     mediaRecorder.current.start();
+    startTimeRef.current = Date.now();
     
     // Start timer
     timerInterval.current = setInterval(() => {

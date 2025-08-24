@@ -85,11 +85,12 @@ exports.sendPushNotification = functions.firestore
   });
 
 
-// --- NEW CALL FUNCTIONS ---
+// --- REFACTORED CALL FUNCTIONS ---
 
 /**
  * Triggers when a new call document is created.
  * Sends a high-priority FCM message to the receiver to initiate the call screen.
+ * This function is read-only and does not modify the call document to prevent loops.
  */
 exports.initiateCall = functions.firestore
   .document('calls/{callId}')
@@ -98,34 +99,43 @@ exports.initiateCall = functions.firestore
     const callId = context.params.callId;
     const { callerId, receiverId } = call;
 
+    if (callerId === receiverId) {
+        console.log(`User [${callerId}] tried to call themselves. Ignoring.`);
+        return null;
+    }
+    
     console.log(`New call [${callId}] from [${callerId}] to [${receiverId}].`);
 
     // 1. Get receiver's FCM token
     const receiverDoc = await admin.firestore().collection('users').doc(receiverId).get();
-    if (!receiverDoc.exists || !receiverDoc.data().fcmToken) {
-        console.error(`Receiver ${receiverId} not found or has no FCM token.`);
-        // Update call status to indicate failure
-        return snap.ref.update({ status: 'error_no_token' });
+    if (!receiverDoc.exists() || !receiverDoc.data().fcmToken) {
+        console.error(`Receiver ${receiverId} not found or has no FCM token. Call will fail silently for the caller.`);
+        // We don't update the status here to avoid recursive triggers. 
+        // The client should handle this timeout.
+        return null;
     }
     const fcmToken = receiverDoc.data().fcmToken;
 
-    // 2. Get caller's name
+    // 2. Get caller's info
     const callerDoc = await admin.firestore().collection('users').doc(callerId).get();
     const callerName = callerDoc.exists() ? callerDoc.data().name : 'Unknown Caller';
+    const callerAvatar = callerDoc.exists() ? callerDoc.data().avatar : null;
 
-    // 3. Construct the FCM message
+
+    // 3. Construct the FCM message for the incoming call
     const payload = {
       token: fcmToken,
       data: {
-        type: 'incoming_call',
+        type: 'incoming_call', // Custom type for the client to handle
         callId: callId,
         callerId: callerId,
         callerName: callerName,
-        // Any other data for the call screen
+        callerAvatar: callerAvatar || '',
+        receiverId: receiverId,
       },
-      android: {
-        priority: 'high',
-      },
+      // Higher priority for call notifications
+      android: { priority: 'high' },
+      apns: { payload: { aps: { 'content-available': 1 } }, headers: { 'apns-push-type': 'voip' } }
     };
 
     try {
@@ -134,7 +144,7 @@ exports.initiateCall = functions.firestore
       console.log(`Successfully sent call notification for call [${callId}]`);
     } catch (error) {
       console.error(`Error sending call notification for call [${callId}]:`, error);
-      return snap.ref.update({ status: 'error_fcm_failed' });
+      // Client-side will have to handle the call timeout.
     }
     
     return null;
@@ -158,7 +168,7 @@ exports.updateCallStatus = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'The function must be called with "callId" and "status" arguments.');
     }
 
-    const validStatuses = ['answered', 'rejected', 'ended'];
+    const validStatuses = ['answered', 'rejected', 'ended', 'missed'];
     if (!validStatuses.includes(status)) {
         throw new functions.https.HttpsError('invalid-argument', `Invalid status "${status}" provided.`);
     }
@@ -184,4 +194,49 @@ exports.updateCallStatus = functions.https.onCall(async (data, context) => {
         console.error(`Error updating call [${callId}] status:`, error);
         throw new functions.https.HttpsError('internal', 'Failed to update call status.');
     }
+});
+
+
+/**
+ * A callable function to reject a call if it hasn't been answered.
+ * This can be triggered by the client after a certain timeout.
+ */
+exports.rejectCallOnTimeout = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    const { callId } = data;
+    const uid = context.auth.uid;
+
+    if (!callId) {
+        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a "callId".');
+    }
+    
+    const callRef = admin.firestore().collection('calls').doc(callId);
+    
+    return admin.firestore().runTransaction(async (transaction) => {
+        const callDoc = await transaction.get(callRef);
+        
+        if (!callDoc.exists) {
+            throw new functions.https.HttpsError('not-found', `Call with ID ${callId} not found.`);
+        }
+        
+        const callData = callDoc.data();
+        
+        // Ensure caller is the one timing out the call
+        if (uid !== callData.callerId) {
+            throw new functions.https.HttpsError('permission-denied', 'Only the caller can time out this call.');
+        }
+
+        // Only update if the status is still 'calling'
+        if (callData.status === 'calling') {
+            transaction.update(callRef, { status: 'missed' });
+            console.log(`Call [${callId}] missed. Timed out by [${uid}].`);
+            return { success: true, status: 'missed' };
+        } else {
+            console.log(`Call [${callId}] was already handled (status: ${callData.status}). No action taken.`);
+            return { success: false, status: callData.status };
+        }
+    });
 });

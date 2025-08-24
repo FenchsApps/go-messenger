@@ -225,17 +225,16 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.media.Ringtone
 import android.media.RingtoneManager
-import android.os.Build
-import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
+import android.os.*
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 
 class FullScreenCallActivity : AppCompatActivity() {
@@ -277,6 +276,7 @@ class FullScreenCallActivity : AppCompatActivity() {
         listenToCallStatus()
     }
     
+    @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         webView.settings.apply {
             javaScriptEnabled = true
@@ -291,7 +291,7 @@ class FullScreenCallActivity : AppCompatActivity() {
     private fun listenToCallStatus() {
         val db = FirebaseFirestore.getInstance()
         callStatusListener = db.collection("calls").document(callId)
-            .addSnapshotListener { snapshot, e ->
+            .addSnapshotListener { snapshot: DocumentSnapshot?, e: FirebaseFirestoreException? ->
                 if (e != null) {
                     Log.w(TAG, "Listen failed.", e)
                     return@addSnapshotListener
@@ -323,7 +323,9 @@ class FullScreenCallActivity : AppCompatActivity() {
         try {
             val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
             ringtone = RingtoneManager.getRingtone(applicationContext, notification)
-            ringtone?.isLooping = true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                ringtone?.isLooping = true
+            }
             ringtone?.play()
         } catch (e: Exception) {
             Log.e(TAG, "Error playing ringtone", e)
@@ -333,6 +335,7 @@ class FullScreenCallActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 1000, 500), 0))
         } else {
+            @Suppress("DEPRECATION")
             vibrator?.vibrate(longArrayOf(0, 1000, 500), 0)
         }
     }

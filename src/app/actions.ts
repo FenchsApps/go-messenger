@@ -102,34 +102,6 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
     }
 }
 
-export async function sendVoiceMessage(senderId: string, recipientId: string, voiceBlob: Blob, duration: number) {
-    const chatId = getChatId(senderId, recipientId);
-    
-    try {
-        // 1. Upload audio to Firebase Storage
-        const storageRef = ref(storage, `voice-messages/${chatId}/${Date.now()}.webm`);
-        const snapshot = await uploadBytes(storageRef, voiceBlob, { contentType: 'audio/webm' });
-        const downloadURL = await getDownloadURL(snapshot.ref);
-
-        // 2. Add message to Firestore
-        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
-            senderId,
-            recipientId,
-            text: '',
-            timestamp: serverTimestamp(),
-            type: 'audio',
-            audioUrl: downloadURL,
-            audioDuration: duration,
-            read: false,
-        });
-
-        return { error: null, data: { id: docRef.id, audioUrl: downloadURL } };
-    } catch (error) {
-        console.error("Error sending voice message:", error);
-        return { error: 'Failed to send voice message' };
-    }
-}
-
 export async function searchGifs(query: string) {
   const apiKey = process.env.GIPHY_API_KEY;
   if (!apiKey) {

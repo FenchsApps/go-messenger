@@ -29,6 +29,19 @@ const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
 // This key is safe to be exposed in the client-side code.
 const VAPID_KEY = "BDx082Bltm_UXLQ22aNyzr-dAjLw4HkG7DcePAdyN8t2u52mChFYoEToPLjZvjEDJv-bS8aO5Ze_oJjU0uAFJ-I";
 
+
+const registerServiceWorker = () => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/firebase-messaging-sw.js')
+        .then(function(registration) {
+          console.log('Service Worker registration successful with scope: ', registration.scope);
+        }).catch(function(err) {
+          console.log('Service Worker registration failed: ', err);
+        });
+    }
+}
+
+
 export function Login() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -55,7 +68,7 @@ export function Login() {
     }
 
     try {
-        const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+        const currentToken = await getToken(messaging, { serviceWorkerRegistration: await navigator.serviceWorker.ready, vapidKey: VAPID_KEY });
         if (currentToken) {
             console.log('FCM Web Token:', currentToken);
             await updateUserFcmToken(user.id, currentToken);
@@ -96,6 +109,8 @@ export function Login() {
 
 
   useEffect(() => {
+    registerServiceWorker();
+
     const checkLoggedInUser = async () => {
       try {
         const userId = getCookie(LOGGED_IN_USER_COOKIE);

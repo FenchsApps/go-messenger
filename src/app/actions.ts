@@ -102,8 +102,8 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
     }
 }
 
-export async function sendVoiceMessage(senderId: string, recipientId: string, audioBlob: Blob, duration: number) {
-    if (!senderId || !recipientId || !audioBlob) {
+export async function sendVoiceMessage(senderId: string, recipientId: string, audioBuffer: ArrayBuffer, duration: number) {
+    if (!senderId || !recipientId || !audioBuffer) {
       return { error: 'Invalid voice message data' };
     }
   
@@ -112,12 +112,15 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
     const storageRef = ref(storage, `chats/${chatId}/${id}.webm`);
   
     try {
+      // Create a Blob from the ArrayBuffer
+      const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+
       // Upload the audio file
       const uploadResult = await uploadBytes(storageRef, audioBlob);
       const downloadURL = await getDownloadURL(uploadResult.ref);
   
       // Save message to Firestore
-      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+      const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId,
         recipientId,
         timestamp: serverTimestamp(),
@@ -127,7 +130,7 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
         read: false,
       });
   
-      return { success: true, data: { id } };
+      return { success: true, data: { id: docRef.id } };
     } catch (error) {
       console.error('Error sending voice message:', error);
       return { error: 'Failed to send voice message' };
@@ -308,3 +311,5 @@ export async function rejectCall(callId: string) {
 export async function endCall(callId: string) {
     return updateCallStatus(callId, 'ended');
 }
+
+    

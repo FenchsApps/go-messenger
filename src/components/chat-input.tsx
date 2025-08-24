@@ -15,7 +15,7 @@ interface ChatInputProps {
   onSendMessage: (text: string) => Promise<void>;
   onSendSticker: (stickerId: string) => void;
   onSendGif: (gifUrl: string) => void;
-  onSendVoice: (audioBlob: Blob, duration: number) => Promise<void>;
+  onSendVoice: (audioBuffer: ArrayBuffer, duration: number) => Promise<void>;
 }
 
 export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice }: ChatInputProps) {
@@ -40,7 +40,8 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     }
     startVoiceTransition(async () => {
       try {
-        await onSendVoice(blob, duration);
+        const audioBuffer = await blob.arrayBuffer();
+        await onSendVoice(audioBuffer, duration);
         clearBlobUrl();
       } catch (error) {
         console.error('Error sending voice message:', error);
@@ -57,8 +58,8 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     recordingTime,
   } = useMediaRecorder({
     audio: { deviceId: selectedMicId === 'default' ? undefined : selectedMicId },
-    onStop: (blobUrl, blob) => {
-        handleSendVoiceMessage(blob, recordingTime);
+    onStop: (blob, duration) => {
+        handleSendVoiceMessage(blob, duration);
     },
     onError: (err) => {
         toast({ title: 'Ошибка записи', description: err.message, variant: 'destructive' });
@@ -176,3 +177,6 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
   );
 }
 
+
+
+    

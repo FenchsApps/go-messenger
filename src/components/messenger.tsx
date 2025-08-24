@@ -23,11 +23,6 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    // Request notification permission on component mount
-    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-      Notification.requestPermission();
-    }
-
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData: User[] = [];
       snapshot.forEach((doc) => {
@@ -60,6 +55,8 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
         if(currentUser) {
+            // Note: This is a best-effort attempt and may not always run on all browsers.
+            // A more robust solution involves Cloud Functions or a presence service.
             setDoc(doc(db, 'users', currentUser.id), { status: 'Offline', lastSeen: serverTimestamp() }, { merge: true });
         }
     };
@@ -107,7 +104,6 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
           {selectedUser ? (
             <ChatView
               key={selectedUserId}
-              initialMessages={[]}
               currentUser={currentUser}
               chatPartner={selectedUser}
               isMobile={isMobile}

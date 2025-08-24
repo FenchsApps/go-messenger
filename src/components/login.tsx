@@ -13,6 +13,7 @@ import type { User } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
+import { requestNotificationPermission } from '@/lib/utils';
 
 const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
 
@@ -35,12 +36,11 @@ export function Login() {
               lastSeen: serverTimestamp()
             }, { merge: true });
             setCurrentUser(user);
+            await requestNotificationPermission(); // Request permission after auto-login
           }
         }
       } catch (error) {
         console.error("Error checking logged in user:", error);
-        // If there's an error (e.g. offline), we still want to stop loading
-        // and show the login page. The user can try logging in manually.
       } finally {
         setIsLoading(false);
       }
@@ -53,7 +53,6 @@ export function Login() {
       (u) => u.phone === phone && u.password === password
     );
     if (user) {
-        // Initialize all users in Firestore if they don't exist
         for (const u of allUsers) {
             const userDocRef = doc(db, 'users', u.id);
             const userDoc = await getDoc(userDocRef);
@@ -71,8 +70,9 @@ export function Login() {
         lastSeen: serverTimestamp()
       }, { merge: true });
 
-      setCookie(LOGGED_IN_USER_COOKIE, user.id, 7); // Save cookie for 7 days
+      setCookie(LOGGED_IN_USER_COOKIE, user.id, 7);
       setCurrentUser(user);
+      await requestNotificationPermission(); // Request permission on manual login
     } else {
       toast({
         title: 'Ошибка входа',
@@ -96,7 +96,6 @@ export function Login() {
   };
 
   if (isLoading) {
-    // You can return a loading spinner here
     return (
         <div className="flex items-center justify-center min-h-screen bg-background">
             <p>Loading...</p>

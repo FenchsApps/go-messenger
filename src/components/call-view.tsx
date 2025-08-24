@@ -82,23 +82,36 @@ export function CallView({
   useEffect(() => {
     const initialize = async () => {
         isCleanedUpRef.current = false;
-        pcRef.current = new RTCPeerConnection(servers);
-
+        
+        let stream: MediaStream;
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
+            // First, try with the specific micId
+            stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { deviceId: micId ? { exact: micId } : undefined }, 
                 video: false 
             });
-            localStreamRef.current = stream;
-            stream.getTracks().forEach(track => {
-                pcRef.current?.addTrack(track, stream);
-            });
         } catch (error) {
-            console.error("Error getting user media", error);
-            setCallStatus("error");
-            setTimeout(handleEndCall, 3000);
-            return;
+            console.warn("Could not get specific mic, trying default", error);
+            // If that fails, try with any available audio input
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            } catch (getUserMediaError) {
+                console.error("Error getting user media", getUserMediaError);
+                setCallStatus("error");
+                setTimeout(handleEndCall, 3000);
+                return;
+            }
         }
+        
+        // Only proceed if we have a stream
+        localStreamRef.current = stream;
+
+        // Now create the peer connection
+        pcRef.current = new RTCPeerConnection(servers);
+
+        stream.getTracks().forEach(track => {
+            pcRef.current?.addTrack(track, stream);
+        });
 
         // Add a null check here to prevent race conditions on unmount
         if (!pcRef.current) return;
@@ -292,3 +305,5 @@ export function CallView({
     </div>
   );
 }
+
+    

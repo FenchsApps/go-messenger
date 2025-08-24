@@ -292,6 +292,3 @@ export function CallView({
     </div>
   );
 }
-
-    
-    

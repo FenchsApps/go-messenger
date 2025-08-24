@@ -39,6 +39,7 @@ export function CallView({
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const isCleanedUpRef = useRef(false);
   
   const [callStatus, setCallStatus] = useState(isReceivingCall ? 'incoming' : 'calling');
   const [isMuted, setIsMuted] = useState(false);
@@ -52,14 +53,9 @@ export function CallView({
   }, [callId, onEndCall]);
 
   useEffect(() => {
-    let isCleanedUp = false;
-    const iceCandidateQueue: RTCIceCandidateInit[] = [];
-    const pc = new RTCPeerConnection(servers);
-    pcRef.current = pc;
-
     const cleanup = () => {
-        if (isCleanedUp) return;
-        isCleanedUp = true;
+        if (isCleanedUpRef.current) return;
+        isCleanedUpRef.current = true;
         
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach(track => track.stop());
@@ -67,10 +63,15 @@ export function CallView({
         }
 
         if (pcRef.current) {
+            // Unassign event handlers
             pcRef.current.onicecandidate = null;
             pcRef.current.ontrack = null;
             pcRef.current.onconnectionstatechange = null;
-            pcRef.current.close();
+            
+            // Close the connection
+            if (pcRef.current.signalingState !== 'closed') {
+                pcRef.current.close();
+            }
             pcRef.current = null;
         }
         
@@ -78,89 +79,101 @@ export function CallView({
             remoteAudioRef.current.srcObject = null;
         }
     };
-
-    const unsubCallDoc = onSnapshot(doc(db, 'calls', callId!), (doc) => {
-        const callData = doc.data();
-        if (!doc.exists() || ['ended', 'declined'].includes(callData?.status)) {
-            handleEndCall();
-        }
-        if (callData?.status === 'active' && callStatus !== 'connected') {
-            setCallStatus('connected');
-        }
-    });
-
-    const unsubSignals = onSnapshot(collection(db, 'calls', callId!, 'signals'), async (snapshot) => {
-        if (isCleanedUp || !pcRef.current) return;
+    
+    const initialize = async () => {
+        const pc = new RTCPeerConnection(servers);
+        pcRef.current = pc;
+        const iceCandidateQueue: RTCIceCandidateInit[] = [];
         
-        for (const change of snapshot.docChanges()) {
-            if (change.type === 'added') {
-                const data = change.doc.data();
-                if (data.sdp) {
-                    const sdp = new RTCSessionDescription(data.sdp);
-                    try {
-                        if (pcRef.current.signalingState !== 'stable' && sdp.type === 'offer') {
-                            // This is a common issue. We can try to rollback and apply the offer.
-                            await Promise.all([
-                                pcRef.current.setLocalDescription({type: 'rollback'}),
-                                pcRef.current.setRemoteDescription(sdp)
-                            ]);
+        // Setup Firestore listeners
+        const unsubCallDoc = onSnapshot(doc(db, 'calls', callId!), (doc) => {
+            const callData = doc.data();
+            if (!doc.exists() || ['ended', 'declined'].includes(callData?.status)) {
+                handleEndCall();
+            }
+            if (callData?.status === 'active' && callStatus !== 'connected') {
+                setCallStatus('connected');
+            }
+        });
+
+        const unsubSignals = onSnapshot(collection(db, 'calls', callId!, 'signals'), async (snapshot) => {
+            if (!pcRef.current || pcRef.current.signalingState === 'closed') return;
+            
+            for (const change of snapshot.docChanges()) {
+                if (change.type === 'added') {
+                    const data = change.doc.data();
+                    if (data.sdp) {
+                        const sdp = new RTCSessionDescription(data.sdp);
+                        try {
+                            if (sdp.type === 'offer' && pcRef.current.signalingState !== 'stable') {
+                                // This condition prevents setting a new offer if one is already set.
+                                // It simplifies glare handling by ignoring the second offer.
+                                console.log("Ignoring subsequent offer in non-stable state.");
+                            } else {
+                                if (pcRef.current) await pcRef.current.setRemoteDescription(sdp);
+                            }
+
+                            if (sdp.type === 'offer' && isReceivingCall) {
+                                if (pcRef.current) {
+                                    const answer = await pcRef.current.createAnswer();
+                                    await pcRef.current.setLocalDescription(answer);
+                                    await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
+                                }
+                            }
+                            
+                            // Process any queued candidates
+                            while(iceCandidateQueue.length > 0) {
+                               const candidate = iceCandidateQueue.shift();
+                               if (pcRef.current?.remoteDescription && candidate) {
+                                   await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+                               }
+                            }
+
+                        } catch (error) {
+                            console.error("Error setting session description:", error);
+                        }
+                    } else if (data.candidate) {
+                        if (pcRef.current?.remoteDescription) {
+                            await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
                         } else {
-                            await pcRef.current.setRemoteDescription(sdp);
+                            iceCandidateQueue.push(data.candidate);
                         }
-
-                        if (sdp.type === 'offer' && isReceivingCall) {
-                            const answer = await pcRef.current.createAnswer();
-                            await pcRef.current.setLocalDescription(answer);
-                            await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
-                        }
-                        
-                        // Process any queued candidates
-                        iceCandidateQueue.forEach(candidate => pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)));
-                        iceCandidateQueue.length = 0; // Clear the queue
-
-                    } catch (error) {
-                        console.error("Error setting session description:", error);
-                    }
-                } else if (data.candidate) {
-                    if (pcRef.current.remoteDescription) {
-                        await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    } else {
-                        iceCandidateQueue.push(data.candidate); // Queue the candidate
                     }
                 }
             }
-        }
-    });
+        });
 
-    pc.onicecandidate = event => {
-        if (event.candidate && callId && !isCleanedUp) {
-            sendCallSignal(callId, { candidate: event.candidate.toJSON() });
-        }
-    };
+        if (!pcRef.current) return;
+        pcRef.current.onicecandidate = event => {
+            if (event.candidate && callId) {
+                sendCallSignal(callId, { candidate: event.candidate.toJSON() });
+            }
+        };
 
-    pc.ontrack = event => {
-        if (remoteAudioRef.current && event.streams[0]) {
-            remoteAudioRef.current.srcObject = event.streams[0];
-        }
-    };
+        if (!pcRef.current) return;
+        pcRef.current.ontrack = event => {
+            if (remoteAudioRef.current && event.streams[0]) {
+                remoteAudioRef.current.srcObject = event.streams[0];
+            }
+        };
+        
+        if (!pcRef.current) return;
+        pcRef.current.onconnectionstatechange = () => {
+            if (!pcRef.current) return;
+            const state = pcRef.current.connectionState;
+            if (state === 'connected') {
+                setCallStatus('connected');
+            } else if (['disconnected', 'failed', 'closed'].includes(state)) {
+                handleEndCall();
+            }
+        };
 
-    pc.onconnectionstatechange = () => {
-        if (isCleanedUp || !pcRef.current) return;
-        const state = pcRef.current.connectionState;
-        if (state === 'connected') {
-            setCallStatus('connected');
-        } else if (['disconnected', 'failed', 'closed'].includes(state)) {
-            handleEndCall();
-        }
-    };
-
-    (async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { deviceId: micId ? { exact: micId } : undefined }, 
                 video: false 
             });
-            if (isCleanedUp) return;
+            if (isCleanedUpRef.current) return;
 
             localStreamRef.current = stream;
             stream.getTracks().forEach(track => {
@@ -170,8 +183,12 @@ export function CallView({
             });
 
             if (!isReceivingCall) {
-                if (isCleanedUp || !pcRef.current) return;
-                const offer = await pcRef.current.createOffer({offerToReceiveAudio: true});
+                if (isCleanedUpRef.current || !pcRef.current) return;
+                const offerOptions = {
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: false
+                };
+                const offer = await pcRef.current.createOffer(offerOptions);
                 await pcRef.current.setLocalDescription(offer);
                 await sendCallSignal(callId!, { sdp: pcRef.current.localDescription?.toJSON() });
             }
@@ -180,18 +197,32 @@ export function CallView({
             setCallStatus("error");
             setTimeout(handleEndCall, 3000);
         }
-    })();
+
+        // Return a cleanup function for both listeners
+        return () => {
+            unsubCallDoc();
+            unsubSignals();
+        };
+    };
+
+    const listenersCleanupPromise = initialize();
 
     return () => {
+        // This is the main cleanup for the component
         cleanup();
-        unsubCallDoc();
-        unsubSignals();
+        
+        // Also ensure the Firestore listeners are cleaned up
+        listenersCleanupPromise.then(cleanupFunc => {
+            if (cleanupFunc) {
+                cleanupFunc();
+            }
+        });
     };
-  }, [callId, micId, isReceivingCall, handleEndCall]);
+  }, [callId, isReceivingCall, micId, handleEndCall]);
 
 
   const handleAcceptCall = async () => {
-    if (!callId) return;
+    if (!callId || !pcRef.current) return;
     setCallStatus('connecting');
     await updateCallStatus(callId, 'active');
   };
@@ -262,7 +293,7 @@ export function CallView({
             >
                 {isMuted ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
             </Button>
-            <Button onClick={onEndCall} variant="destructive" size="lg" className="rounded-full h-20 w-20 p-0">
+            <Button onClick={handleEndCall} variant="destructive" size="lg" className="rounded-full h-20 w-20 p-0">
                 <PhoneOff className="h-10 w-10" />
             </Button>
             <div className="h-16 w-16"></div> 

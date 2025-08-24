@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
@@ -117,7 +118,7 @@ export async function sendVoiceMessage(formData: FormData) {
   
     try {
       const audioBuffer = await audioBlob.arrayBuffer();
-      const uploadTask = await uploadBytes(storageRef, audioBuffer, { contentType: 'audio/webm' });
+      const uploadTask = await uploadBytes(storageRef, audioBuffer, { contentType: audioBlob.type || 'audio/webm' });
       const downloadURL = await getDownloadURL(uploadTask.ref);
   
       const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {

@@ -66,9 +66,8 @@ export function useMediaRecorder({
       return;
     }
     
-    // Set mimeType to ensure consistency
-    const options = { mimeType: 'audio/webm' };
-    mediaRecorder.current = new MediaRecorder(mediaStream.current, options);
+    // Let the browser decide the mimeType
+    mediaRecorder.current = new MediaRecorder(mediaStream.current);
 
     mediaRecorder.current.ondataavailable = (e) => {
       if (e.data.size > 0) {
@@ -77,7 +76,7 @@ export function useMediaRecorder({
     };
     mediaRecorder.current.onstop = () => {
       const duration = (Date.now() - startTimeRef.current) / 1000;
-      const blob = new Blob(mediaChunks.current, { type: 'audio/webm' });
+      const blob = new Blob(mediaChunks.current, { type: mediaChunks.current[0]?.type || 'audio/webm' });
       setStatus('stopped');
       onStop(blob, duration);
       mediaChunks.current = [];
@@ -110,8 +109,6 @@ export function useMediaRecorder({
   };
   
   const clearBlobUrl = () => {
-    // This function is kept for potential future use if we need to generate local URLs again
-    // but for now, we just reset the status.
     setStatus('idle');
   };
   

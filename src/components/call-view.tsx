@@ -35,6 +35,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const iceCandidateQueue = useRef<RTCIceCandidate[]>([]);
+  const isCleanedUpRef = useRef<boolean>(false);
   
   const [callId, setCallId] = useState<string | null>(initialCallId);
   const [callStatus, setCallStatus] = useState<CallStatus>(isReceivingCall ? 'ringing_incoming' : 'initializing');
@@ -56,6 +57,11 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   
   // --- Cleanup and Hang Up ---
   const cleanup = useCallback(() => {
+    if (isCleanedUpRef.current) {
+        return;
+    }
+    isCleanedUpRef.current = true;
+    
     if (animationFrameId.current) {
       cancelAnimationFrame(animationFrameId.current);
     }
@@ -67,7 +73,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       localStreamRef.current = null;
     }
     if (pcRef.current) {
-        // Detach all event handlers before closing
         pcRef.current.onicecandidate = null;
         pcRef.current.ontrack = null;
         pcRef.current.onconnectionstatechange = null;
@@ -183,23 +188,30 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         const q = query(signalsCollection, where('to', '==', currentUser.id), orderBy('createdAt', 'asc'));
         
         return onSnapshot(q, async (snapshot) => {
+          if (!pcRef.current) return;
+
           for (const change of snapshot.docChanges()) {
             if (change.type === 'added') {
               const signal = change.doc.data().data;
               
               if (signal.sdp) {
                 try {
-                    if (pc.signalingState === 'stable' && signal.sdp.type === 'offer') {
-                        // Callee receives offer
-                        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                    if (pcRef.current.signalingState === 'stable' && signal.sdp.type === 'offer') {
+                        await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                         // Process any queued candidates that arrived before the offer
-                        iceCandidateQueue.current.forEach(candidate => pc.addIceCandidate(candidate));
+                        iceCandidateQueue.current.forEach(candidate => pcRef.current?.addIceCandidate(candidate));
                         iceCandidateQueue.current = [];
-                    } else if (pc.signalingState === 'have-local-offer' && signal.sdp.type === 'answer') {
-                        // Caller receives answer
-                        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                        
+                         // Now create an answer
+                        setCallStatus('connecting');
+                        const answer = await pcRef.current.createAnswer();
+                        await pcRef.current.setLocalDescription(answer);
+                        await sendCallSignal(id, currentUser.id, chatPartner.id, { sdp: pcRef.current.localDescription?.toJSON() });
+
+                    } else if (pcRef.current.signalingState === 'have-local-offer' && signal.sdp.type === 'answer') {
+                        await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                         // Now that remote description is set, process any queued candidates
-                        iceCandidateQueue.current.forEach(candidate => pc.addIceCandidate(candidate));
+                        iceCandidateQueue.current.forEach(candidate => pcRef.current?.addIceCandidate(candidate));
                         iceCandidateQueue.current = [];
                     }
                 } catch(e) {
@@ -207,8 +219,8 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                 }
               } else if (signal.candidate) {
                 try {
-                    if (pc.remoteDescription) {
-                        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                    if (pcRef.current.remoteDescription) {
+                        await pcRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
                     } else {
                         // Queue candidates if remote description is not set yet
                         iceCandidateQueue.current.push(new RTCIceCandidate(signal.candidate));
@@ -235,7 +247,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
         unsubSignals = listenToSignals(newCallId);
         unsubCallDoc = listenToCallDoc(newCallId);
         
-        if (pc.signalingState === 'closed') return; // Prevent offer creation on closed connection
+        if (pc.signalingState === 'closed') return;
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         
@@ -255,26 +267,18 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     return () => {
       unsubCallDoc?.();
       unsubSignals?.();
-      cleanup();
+      hangUp();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only re-run if these change initially
+  }, []);
 
   // --- User Actions ---
   
   const handleAcceptCall = async () => {
-    const pc = pcRef.current;
-    if (!pc || !callId || pc.signalingState !== 'have-remote-offer') {
-       console.error("Cannot accept call in current state:", pc?.signalingState);
-       return;
-    }
-
+    // Callee accepts the call. The logic to create and send an answer is now
+    // inside the signal listener, once the offer is set.
+    // This function is now mainly for updating the UI.
     setCallStatus('connecting');
-    
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    await sendCallSignal(callId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
   };
   
   const toggleMic = () => {

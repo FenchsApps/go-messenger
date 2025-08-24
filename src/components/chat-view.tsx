@@ -26,10 +26,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, createCall } from '@/app/actions';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
+import { useRouter } from 'next/navigation';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -53,7 +54,7 @@ export function ChatView({
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
-
+  const router = useRouter();
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
@@ -189,6 +190,16 @@ export function ChatView({
     setIsClearingChat(false);
   }
 
+  const handleInitiateCall = async () => {
+    toast({ title: 'Начинаем звонок...', description: `Пожалуйста, подождите.` });
+    const result = await createCall(currentUser.id, chatPartner.id);
+    if (result.error) {
+        toast({ title: 'Ошибка звонка', description: result.error, variant: 'destructive' });
+    } else if (result.callId) {
+        router.push(`/call/${result.callId}`);
+    }
+  }
+
   return (
     <div className="flex flex-col h-full bg-background">
       <ChatHeader 
@@ -196,6 +207,7 @@ export function ChatView({
         isMobile={isMobile} 
         onBack={onBack}
         onClearChat={() => setIsClearingChat(true)}
+        onInitiateCall={handleInitiateCall}
       />
       <ChatMessages
         messages={messages}

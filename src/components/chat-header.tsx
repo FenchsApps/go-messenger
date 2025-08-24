@@ -2,7 +2,7 @@
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Crown, Trash2 } from 'lucide-react';
+import { ArrowLeft, Crown, Phone, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -14,9 +14,10 @@ interface ChatHeaderProps {
   isMobile: boolean;
   onBack: () => void;
   onClearChat: () => void;
+  onInitiateCall: () => void;
 }
 
-export function ChatHeader({ user, isMobile, onBack, onClearChat }: ChatHeaderProps) {
+export function ChatHeader({ user, isMobile, onBack, onClearChat, onInitiateCall }: ChatHeaderProps) {
   return (
     <div className="flex items-center justify-between p-2 md:p-4 border-b">
       <div className="flex items-center gap-3">
@@ -54,6 +55,9 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat }: ChatHeaderPr
         </div>
       </div>
        <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={onInitiateCall}>
+            <Phone className="h-5 w-5" />
+        </Button>
         <Button variant="ghost" size="icon" onClick={onClearChat}>
             <Trash2 className="h-5 w-5" />
         </Button>

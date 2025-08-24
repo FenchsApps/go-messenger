@@ -116,7 +116,7 @@ export function CallView({
                       if (data.sdp) {
                           const sdp = new RTCSessionDescription(data.sdp);
                            if (pcRef.current.signalingState !== 'stable' && sdp.type === 'offer') {
-                               // Ignore subsequent offers if not stable
+                                // Ignore subsequent offers if not stable
                            } else {
                                 await pcRef.current.setRemoteDescription(sdp);
                            }

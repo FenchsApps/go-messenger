@@ -102,8 +102,13 @@
 ```kotlin
 dependencies {
     // ... другие зависимости
+    
+    // Firebase BOM (Bill of Materials)
     implementation(platform("com.google.firebase:firebase-bom:33.1.1"))
+
+    // Firebase Cloud Messaging
     implementation("com.google.firebase:firebase-messaging-ktx")
+    
     // ДОБАВЬТЕ ЭТУ СТРОКУ, ЕСЛИ ЕЕ НЕТ
     implementation("com.google.firebase:firebase-firestore-ktx") 
 }
@@ -399,48 +404,8 @@ class FullScreenCallActivity : AppCompatActivity() {
 }
 ```
 
-## Шаг 5: Обновление `MainActivity.kt` для запроса разрешений
+## Шаг 5: Обновление `MainActivity.kt`
 
-Наконец, убедитесь, что ваша `MainActivity` запрашивает все необходимые разрешения при запуске. Замените код `MainActivity` на тот, что находится в файле `ANDROID_WEBVIEW_GUIDE.md`. Он уже содержит логику запроса разрешений на уведомления. Мы добавим в него проверку для `SYSTEM_ALERT_WINDOW`.
-
-**Важно:** Код для `MainActivity` находится в файле `ANDROID_WEBVIEW_GUIDE.md`. Просто убедитесь, что он содержит следующие функции для запроса разрешений.
-
-```kotlin
-// В MainActivity.kt
-
-// ... (другие импорты)
-import android.provider.Settings
-import android.net.Uri
-
-class MainActivity : AppCompatActivity() {
-
-    // ... (остальной код)
-
-    private const val ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 1234
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        // ... (остальной код onCreate)
-
-        // Запрос всех необходимых разрешений
-        askNotificationPermission()
-        checkOverlayPermission()
-    }
-
-    private fun checkOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            // Использование startActivityForResult устарело, но для простоты примера
-            // можно оставить так. В проде лучше использовать registerForActivityResult.
-            startActivityForResult(intent, ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
-        }
-    }
-    
-    // ... (остальной код MainActivity, включая askNotificationPermission)
-}
-```
+Наконец, убедитесь, что ваша `MainActivity` запрашивает все необходимые разрешения при запуске. **Используйте версию `MainActivity.kt` из файла `ANDROID_WEBVIEW_GUIDE.md`**, так как она уже содержит всю необходимую логику для запроса разрешений. Этот код является единым и полным.
 
 Теперь у вас есть полная система для отображения полноэкранных уведомлений о звонках.

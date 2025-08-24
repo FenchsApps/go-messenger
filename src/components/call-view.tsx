@@ -87,6 +87,7 @@ export function CallView({
         
         // Setup Firestore listeners
         const unsubCallDoc = onSnapshot(doc(db, 'calls', callId!), (doc) => {
+            if (isCleanedUpRef.current) return;
             const callData = doc.data();
             if (!doc.exists() || ['ended', 'declined'].includes(callData?.status)) {
                 handleEndCall();
@@ -105,9 +106,7 @@ export function CallView({
                     if (data.sdp) {
                         const sdp = new RTCSessionDescription(data.sdp);
                         try {
-                            if (sdp.type === 'offer' && pcRef.current.signalingState !== 'stable') {
-                                // This condition prevents setting a new offer if one is already set.
-                                // It simplifies glare handling by ignoring the second offer.
+                           if (sdp.type === 'offer' && pcRef.current.signalingState !== 'stable') {
                                 console.log("Ignoring subsequent offer in non-stable state.");
                             } else {
                                 if (pcRef.current) await pcRef.current.setRemoteDescription(sdp);
@@ -121,7 +120,6 @@ export function CallView({
                                 }
                             }
                             
-                            // Process any queued candidates
                             while(iceCandidateQueue.length > 0) {
                                const candidate = iceCandidateQueue.shift();
                                if (pcRef.current?.remoteDescription && candidate) {
@@ -154,6 +152,7 @@ export function CallView({
         pcRef.current.ontrack = event => {
             if (remoteAudioRef.current && event.streams[0]) {
                 remoteAudioRef.current.srcObject = event.streams[0];
+                remoteAudioRef.current.play().catch(e => console.error("Error playing remote audio:", e));
             }
         };
         
@@ -198,7 +197,6 @@ export function CallView({
             setTimeout(handleEndCall, 3000);
         }
 
-        // Return a cleanup function for both listeners
         return () => {
             unsubCallDoc();
             unsubSignals();
@@ -208,10 +206,7 @@ export function CallView({
     const listenersCleanupPromise = initialize();
 
     return () => {
-        // This is the main cleanup for the component
         cleanup();
-        
-        // Also ensure the Firestore listeners are cleaned up
         listenersCleanupPromise.then(cleanupFunc => {
             if (cleanupFunc) {
                 cleanupFunc();

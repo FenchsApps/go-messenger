@@ -114,7 +114,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       
       // Handle connection state
       pc.onconnectionstatechange = () => {
-        console.log("Connection state:", pc.connectionState);
         if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
           hangUp();
         }
@@ -176,21 +175,30 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
                     const signal = change.doc.data().data;
                     
                     if (signal.sdp) {
-                         if (signal.sdp.type === 'answer' && pc.signalingState === 'have-local-offer') {
-                            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-                            await processCandidateQueue();
-                         } else if (signal.sdp.type === 'offer' && pc.signalingState === 'stable') {
+                         // Callee receives offer
+                         if (signal.sdp.type === 'offer' && pc.signalingState === 'stable') {
+                            setCallStatus('connecting');
                             await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                             await processCandidateQueue();
 
                             const answer = await pc.createAnswer();
                             await pc.setLocalDescription(answer);
                             await sendCallSignal(currentCallId, currentUser.id, chatPartner.id, { sdp: pc.localDescription.toJSON() });
-                            setCallStatus('connecting');
+                         }
+                         // Caller receives answer
+                         else if (signal.sdp.type === 'answer' && pc.signalingState === 'have-local-offer') {
+                            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                            await processCandidateQueue();
                          }
                     } else if (signal.candidate) {
                         if (pc.remoteDescription) {
-                            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                            try {
+                                await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                            } catch (e) {
+                                if (pc.signalingState !== 'closed') {
+                                    console.error("Error adding ICE candidate:", e);
+                                }
+                            }
                         } else {
                             candidateQueue.current.push(signal.candidate);
                         }
@@ -209,24 +217,28 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
     
     const setupMicVisualizer = (stream: MediaStream) => {
         if (stream.getAudioTracks().length > 0) {
-            const audioContext = new AudioContext();
-            audioContextRef.current = audioContext;
-            const source = audioContext.createMediaStreamSource(stream);
-            const analyser = audioContext.createAnalyser();
-            analyser.fftSize = 32;
-            source.connect(analyser);
-            analyserRef.current = analyser;
+            try {
+                const audioContext = new AudioContext();
+                audioContextRef.current = audioContext;
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 32;
+                source.connect(analyser);
+                analyserRef.current = analyser;
 
-            const visualize = () => {
-                if (!analyserRef.current || audioContext.state === 'closed') return;
-                const bufferLength = analyserRef.current.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-                analyserRef.current.getByteFrequencyData(dataArray);
-                const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
-                setMicVolume(average / 128);
-                animationFrameRef.current = requestAnimationFrame(visualize);
-            };
-            visualize();
+                const visualize = () => {
+                    if (!analyserRef.current || audioContext.state === 'closed') return;
+                    const bufferLength = analyserRef.current.frequencyBinCount;
+                    const dataArray = new Uint8Array(bufferLength);
+                    analyserRef.current.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
+                    setMicVolume(average / 128);
+                    animationFrameRef.current = requestAnimationFrame(visualize);
+                };
+                visualize();
+            } catch (e) {
+                console.error("Failed to setup mic visualizer. AudioContext may not be supported.", e);
+            }
         }
     };
     
@@ -238,7 +250,6 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       
       unsubCallDoc?.();
       unsubSignals?.();
-      console.log("Cleaning up call view...");
 
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -266,9 +277,10 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleAcceptCall = () => {
-    // This function is now mainly for UI state change, actual logic is in useEffect
-    setCallStatus('connecting');
+  const handleAcceptCall = async () => {
+    // The core logic is now handled in the onSnapshot listener when the offer arrives.
+    // This button just needs to change the UI state.
+    // We can also trigger any pre-answer logic here if needed in the future.
   };
 
   const toggleMic = () => {
@@ -339,7 +351,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
       <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
       <video ref={localVideoRef} autoPlay playsInline muted className="absolute bottom-28 md:bottom-4 right-4 h-40 w-32 object-cover rounded-md border-2 border-white/50" />
       
-      {(callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'initializing') && (
+      {(callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'initializing') && !isReceivingCall && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white">
             <Avatar className="h-24 w-24 border-4 border-white">
                 <AvatarImage src={chatPartner.avatar} />
@@ -347,8 +359,7 @@ export function CallView({ currentUser, chatPartner, isReceivingCall, initialCal
             </Avatar>
             <h2 className="text-2xl font-bold mt-4">{chatPartner.name}</h2>
             <p className="text-white/80">
-              {callStatus === 'ringing' && !isReceivingCall ? 'Набор номера...' : 'Соединение...'}
-              {callStatus === 'ringing' && isReceivingCall ? 'Входящий звонок...' : ''}
+              {callStatus === 'ringing' ? 'Набор номера...' : 'Соединение...'}
               {callStatus === 'initializing' ? 'Инициализация...' : ''}
               {callStatus === 'connecting' ? 'Соединение...' : ''}
             </p>

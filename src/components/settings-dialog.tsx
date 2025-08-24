@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -10,44 +11,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Settings, Moon, Sun, Monitor, CaseSensitive, Mic } from 'lucide-react';
+import { Settings, Moon, Sun, Monitor, CaseSensitive } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useEffect, useState } from 'react';
 
 export function SettingsDialog() {
   const { 
     theme, setTheme, 
     textSize, setTextSize,
-    audioDeviceId, setAudioDeviceId,
   } = useSettings();
 
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
-  const [hasPermission, setHasPermission] = useState(false);
-
-  useEffect(() => {
-    // A one-time permission request to get device labels
-    const getDevices = async () => {
-      try {
-        // We only need audio, so we don't request video
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        setHasPermission(true);
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
-        setAudioDevices(audioInputDevices);
-      } catch (err) {
-        console.error("Error getting media devices.", err);
-        setHasPermission(false);
-      }
-    };
-    getDevices();
-  }, []);
 
   return (
     <Dialog>
@@ -140,23 +112,6 @@ export function SettingsDialog() {
               </div>
             </RadioGroup>
           </div>
-           <div className="grid gap-3">
-              <Label htmlFor="audio-device" className="font-semibold flex items-center gap-2"><Mic className="h-4 w-4" /> Микрофон</Label>
-               {!hasPermission && <p className="text-xs text-muted-foreground">Дайте разрешение на доступ к микрофону, чтобы выбрать устройство.</p>}
-              <Select value={audioDeviceId ?? 'default'} onValueChange={setAudioDeviceId} disabled={!hasPermission}>
-                <SelectTrigger id="audio-device">
-                  <SelectValue placeholder="Выберите микрофон" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">По умолчанию</SelectItem>
-                  {audioDevices.map(device => (
-                    <SelectItem key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Микрофон ${audioDevices.indexOf(device) + 1}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-           </div>
         </div>
       </DialogContent>
     </Dialog>

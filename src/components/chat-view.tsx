@@ -6,7 +6,6 @@ import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
 import { ChatInput } from './chat-input';
-import { CallView } from './call-view';
 import {
   Dialog,
   DialogContent,
@@ -29,7 +28,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, where, getDocs, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 
 function getChatId(userId1: string, userId2: string) {
@@ -55,13 +54,6 @@ export function ChatView({
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
 
-  // Call state
-  const [isCalling, setIsCalling] = useState(false);
-  const [isReceivingCall, setIsReceivingCall] = useState(false);
-  const [activeCallId, setActiveCallId] = useState<string | null>(null);
-  const callListenerUnsubscribeRef = useRef<() => void | null>(null);
-
-
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
@@ -80,14 +72,12 @@ export function ChatView({
   }, []);
 
   useEffect(() => {
-    if (isWindowFocused && !isCalling) {
+    if (isWindowFocused) {
         markMessagesAsRead(chatId, currentUser.id);
     }
-  }, [isWindowFocused, messages, chatId, currentUser.id, isCalling]);
+  }, [isWindowFocused, messages, chatId, currentUser.id]);
   
   useEffect(() => {
-    if (isCalling) return;
-
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
     const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
@@ -112,58 +102,7 @@ export function ChatView({
     return () => {
         unsubscribeMessages();
     }
-  }, [chatId, currentUser.id, isWindowFocused, isCalling]);
-
-
-  // Listen for incoming calls from the chat partner
-  useEffect(() => {
-    if (isCalling || callListenerUnsubscribeRef.current) return;
-
-    const callsRef = collection(db, 'calls');
-    const q = query(
-      callsRef,
-      where('recipientId', '==', currentUser.id)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const callDoc = snapshot.docs.find(doc => {
-        const data = doc.data();
-        return data.callerId === chatPartner.id && data.status === 'ringing';
-      });
-
-      if (callDoc) {
-        setActiveCallId(callDoc.id);
-        setIsReceivingCall(true);
-        setIsCalling(true);
-        // Once we find a call, we stop listening to prevent re-triggers.
-        if(callListenerUnsubscribeRef.current) {
-            callListenerUnsubscribeRef.current();
-            callListenerUnsubscribeRef.current = null;
-        }
-      }
-    });
-    
-    callListenerUnsubscribeRef.current = unsubscribe;
-
-    return () => {
-      if(callListenerUnsubscribeRef.current) {
-          callListenerUnsubscribeRef.current();
-          callListenerUnsubscribeRef.current = null;
-      }
-    };
-  }, [currentUser.id, chatPartner.id, isCalling]);
-
-
-  const handleEndCall = useCallback(() => {
-    setIsCalling(false);
-    setIsReceivingCall(false);
-    setActiveCallId(null);
-  }, []);
-
-  const handleStartCall = () => {
-    setIsCalling(true);
-    setIsReceivingCall(false);
-  };
+  }, [chatId, currentUser.id, isWindowFocused]);
 
   const handleSendMessage = async (text: string) => {
     const result = await sendMessage(currentUser.id, chatPartner.id, text);
@@ -238,18 +177,6 @@ export function ChatView({
     setIsClearingChat(false);
   }
 
-  if (isCalling) {
-    return (
-      <CallView
-        currentUser={currentUser}
-        chatPartner={chatPartner}
-        isReceivingCall={isReceivingCall}
-        initialCallId={activeCallId}
-        onEndCall={handleEndCall}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col h-full bg-background">
       <ChatHeader 
@@ -257,7 +184,6 @@ export function ChatView({
         isMobile={isMobile} 
         onBack={onBack}
         onClearChat={() => setIsClearingChat(true)}
-        onStartCall={handleStartCall}
       />
       <ChatMessages
         messages={messages}

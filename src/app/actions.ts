@@ -195,37 +195,3 @@ export async function clearChatHistory(chatId: string) {
         return { error: 'Failed to clear chat history.' };
     }
 }
-
-
-// Call Actions
-
-export async function createCall(callerId: string, recipientId: string) {
-  const callRef = doc(collection(db, 'calls'));
-  await setDoc(callRef, {
-    callerId,
-    recipientId,
-    status: 'ringing',
-    createdAt: serverTimestamp(),
-  });
-  return callRef.id;
-}
-
-export async function sendCallSignal(callId: string, data: any) {
-  const signalsCollection = collection(db, 'calls', callId, 'signals');
-  await addDoc(signalsCollection, { ...data, createdAt: serverTimestamp() });
-}
-
-export async function endCall(callId: string) {
-    const callRef = doc(db, 'calls', callId);
-    if ((await getDoc(callRef)).exists()) {
-        // Delete signals subcollection
-        const signalsCollection = collection(db, 'calls', callId, 'signals');
-        const signalsSnapshot = await getDocs(signalsCollection);
-        const batch = writeBatch(db);
-        signalsSnapshot.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-        
-        // Delete the call document itself
-        await deleteDoc(callRef);
-    }
-}

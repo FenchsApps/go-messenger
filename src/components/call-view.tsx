@@ -211,14 +211,9 @@ export function CallView({
   const handleAcceptCall = async () => {
     if (!callId) return;
     setCallStatus('connecting');
-    // The offer should already be set via the listener. Now, we create an answer.
-    if (pcRef.current && pcRef.current.remoteDescription) {
-        await updateCallStatus(callId, 'active');
-    } else {
-        // Offer hasn't been received yet, which is a problem.
-        console.error("Cannot accept call, remote description is not set.");
-        handleEndCall();
-    }
+    // The offer is handled by the onSnapshot listener.
+    // Here we just update the call status.
+    await updateCallStatus(callId, 'active');
   };
 
   const handleDeclineCall = async () => {
@@ -298,4 +293,5 @@ export function CallView({
   );
 }
 
+    
     

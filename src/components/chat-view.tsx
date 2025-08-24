@@ -149,8 +149,11 @@ export function ChatView({
     }
   };
   
-  const handleSendVoice = async (audioAsBase64: string, duration: number) => {
-    const result = await sendVoiceMessage(currentUser.id, chatPartner.id, audioAsBase64, duration);
+  const handleSendVoice = async (formData: FormData) => {
+    formData.append('senderId', currentUser.id);
+    formData.append('recipientId', chatPartner.id);
+
+    const result = await sendVoiceMessage(formData);
     if(result.error) {
         toast({
             title: "Ошибка отправки аудио",
@@ -312,5 +315,3 @@ export function ChatView({
     </div>
   );
 }
-
-    

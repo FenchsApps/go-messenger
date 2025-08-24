@@ -15,23 +15,8 @@ interface ChatInputProps {
   onSendMessage: (text: string) => Promise<void>;
   onSendSticker: (stickerId: string) => void;
   onSendGif: (gifUrl: string) => void;
-  onSendVoice: (audioAsBase64: string, duration: number) => Promise<void>;
+  onSendVoice: (formData: FormData) => Promise<void>;
 }
-
-const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = () => {
-        const base64data = reader.result as string;
-        // remove the "data:audio/webm;base64," part
-        resolve(base64data.split(',')[1]);
-      };
-      reader.onerror = (error) => {
-        reject(error);
-      };
-    });
-};
 
 export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice }: ChatInputProps) {
   const [text, setText] = useState('');
@@ -55,8 +40,12 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     }
     startVoiceTransition(async () => {
       try {
-        const audioAsBase64 = await blobToBase64(blob);
-        await onSendVoice(audioAsBase64, duration);
+        const formData = new FormData();
+        formData.append('audio', blob, 'voice-message.webm');
+        formData.append('duration', String(duration));
+        
+        await onSendVoice(formData);
+        
         clearBlobUrl();
       } catch (error) {
         console.error('Error sending voice message:', error);
@@ -191,10 +180,3 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     </div>
   );
 }
-
-
-
-    
-
-
-

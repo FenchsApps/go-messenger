@@ -1,4 +1,3 @@
-
 // @ts-nocheck
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
@@ -102,8 +101,13 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
     }
 }
 
-export async function sendVoiceMessage(senderId: string, recipientId: string, audioAsBase64: string, duration: number) {
-    if (!senderId || !recipientId || !audioAsBase64) {
+export async function sendVoiceMessage(formData: FormData) {
+    const audioBlob = formData.get('audio') as Blob;
+    const senderId = formData.get('senderId') as string;
+    const recipientId = formData.get('recipientId') as string;
+    const duration = Number(formData.get('duration'));
+
+    if (!audioBlob || !senderId || !recipientId) {
       return { error: 'Invalid voice message data' };
     }
   
@@ -112,15 +116,10 @@ export async function sendVoiceMessage(senderId: string, recipientId: string, au
     const storageRef = ref(storage, `voice_messages/${chatId}/${audioId}.webm`);
   
     try {
-      // Decode the Base64 string into a Buffer
-      const audioBuffer = Buffer.from(audioAsBase64, 'base64');
-      const metadata = { contentType: 'audio/webm' };
-      
-      // Upload the buffer to Firebase Storage with metadata
-      const uploadTask = await uploadBytes(storageRef, audioBuffer, metadata);
+      const audioBuffer = await audioBlob.arrayBuffer();
+      const uploadTask = await uploadBytes(storageRef, audioBuffer, { contentType: 'audio/webm' });
       const downloadURL = await getDownloadURL(uploadTask.ref);
   
-      // Create the message document in Firestore
       const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId,
         recipientId,
@@ -285,8 +284,3 @@ export async function endCall(callId: string) {
      console.warn("endCall is deprecated and will be removed.");
     return { error: "Calling feature is disabled." };
 }
-
-
-    
-
-    

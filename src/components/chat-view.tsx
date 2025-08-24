@@ -1,6 +1,6 @@
 
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Message, User } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, getDocs, doc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 
 function getChatId(userId1: string, userId2: string) {
@@ -59,6 +59,8 @@ export function ChatView({
   const [isCalling, setIsCalling] = useState(false);
   const [isReceivingCall, setIsReceivingCall] = useState(false);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const callListenerUnsubscribeRef = useRef<() => void | null>(null);
+
 
   const { toast } = useToast();
   
@@ -115,33 +117,41 @@ export function ChatView({
 
   // Listen for incoming calls from the chat partner
   useEffect(() => {
-    if (isCalling) return;
+    if (isCalling || callListenerUnsubscribeRef.current) return;
 
     const callsRef = collection(db, 'calls');
-    // Simplified query to avoid needing a composite index
     const q = query(
       callsRef,
       where('recipientId', '==', currentUser.id)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) return;
-
-      // Filter on the client to find the correct ringing call from the current chat partner
       const callDoc = snapshot.docs.find(doc => {
         const data = doc.data();
         return data.callerId === chatPartner.id && data.status === 'ringing';
       });
 
-      if (callDoc && callDoc.id !== activeCallId) {
+      if (callDoc) {
         setActiveCallId(callDoc.id);
         setIsReceivingCall(true);
         setIsCalling(true);
+        // Once we find a call, we stop listening to prevent re-triggers.
+        if(callListenerUnsubscribeRef.current) {
+            callListenerUnsubscribeRef.current();
+            callListenerUnsubscribeRef.current = null;
+        }
       }
     });
     
-    return () => unsubscribe();
-  }, [currentUser.id, chatPartner.id, isCalling, activeCallId]);
+    callListenerUnsubscribeRef.current = unsubscribe;
+
+    return () => {
+      if(callListenerUnsubscribeRef.current) {
+          callListenerUnsubscribeRef.current();
+          callListenerUnsubscribeRef.current = null;
+      }
+    };
+  }, [currentUser.id, chatPartner.id, isCalling]);
 
 
   const handleEndCall = useCallback(() => {

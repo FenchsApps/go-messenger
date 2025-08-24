@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useTransition, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -32,17 +33,39 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     }
   }, []);
 
+  const handleSendVoiceMessage = async (blobUrl: string, duration: number) => {
+    if (!blobUrl) {
+      toast({ title: 'Ошибка', description: 'Нет аудио для отправки.' });
+      return;
+    }
+    startVoiceTransition(async () => {
+      try {
+        const response = await fetch(blobUrl);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          await onSendVoice(base64data, duration);
+          clearBlobUrl();
+        };
+      } catch (error) {
+        console.error('Error sending voice message:', error);
+        toast({ title: 'Ошибка отправки', description: 'Не удалось отправить голосовое сообщение.', variant: 'destructive' });
+      }
+    });
+  };
+
   const {
     status,
     startRecording,
     stopRecording,
-    mediaBlobUrl,
     clearBlobUrl,
     recordingTime,
   } = useMediaRecorder({
     audio: { deviceId: selectedMicId === 'default' ? undefined : selectedMicId },
-    onStop: (blobUrl, blob) => {
-        // We will send the blob from here.
+    onStop: (blobUrl) => {
+        handleSendVoiceMessage(blobUrl, recordingTime);
     },
     onError: (err) => {
         toast({ title: 'Ошибка записи', description: err.message, variant: 'destructive' });
@@ -58,33 +81,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
       setText('');
     });
   };
-
-  const handleSendVoiceMessage = async () => {
-      if (!mediaBlobUrl) {
-        toast({ title: 'Ошибка', description: 'Нет аудио для отправки.' });
-        return;
-      }
-      stopRecording();
-      startVoiceTransition(async () => {
-        try {
-            // Fetch blob data and convert to base64
-            const response = await fetch(mediaBlobUrl);
-            const blob = await response.blob();
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = async () => {
-                const base64data = reader.result as string;
-                await onSendVoice(base64data, recordingTime);
-                clearBlobUrl();
-            };
-
-        } catch (error) {
-            console.error("Error sending voice message:", error);
-            toast({ title: 'Ошибка отправки', description: 'Не удалось отправить голосовое сообщение.', variant: 'destructive' });
-        }
-      });
-  }
-
+  
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -95,7 +92,6 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
   const handleMicClick = () => {
     if (status === 'recording') {
         stopRecording();
-        handleSendVoiceMessage();
     } else {
         clearBlobUrl(); // Clear any previous recording
         startRecording();
@@ -128,7 +124,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
                     <Button 
                         size="icon" 
                         className="h-11 w-11 shrink-0 rounded-full"
-                        onClick={handleSendVoiceMessage}
+                        onClick={stopRecording}
                         disabled={isVoicePending}
                     >
                         {isVoicePending ? <Loader2 className="animate-spin" /> : <Send className="h-5 w-5" />}
@@ -186,3 +182,4 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     </div>
   );
 }
+

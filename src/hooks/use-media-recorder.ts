@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useRef } from 'react';
 
@@ -123,5 +124,5 @@ export function useMediaRecorder({
     }
   }, [externalStream]);
 
-  return { status, error, mediaBlobUrl, startRecording, stopRecording, clearBlobUrl, recordingTime };
+  return { status, error, startRecording, stopRecording, clearBlobUrl, recordingTime };
 }

@@ -16,9 +16,12 @@ interface ChatMessagesProps {
   onEdit: (message: Message) => void;
   onDelete: (messageId: string) => void;
   onForward: (message: Message) => void;
+  background?: string;
 }
 
-export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDelete, onForward }: ChatMessagesProps) {
+const defaultBackgroundClass = 'chat-background';
+
+export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDelete, onForward, background }: ChatMessagesProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { textSize } = useSettings();
 
@@ -30,7 +33,12 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
 
   return (
     <div ref={scrollAreaRef} className="relative flex-1 overflow-y-auto p-4 space-y-4">
-       <div className="absolute inset-0 chat-background opacity-70 dark:opacity-100" />
+       <div className={cn(
+           "absolute inset-0 opacity-70 dark:opacity-100",
+           !background && defaultBackgroundClass
+        )} 
+        style={background ? { backgroundImage: `url("${background}")`, backgroundSize: 'cover', backgroundRepeat: 'repeat', backgroundPosition: 'center' } : {}}
+       />
       {messages.map((message, index) => {
         const isCurrentUser = message.senderId === currentUser.id;
         const sender = isCurrentUser ? currentUser : chatPartner;

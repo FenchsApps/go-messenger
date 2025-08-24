@@ -31,6 +31,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 import { useRouter } from 'next/navigation';
+import { ChatSettings } from './chat/chat-settings';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -54,10 +55,18 @@ export function ChatView({
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
+  const [isChatSettingsOpen, setIsChatSettingsOpen] = useState(false);
+  const [chatBackground, setChatBackground] = useState('');
+
   const router = useRouter();
   const { toast } = useToast();
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
+
+  useEffect(() => {
+    const savedBg = localStorage.getItem(`chat-background-${chatId}`);
+    setChatBackground(savedBg || '');
+  }, [chatId]);
 
    useEffect(() => {
     const handleFocus = () => setIsWindowFocused(true);
@@ -210,6 +219,11 @@ export function ChatView({
     }
   }
 
+  const handleBackgroundChange = (newBg: string) => {
+    setChatBackground(newBg);
+    localStorage.setItem(`chat-background-${chatId}`, newBg);
+  };
+
   return (
     <div className="flex flex-col h-full bg-transparent">
       <ChatHeader 
@@ -218,6 +232,7 @@ export function ChatView({
         onBack={onBack}
         onClearChat={() => setIsClearingChat(true)}
         onInitiateCall={handleInitiateCall}
+        onOpenSettings={() => setIsChatSettingsOpen(true)}
       />
       <ChatMessages
         messages={messages}
@@ -226,12 +241,20 @@ export function ChatView({
         onEdit={handleEdit}
         onDelete={handleDelete}
         onForward={handleForward}
+        background={chatBackground}
       />
       <ChatInput 
         onSendMessage={handleSendMessage} 
         onSendSticker={handleSendSticker}
         onSendGif={handleSendGif}
        />
+      
+      <ChatSettings 
+        isOpen={isChatSettingsOpen}
+        onOpenChange={setIsChatSettingsOpen}
+        onBackgroundChange={handleBackgroundChange}
+        currentBackground={chatBackground}
+      />
 
       <Dialog open={!!editingMessage} onOpenChange={() => setEditingMessage(null)}>
         <DialogContent>

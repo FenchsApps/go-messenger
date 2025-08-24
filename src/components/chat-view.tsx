@@ -81,6 +81,8 @@ export function ChatView({
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
     const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
+      let isInitialLoad = messages.length === 0 && querySnapshot.docs.length > 0;
+      
       const newMessages: Message[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -92,11 +94,29 @@ export function ChatView({
         newMessages.push(newMessage);
       });
       
+      const lastMessage = newMessages[newMessages.length - 1];
+
+      if (!isInitialLoad && lastMessage && lastMessage.senderId !== currentUser.id && !isWindowFocused) {
+          if (Notification.permission === 'granted') {
+              const notification = new Notification(chatPartner.name, {
+                  body: lastMessage.text || (lastMessage.type === 'sticker' ? 'Стикер' : 'GIF'),
+                  icon: chatPartner.avatar,
+                  tag: chatId, // Tag to prevent multiple notifications for the same chat
+              });
+              // Optional: close notification on click and focus window
+              notification.onclick = () => {
+                  window.focus();
+                  notification.close();
+              };
+          }
+      }
+      
       setMessages(newMessages);
     });
 
     return () => unsubscribeMessages();
-  }, [chatId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, currentUser.id, chatPartner.name, chatPartner.avatar, isWindowFocused]);
 
   const handleSendMessage = async (text: string) => {
     const result = await sendMessage(currentUser.id, chatPartner.id, text);

@@ -221,25 +221,25 @@ export async function sendCallSignal(callId: string, fromId: string, toId: strin
 }
 
 export async function endCall(callId: string) {
+    if (!callId) return;
     const callDocRef = doc(db, 'calls', callId);
     try {
         const callDoc = await getDoc(callDocRef);
         if (callDoc.exists()) {
+            // Delete all signals in the subcollection first
             const signalsQuery = query(collection(callDocRef, 'signals'));
-            
             const signalsSnapshot = await getDocs(signalsQuery);
-
             const batch = writeBatch(db);
             signalsSnapshot.forEach(doc => batch.delete(doc.ref));
+            
+            // Then delete the main call document
             batch.delete(callDocRef);
-
             await batch.commit();
         }
     } catch (error) {
+        // It's possible the document is already deleted, so we can ignore "not-found" errors.
         if (error.code !== 'not-found') {
             console.error("Error ending call:", error);
         }
     }
 }
-
-    

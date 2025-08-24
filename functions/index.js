@@ -45,6 +45,8 @@ exports.sendPushNotification = functions.firestore
         notificationBody = 'Стикер';
     } else if (message.type === 'gif') {
         notificationBody = 'GIF';
+    } else if (message.type === 'audio') {
+        notificationBody = 'Голосовое сообщение';
     }
 
     const payload = {
@@ -85,12 +87,9 @@ exports.sendPushNotification = functions.firestore
 
 // --- NEW CALL FUNCTIONS ---
 
-const CALL_TIMEOUT_SECONDS = 45;
-
 /**
  * Triggers when a new call document is created.
  * Sends a high-priority FCM message to the receiver to initiate the call screen.
- * Sets a timeout to automatically reject the call if not answered.
  */
 exports.initiateCall = functions.firestore
   .document('calls/{callId}')
@@ -137,22 +136,7 @@ exports.initiateCall = functions.firestore
       console.error(`Error sending call notification for call [${callId}]:`, error);
       return snap.ref.update({ status: 'error_fcm_failed' });
     }
-
-    // 4. Set a timeout to auto-reject the call
-    // We use Cloud Tasks or a scheduled function for production, but for simplicity,
-    // a setTimeout can work here, though it's not guaranteed in a serverless environment.
-    // For a robust solution, a separate scheduled function that checks for timed-out calls is better.
-    // This is a simplified example:
-    const timeoutPromise = new Promise(resolve => setTimeout(resolve, CALL_TIMEOUT_SECONDS * 1000));
-    await timeoutPromise;
-
-    // After timeout, check if the call is still 'calling'
-    const currentCallDoc = await snap.ref.get();
-    if (currentCallDoc.exists && currentCallDoc.data().status === 'calling') {
-      console.log(`Call [${callId}] timed out. Rejecting.`);
-      return snap.ref.update({ status: 'rejected_timeout' });
-    }
-    console.log(`Timeout check for call [${callId}]: Call status is now '${currentCallDoc.data().status}'. No action taken.`);
+    
     return null;
   });
 

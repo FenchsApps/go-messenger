@@ -8,17 +8,19 @@ import { cn } from '@/lib/utils';
 
 interface VoiceMessagePlayerProps {
   audioUrl: string;
+  duration?: number;
 }
 
-export function VoiceMessagePlayer({ audioUrl }: VoiceMessagePlayerProps) {
+export function VoiceMessagePlayer({ audioUrl, duration: propDuration }: VoiceMessagePlayerProps) {
   const waveformRef = useRef<HTMLDivElement | null>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState('0:00');
-  const [duration, setDuration] = useState('0:00');
+  const [totalDuration, setTotalDuration] = useState(propDuration ? formatTime(propDuration) : '0:00');
   const [isLoading, setIsLoading] = useState(true);
 
-  const formatTime = (seconds: number) => {
+  function formatTime(seconds: number) {
+    if (isNaN(seconds)) return '0:00';
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
@@ -44,7 +46,7 @@ export function VoiceMessagePlayer({ audioUrl }: VoiceMessagePlayerProps) {
     wavesurferRef.current = wavesurfer;
 
     wavesurfer.on('ready', (newDuration) => {
-      setDuration(formatTime(newDuration));
+      setTotalDuration(formatTime(newDuration));
       setIsLoading(false);
     });
 
@@ -91,7 +93,7 @@ export function VoiceMessagePlayer({ audioUrl }: VoiceMessagePlayerProps) {
           "text-xs font-mono text-muted-foreground transition-opacity",
           isLoading && "opacity-0"
         )}>
-        {isPlaying ? currentTime : duration}
+        {isPlaying ? currentTime : totalDuration}
       </span>
     </div>
   );

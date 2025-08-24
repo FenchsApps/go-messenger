@@ -1,7 +1,7 @@
 
 'use client';
-import { useState, useEffect, useCallback } from 'react';
-import type { Message, User, Call } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import type { Message, User } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
@@ -26,11 +26,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, createCall } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, where, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
-import { CallView } from './call-view';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -54,9 +53,6 @@ export function ChatView({
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
-
-  // Consolidated call state
-  const [activeCall, setActiveCall] = useState<{ id: string; isReceiving: boolean } | null>(null);
 
   const { toast } = useToast();
   
@@ -101,33 +97,6 @@ export function ChatView({
 
     return () => unsubscribeMessages();
   }, [chatId]);
-
-  // Listen for incoming calls
-  useEffect(() => {
-    if (!currentUser.id) return;
-
-    const q = query(
-      collection(db, 'calls'),
-      where('recipientId', '==', currentUser.id),
-      where('status', '==', 'ringing')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) return;
-      
-      snapshot.docs.forEach(callDoc => {
-        const callData = callDoc.data();
-        // Only show incoming call if it's from the current chat partner
-        // and we are not already in a call.
-        if (callData.callerId === chatPartner.id && !activeCall) {
-          setActiveCall({ id: callDoc.id, isReceiving: true });
-        }
-      });
-    });
-
-    return () => unsubscribe();
-  }, [currentUser.id, chatPartner.id, activeCall]);
-
 
   const handleSendMessage = async (text: string) => {
     const result = await sendMessage(currentUser.id, chatPartner.id, text);
@@ -202,32 +171,6 @@ export function ChatView({
     setIsClearingChat(false);
   }
 
-  const handleStartCall = async () => {
-    const result = await createCall(currentUser.id, chatPartner.id);
-    if (result.id) {
-        setActiveCall({ id: result.id, isReceiving: false });
-    } else {
-        toast({ title: 'Ошибка', description: 'Не удалось начать звонок.', variant: 'destructive' });
-    }
-  };
-
-  const handleEndCall = useCallback(() => {
-    setActiveCall(null);
-  }, []);
-  
-  if (activeCall) {
-    return (
-      <CallView
-        currentUser={currentUser}
-        chatPartner={chatPartner}
-        callId={activeCall.id}
-        isReceivingCall={activeCall.isReceiving}
-        onEndCall={handleEndCall}
-      />
-    );
-  }
-
-
   return (
     <div className="flex flex-col h-full bg-background">
       <ChatHeader 
@@ -235,7 +178,6 @@ export function ChatView({
         isMobile={isMobile} 
         onBack={onBack}
         onClearChat={() => setIsClearingChat(true)}
-        onStartCall={handleStartCall}
       />
       <ChatMessages
         messages={messages}

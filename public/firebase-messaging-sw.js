@@ -1,8 +1,7 @@
-// Import and configure the Firebase SDK
-// It's important to include this file in the public directory of your project.
-// Otherwise, the service worker will not be able to intercept requests.
-importScripts('https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js');
+
+// Scripts for firebase and firebase messaging
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -14,11 +13,14 @@ const firebaseConfig = {
   appId: "1:289105120218:web:0a828e96df9cee3"
 };
 
+// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
+// Retrieve an instance of Firebase Messaging so that it can handle background
+// messages.
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(function(payload) {
+messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
   
   const notificationTitle = payload.notification.title;
@@ -26,15 +28,17 @@ messaging.onBackgroundMessage(function(payload) {
     body: payload.notification.body,
     icon: payload.notification.icon || '/favicon.ico',
     data: {
-        url: payload.data.url // Pass the URL from the data payload
+        url: payload.fcmOptions.link // Use the link from fcmOptions
     }
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// Handle notification click
-self.addEventListener('notificationclick', function(event) {
+
+self.addEventListener('notificationclick', (event) => {
+    console.log('[firebase-messaging-sw.js] Notification click Received.', event.notification);
+
     event.notification.close();
     
     const urlToOpen = event.notification.data.url;
@@ -43,18 +47,16 @@ self.addEventListener('notificationclick', function(event) {
         clients.matchAll({
             type: "window",
             includeUncontrolled: true
-        }).then(function(clientList) {
-            if (clientList.length > 0) {
-                let client = clientList[0];
-                for (let i = 0; i < clientList.length; i++) {
-                    if (clientList[i].focused) {
-                        client = clientList[i];
-                    }
+        }).then((clientList) => {
+            for (let i = 0; i < clientList.length; i++) {
+                const client = clientList[i];
+                if (client.url === urlToOpen && 'focus' in client) {
+                    return client.focus();
                 }
-                client.focus();
-                return client.navigate(urlToOpen);
             }
-            return clients.openWindow(urlToOpen);
+            if (clients.openWindow) {
+                return clients.openWindow(urlToOpen);
+            }
         })
     );
 });

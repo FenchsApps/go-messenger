@@ -68,7 +68,8 @@ export function Login() {
     }
 
     try {
-        const currentToken = await getToken(messaging, { serviceWorkerRegistration: await navigator.serviceWorker.ready, vapidKey: VAPID_KEY });
+        const serviceWorkerRegistration = await navigator.serviceWorker.ready;
+        const currentToken = await getToken(messaging, { serviceWorkerRegistration, vapidKey: VAPID_KEY });
         if (currentToken) {
             console.log('FCM Web Token:', currentToken);
             await updateUserFcmToken(user.id, currentToken);

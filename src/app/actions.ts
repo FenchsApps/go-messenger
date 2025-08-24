@@ -4,7 +4,7 @@
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
   if (!text.trim()) {
@@ -99,6 +99,34 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
     } catch (error) {
         console.error("Error sending GIF:", error);
         return { error: 'Failed to send GIF' };
+    }
+}
+
+export async function sendVoiceMessage(senderId: string, recipientId: string, voiceBlob: Blob, duration: number) {
+    const chatId = getChatId(senderId, recipientId);
+    
+    try {
+        // 1. Upload audio to Firebase Storage
+        const storageRef = ref(storage, `voice-messages/${chatId}/${Date.now()}.webm`);
+        const snapshot = await uploadBytes(storageRef, voiceBlob, { contentType: 'audio/webm' });
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        // 2. Add message to Firestore
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            senderId,
+            recipientId,
+            text: '',
+            timestamp: serverTimestamp(),
+            type: 'audio',
+            audioUrl: downloadURL,
+            audioDuration: duration,
+            read: false,
+        });
+
+        return { error: null, data: { id: docRef.id, audioUrl: downloadURL } };
+    } catch (error) {
+        console.error("Error sending voice message:", error);
+        return { error: 'Failed to send voice message' };
     }
 }
 

@@ -26,7 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, createCall } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, createCall, sendVoiceMessage } from '@/app/actions';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
@@ -149,6 +149,17 @@ export function ChatView({
     }
   };
 
+  const handleSendVoiceMessage = async (blob: Blob, duration: number) => {
+    const result = await sendVoiceMessage(currentUser.id, chatPartner.id, blob, duration);
+    if(result.error) {
+        toast({
+            title: "Ошибка отправки",
+            description: result.error,
+            variant: "destructive",
+        });
+    }
+  }
+
   const handleSendSticker = async (stickerId: string) => {
     await sendSticker(currentUser.id, chatPartner.id, stickerId);
   };
@@ -248,6 +259,7 @@ export function ChatView({
       />
       <ChatInput 
         onSendMessage={handleSendMessage} 
+        onSendVoiceMessage={handleSendVoiceMessage}
         onSendSticker={handleSendSticker}
         onSendGif={handleSendGif}
        />

@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '4mb', // Increase for voice messages
+    },
+  },
   images: {
     remotePatterns: [
       {

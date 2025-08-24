@@ -1,3 +1,4 @@
+
 import { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import type { Message, User } from '@/lib/types';
@@ -8,6 +9,8 @@ import { MessageMenu } from './message-menu';
 import { stickers } from '@/lib/data';
 import { Check, CheckCheck } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
+import { VoiceMessagePlayer } from './chat/voice-message-player';
+
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -80,11 +83,12 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
               className={cn(
                 'relative max-w-sm rounded-2xl px-3 py-2 transition-all duration-300 animate-in fade-in-25 slide-in-from-bottom-4 shadow-md',
                 {
-                  'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser && message.type === 'text',
-                  'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser && message.type === 'text',
+                  'bg-primary text-primary-foreground rounded-br-sm': isCurrentUser,
+                  'bg-card text-card-foreground rounded-bl-sm': !isCurrentUser,
                 },
                  message.type === 'sticker' && 'p-1 bg-transparent shadow-none',
-                 message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden shadow-none'
+                 message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden shadow-none',
+                 message.type === 'audio' && 'p-2 w-72'
               )}
             >
               {message.forwardedFrom && (
@@ -117,6 +121,9 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                     'text-lg': textSize === 'lg',
                   }
                   )}>{message.text}</p>
+              )}
+              {message.type === 'audio' && message.audioUrl && (
+                <VoiceMessagePlayer audioUrl={message.audioUrl} duration={message.audioDuration!} />
               )}
               <div className={cn(
                   "flex items-center justify-end gap-1.5 text-xs text-muted-foreground/80 pt-1",

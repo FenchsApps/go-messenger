@@ -487,10 +487,6 @@ body {
   z-index: 100;
 }
 
-.m-0 {
-  margin: 0;
-}
-
 .-mx-1 {
   margin-left: -.25rem;
   margin-right: -.25rem;
@@ -518,6 +514,10 @@ body {
 
 .-ml-4 {
   margin-left: -1rem;
+}
+
+.-mr-2 {
+  margin-right: -.5rem;
 }
 
 .-mt-4 {
@@ -558,10 +558,6 @@ body {
 
 .mt-4 {
   margin-top: 1rem;
-}
-
-.-mr-2 {
-  margin-right: -.5rem;
 }
 
 .block {
@@ -1056,6 +1052,10 @@ body {
   justify-content: space-between;
 }
 
+.gap-0\.5 {
+  gap: .125rem;
+}
+
 .gap-1 {
   gap: .25rem;
 }
@@ -1078,10 +1078,6 @@ body {
 
 .gap-6 {
   gap: 1.5rem;
-}
-
-.gap-0\.5 {
-  gap: .125rem;
 }
 
 .space-x-1 > :not([hidden]) ~ :not([hidden]) {

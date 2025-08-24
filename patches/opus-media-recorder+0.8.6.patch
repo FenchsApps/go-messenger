@@ -1,0 +1,20 @@
+diff --git a/node_modules/opus-media-recorder/OpusMediaRecorder.js b/node_modules/opus-media-recorder/OpusMediaRecorder.js
+index 921441b..897e466 100644
+--- a/node_modules/opus-media-recorder/OpusMediaRecorder.js
++++ b/node_modules/opus-media-recorder/OpusMediaRecorder.js
+@@ -1,4 +1,4 @@
+-module.exports = (function (window) {
++module.exports = (function () {
+   'use strict';
+ 
+   //embind
+diff --git a/node_modules/opus-media-recorder/index.d.ts b/node_modules/opus-media-recorder/index.d.ts
+index b09292c..9bd87c3 100644
+--- a/node_modules/opus-media-recorder/index.d.ts
++++ b/node_modules/opus-media-recorder/index.d.ts
+@@ -1,4 +1,4 @@
+-export = OpusMediaRecorder;
++export default OpusMediaRecorder;
+ declare class OpusMediaRecorder extends EventTarget {
+   constructor(stream: MediaStream, options?: MediaRecorderOptions, workerOptions?: OpusMediaRecorderWorkerOptions);
+   readonly mimeType: string;

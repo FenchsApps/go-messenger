@@ -26,6 +26,8 @@ declare global {
 }
 
 const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
+// This key is safe to be exposed in the client-side code.
+const VAPID_KEY = "BD7QoHhW_r94sT_uY4h_rJg-rL1jA1qJ4xG9r9pZ7eY1wX5sW8eX8zQ3h2cY1rK8g7Y7Y0jH4J4qQo";
 
 export function Login() {
   const [phone, setPhone] = useState('');
@@ -47,8 +49,13 @@ export function Login() {
         // but ChatView already handles live updates.
     });
 
+    if (Notification.permission !== 'granted') {
+      console.log('Notification permission not granted. Skipping FCM setup.');
+      return;
+    }
+
     try {
-        const currentToken = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE' });
+        const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
         if (currentToken) {
             console.log('FCM Web Token:', currentToken);
             await updateUserFcmToken(user.id, currentToken);
@@ -194,7 +201,7 @@ export function Login() {
             <Input
               id="phone"
               type="tel"
-              placeholder="79123456789"
+              placeholder="79191352804"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required

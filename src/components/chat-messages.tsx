@@ -88,7 +88,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                 },
                  message.type === 'sticker' && 'p-1 bg-transparent shadow-none',
                  message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden shadow-none',
-                 message.type === 'audio' && 'p-2 w-72'
+                 message.type === 'audio' && 'p-2 w-full max-w-[280px]'
               )}
             >
               {message.forwardedFrom && (

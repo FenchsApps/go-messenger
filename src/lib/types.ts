@@ -29,4 +29,3 @@ export type Message = {
   } | null;
   read?: boolean;
 };
-

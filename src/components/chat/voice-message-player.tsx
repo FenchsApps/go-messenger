@@ -20,7 +20,7 @@ export function VoiceMessagePlayer({ audioUrl, duration: propDuration }: VoiceMe
   const [isLoading, setIsLoading] = useState(true);
 
   function formatTime(seconds: number) {
-    if (isNaN(seconds)) return '0:00';
+    if (isNaN(seconds) || seconds === Infinity) return '0:00';
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
@@ -46,7 +46,7 @@ export function VoiceMessagePlayer({ audioUrl, duration: propDuration }: VoiceMe
     wavesurferRef.current = wavesurfer;
 
     wavesurfer.on('ready', (newDuration) => {
-      // Prefer the duration from props if available and more accurate
+      // Prefer the duration from props if available and seems more accurate
       const displayDuration = propDuration && propDuration > 0 ? propDuration : newDuration;
       setTotalDuration(formatTime(displayDuration));
       setIsLoading(false);
@@ -80,7 +80,7 @@ export function VoiceMessagePlayer({ audioUrl, duration: propDuration }: VoiceMe
   };
 
   return (
-    <div className="flex items-center gap-2 w-full max-w-[250px]">
+    <div className="flex items-center gap-2 w-full">
       <Button 
         variant="ghost" 
         size="icon" 

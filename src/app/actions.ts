@@ -4,7 +4,7 @@
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL, uploadBytes, uploadBytesResumable } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export async function getFilteredMessage(text: string) {
   if (!text.trim()) {
@@ -113,14 +113,20 @@ export async function sendVoiceMessage(formData: FormData) {
     }
   
     const chatId = getChatId(senderId, recipientId);
+    // Generate a unique ID for the file
     const audioId = doc(collection(db, 'dummy')).id; 
     const storageRef = ref(storage, `voice_messages/${chatId}/${audioId}.webm`);
   
     try {
+      // Convert Blob to ArrayBuffer, then to Buffer for upload
       const audioBuffer = await audioBlob.arrayBuffer();
-      const uploadTask = await uploadBytes(storageRef, audioBuffer, { contentType: audioBlob.type || 'audio/webm' });
+      const buffer = Buffer.from(audioBuffer);
+
+      // Upload the file to Firebase Storage
+      const uploadTask = await uploadBytes(storageRef, buffer, { contentType: audioBlob.type || 'audio/webm;codecs=opus' });
       const downloadURL = await getDownloadURL(uploadTask.ref);
   
+      // Add the message metadata to Firestore
       const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId,
         recipientId,
@@ -261,27 +267,4 @@ export async function updateUserProfile(userId: string, name: string, descriptio
         console.error("Error updating user profile:", error);
         return { error: "Failed to update profile." };
     }
-}
-
-// --- Call Actions Removed ---
-export async function createCall(callerId: string, receiverId: string) {
-    console.warn("createCall is deprecated and will be removed.");
-    return { error: "Calling feature is disabled." };
-}
-
-export async function updateCallStatus(callId: string, status: string) {
-     console.warn("updateCallStatus is deprecated and will be removed.");
-    return { error: "Calling feature is disabled." };
-}
-export async function answerCall(callId: string) {
-     console.warn("answerCall is deprecated and will be removed.");
-    return { error: "Calling feature is disabled." };
-}
-export async function rejectCall(callId: string) {
-     console.warn("rejectCall is deprecated and will be removed.");
-    return { error: "Calling feature is disabled." };
-}
-export async function endCall(callId: string) {
-     console.warn("endCall is deprecated and will be removed.");
-    return { error: "Calling feature is disabled." };
 }

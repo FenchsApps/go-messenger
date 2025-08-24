@@ -927,6 +927,10 @@ body {
   max-width: 24rem;
 }
 
+.max-w-\[280px\] {
+  max-width: 280px;
+}
+
 .flex-1 {
   flex: 1;
 }

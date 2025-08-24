@@ -19,12 +19,11 @@ interface ChatHeaderProps {
   isMobile: boolean;
   onBack: () => void;
   onClearChat: () => void;
-  onInitiateCall: () => void;
   onOpenSettings: () => void;
   onOpenContactInfo: () => void;
 }
 
-export function ChatHeader({ user, isMobile, onBack, onClearChat, onInitiateCall, onOpenSettings, onOpenContactInfo }: ChatHeaderProps) {
+export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings, onOpenContactInfo }: ChatHeaderProps) {
   return (
     <div className="flex items-center justify-between p-2 md:p-4 border-b bg-card">
       <div className="flex items-center gap-3">
@@ -62,10 +61,6 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onInitiateCall
         </div>
       </div>
        <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" onClick={onInitiateCall}>
-            <Phone className="h-5 w-5" />
-        </Button>
-        
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">

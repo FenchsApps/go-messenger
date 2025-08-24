@@ -51,13 +51,13 @@ export function useMediaRecorder({
     setError(null);
     setStatus('recording');
     setRecordingTime(0);
+    mediaChunks.current = [];
 
     if (!mediaStream.current) {
       await getMediaStream();
     }
     if (!mediaStream.current) return;
 
-    // Check for browser support
     if (!window.MediaRecorder) {
       const err = new Error("MediaRecorder is not supported in this browser.") as MediaRecorderError;
       setStatus('error');
@@ -66,7 +66,6 @@ export function useMediaRecorder({
       return;
     }
     
-    // Let the browser decide the mimeType
     mediaRecorder.current = new MediaRecorder(mediaStream.current);
 
     mediaRecorder.current.ondataavailable = (e) => {
@@ -76,12 +75,15 @@ export function useMediaRecorder({
     };
     mediaRecorder.current.onstop = () => {
       const duration = (Date.now() - startTimeRef.current) / 1000;
-      const blob = new Blob(mediaChunks.current, { type: mediaChunks.current[0]?.type || 'audio/webm' });
-      setStatus('stopped');
-      onStop(blob, duration);
+      if (mediaChunks.current.length > 0) {
+        const blob = new Blob(mediaChunks.current, { type: mediaChunks.current[0]?.type || 'audio/webm;codecs=opus' });
+        setStatus('stopped');
+        onStop(blob, duration);
+      } else {
+         setStatus('idle');
+      }
       mediaChunks.current = [];
 
-      // Stop timer
       if (timerInterval.current) {
         clearInterval(timerInterval.current);
       }
@@ -96,14 +98,16 @@ export function useMediaRecorder({
     mediaRecorder.current.start();
     startTimeRef.current = Date.now();
     
-    // Start timer
     timerInterval.current = setInterval(() => {
         setRecordingTime(prevTime => prevTime + 1);
     }, 1000);
   };
 
-  const stopRecording = () => {
+  const stopRecording = (isCancel: boolean = false) => {
     if (mediaRecorder.current && status === 'recording') {
+      if (isCancel) {
+        mediaChunks.current = []; // Clear chunks if cancelling
+      }
       mediaRecorder.current.stop();
     }
   };
@@ -112,7 +116,6 @@ export function useMediaRecorder({
     setStatus('idle');
   };
   
-  // Cleanup
   useEffect(() => {
     return () => {
       if (timerInterval.current) clearInterval(timerInterval.current);

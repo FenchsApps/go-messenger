@@ -26,7 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, createCall, sendVoiceMessage } from '@/app/actions';
+import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory, sendVoiceMessage } from '@/app/actions';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
@@ -225,16 +225,6 @@ export function ChatView({
     setIsClearingChat(false);
   }
 
-  const handleInitiateCall = async () => {
-    toast({ title: 'Начинаем звонок...', description: `Пожалуйста, подождите.` });
-    const result = await createCall(currentUser.id, chatPartner.id);
-    if (result.error) {
-        toast({ title: 'Ошибка звонка', description: result.error, variant: 'destructive' });
-    } else if (result.callId) {
-        router.push(`/call/${result.callId}`);
-    }
-  }
-
   const handleBackgroundChange = (newBg: string) => {
     setChatBackground(newBg);
     localStorage.setItem(`chat-background-${chatId}`, newBg);
@@ -247,7 +237,6 @@ export function ChatView({
         isMobile={isMobile} 
         onBack={onBack}
         onClearChat={() => setIsClearingChat(true)}
-        onInitiateCall={handleInitiateCall}
         onOpenSettings={() => setIsChatSettingsOpen(true)}
         onOpenContactInfo={() => setIsContactInfoOpen(true)}
       />

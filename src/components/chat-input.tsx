@@ -46,7 +46,6 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
         
         await onSendVoice(formData);
         
-        clearBlobUrl();
       } catch (error) {
         console.error('Error sending voice message:', error);
         toast({ title: 'Ошибка отправки', description: 'Не удалось отправить голосовое сообщение.', variant: 'destructive' });
@@ -95,7 +94,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
   }
 
   const handleCancelRecording = () => {
-      stopRecording();
+      stopRecording(true); // Pass true to indicate cancellation
       clearBlobUrl();
   }
   
@@ -120,7 +119,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
                     <Button 
                         size="icon" 
                         className="h-11 w-11 shrink-0 rounded-full"
-                        onClick={stopRecording}
+                        onClick={() => stopRecording()}
                         disabled={isVoicePending}
                     >
                         {isVoicePending ? <Loader2 className="animate-spin" /> : <Send className="h-5 w-5" />}

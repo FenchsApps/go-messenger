@@ -38,9 +38,9 @@
 
         dependencies {
             // ...
-            // Firebase BoM (Bill of Materials)
+            // Firebase BoM (Bill of Materials) - ОБЯЗАТЕЛЬНО ДЛЯ РАБОТЫ!
             implementation(platform("com.google.firebase:firebase-bom:33.1.1"))
-            // Firebase Cloud Messaging
+            // Firebase Cloud Messaging - ОБЯЗАТЕЛЬНО ДЛЯ PUSH-УВЕДОМЛЕНИЙ!
             implementation("com.google.firebase:firebase-messaging-ktx")
             // Firebase Analytics (рекомендуется)
             implementation("com.google.firebase:firebase-analytics-ktx")

@@ -50,15 +50,12 @@ export function CallView({
   const cleanup = useCallback(() => {
     if (isCleanedUpRef.current) return;
     isCleanedUpRef.current = true;
-
-    console.log('Cleaning up call resources...');
     
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
     }
     if (pcRef.current) {
-        // Remove all event listeners to prevent zombie listeners
         pcRef.current.onicecandidate = null;
         pcRef.current.ontrack = null;
         pcRef.current.onconnectionstatechange = null;
@@ -105,23 +102,25 @@ export function CallView({
             }
         }
         
+        if (isCleanedUpRef.current) return;
+
         localStreamRef.current = stream;
         pcRef.current = new RTCPeerConnection(servers);
-        if (!pcRef.current) return; // Guard against race condition on cleanup
-
+        
         stream.getTracks().forEach(track => {
             pcRef.current?.addTrack(track, stream);
         });
 
-        if (!pcRef.current) return;
+        if (isCleanedUpRef.current || !pcRef.current) return;
 
         pcRef.current.onicecandidate = event => {
-            if (event.candidate && callId) {
+            if (event.candidate && callId && !isCleanedUpRef.current) {
                 sendCallSignal(callId, { candidate: event.candidate.toJSON() });
             }
         };
 
         pcRef.current.ontrack = event => {
+            if (isCleanedUpRef.current) return;
             remoteStreamRef.current = event.streams[0];
             if (remoteAudioRef.current) {
                 remoteAudioRef.current.srcObject = event.streams[0];
@@ -129,7 +128,7 @@ export function CallView({
         };
 
         pcRef.current.onconnectionstatechange = () => {
-            if (!pcRef.current) return;
+            if (isCleanedUpRef.current || !pcRef.current) return;
             if (pcRef.current.connectionState === 'connected') {
                 setCallStatus('connected');
             }
@@ -138,10 +137,12 @@ export function CallView({
             }
         };
 
-        if (!isReceivingCall && callId && pcRef.current) {
+        if (!isReceivingCall && callId && !isCleanedUpRef.current && pcRef.current) {
             const offerOptions = { offerToReceiveAudio: true, offerToReceiveVideo: false };
             const offer = await pcRef.current.createOffer(offerOptions);
+            if (isCleanedUpRef.current || !pcRef.current) return;
             await pcRef.current.setLocalDescription(offer);
+            if (isCleanedUpRef.current) return;
             await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
         }
     };
@@ -168,22 +169,22 @@ export function CallView({
                     const sdp = new RTCSessionDescription(data.sdp);
                     try {
                         if (sdp.type === 'offer' && pcRef.current.signalingState !== 'stable') {
-                            console.log('Ignoring offer in non-stable state:', pcRef.current.signalingState);
-                            // Optional: Rollback logic if needed
                             continue;
                         }
 
                         if (sdp.type === 'offer') {
                              await pcRef.current.setRemoteDescription(sdp);
                              if (isReceivingCall) {
+                                if (isCleanedUpRef.current || !pcRef.current) return;
                                 const answer = await pcRef.current.createAnswer();
+                                if (isCleanedUpRef.current || !pcRef.current) return;
                                 await pcRef.current.setLocalDescription(answer);
+                                if (isCleanedUpRef.current) return;
                                 await sendCallSignal(callId, { sdp: pcRef.current.localDescription?.toJSON() });
                              }
                         } else if (sdp.type === 'answer' && pcRef.current.signalingState === 'have-local-offer') {
                             await pcRef.current.setRemoteDescription(sdp);
                         } else if (sdp.type === 'answer') {
-                           console.log('Ignoring answer in wrong state:', pcRef.current.signalingState);
                            continue;
                         }
 
@@ -228,7 +229,6 @@ export function CallView({
     if (!callId) return;
     setCallStatus('connecting');
     await updateCallStatus(callId, 'active');
-    // The answer is now created automatically when the offer is received in onSnapshot.
   };
 
   const handleDeclineCall = async () => {
@@ -307,3 +307,5 @@ export function CallView({
     </div>
   );
 }
+
+    

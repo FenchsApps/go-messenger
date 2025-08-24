@@ -209,3 +209,53 @@ export async function updateUserFcmToken(userId: string, fcmToken: string) {
         return { error: "Failed to update FCM token." };
     }
 }
+
+
+// --- NEW CALL ACTIONS ---
+
+export async function createCall(callerId: string, receiverId: string) {
+    if (!callerId || !receiverId) {
+        return { error: "Caller and Receiver IDs are required." };
+    }
+
+    try {
+        const callDocRef = await addDoc(collection(db, 'calls'), {
+            callerId,
+            receiverId,
+            status: 'calling', // initial status
+            timestamp: serverTimestamp(),
+        });
+        return { success: true, callId: callDocRef.id };
+    } catch (error) {
+        console.error("Error creating call:", error);
+        return { error: "Failed to create call." };
+    }
+}
+
+export async function updateCallStatus(callId: string, status: 'answered' | 'rejected' | 'ended') {
+    if (!callId || !status) {
+        return { error: "Call ID and status are required." };
+    }
+
+    try {
+        const callRef = doc(db, 'calls', callId);
+        await updateDoc(callRef, { status: status });
+        return { success: true };
+    } catch (error) {
+        console.error(`Error updating call status to ${status}:`, error);
+        return { error: "Failed to update call status." };
+    }
+}
+
+// Convenience functions
+export async function answerCall(callId: string) {
+    return updateCallStatus(callId, 'answered');
+}
+
+export async function rejectCall(callId: string) {
+    return updateCallStatus(callId, 'rejected');
+}
+
+export async function endCall(callId: string) {
+    return updateCallStatus(callId, 'ended');
+}

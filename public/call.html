@@ -1,0 +1,252 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incoming Call</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            font-family: 'Roboto', sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            height: 100%;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+
+        .caller-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            margin-top: 20%;
+        }
+
+        .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background-color: #555;
+            margin-bottom: 20px;
+            border: 3px solid white;
+            object-fit: cover;
+        }
+
+        #caller-name {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        #call-status {
+            font-size: 18px;
+            color: #ccc;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 300px;
+            margin-bottom: 10%;
+        }
+
+        .action-button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: none;
+            background: none;
+            color: white;
+            cursor: pointer;
+        }
+
+        .button-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            transition: transform 0.2s;
+        }
+
+        .action-button:active .button-icon {
+            transform: scale(0.9);
+        }
+
+        .accept {
+            background-color: #4CAF50; /* Green */
+        }
+
+        .reject {
+            background-color: #F44336; /* Red */
+        }
+
+        .button-icon svg {
+            width: 36px;
+            height: 36px;
+        }
+
+        .action-label {
+            font-size: 16px;
+        }
+        
+        #timer {
+            font-size: 16px;
+            color: #ccc;
+            margin-top: 20px;
+            display: none; /* Initially hidden */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="caller-info">
+            <img id="caller-avatar" class="avatar" src="https://placehold.co/120x120/EFEFEF/333333?text=?" alt="Caller Avatar">
+            <div id="caller-name">Unknown Caller</div>
+            <div id="call-status">Incoming call...</div>
+            <div id="timer">00:00</div>
+        </div>
+
+        <div class="actions" id="call-actions">
+            <button class="action-button" onclick="rejectCall()">
+                <div class="button-icon reject">
+                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12.87,11.13,10,8.27V15.73l2.87-2.86,2.87-2.87ZM19,3A1,1,0,0,0,18,4,8,8,0,0,1,10,12,8,8,0,0,1,2,4,1,1,0,0,0,1,3,10,10,0,0,0,9,12.9v1.94a1.51,1.51,0,0,0,.44,1.08l2.25,2.25a1.5,1.5,0,0,0,2.12,0L16.06,16a1.49,1.49,0,0,0,0-2.12L15.1,13v0A10,10,0,0,0,19,3Z"/></svg>
+                </div>
+                <span class="action-label">Decline</span>
+            </button>
+            <button class="action-button" onclick="acceptCall()">
+                <div class="button-icon accept">
+                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M15.1,13l.94.94a1.5,1.5,0,0,0,2.12,0l2.25-2.25a1.51,1.51,0,0,0-.44-2.52,10.11,10.11,0,0,0-5.46-1.58V3a1,1,0,0,0-2,0,8,8,0,0,1,0,16,1,1,0,0,0,2,0V15.73L15.1,13Z"/></svg>
+                </div>
+                <span class="action-label">Accept</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // This is a placeholder for the actual Firebase SDK
+        const Android = window.Android || {
+            log: (message) => console.log(`[Android Interface Mock] ${message}`),
+            acceptCall: (callId) => console.log(`Accepting call: ${callId}`),
+            rejectCall: (callId) => console.log(`Rejecting call: ${callId}`),
+            endCall: (callId) => console.log(`Ending call: ${callId}`),
+            finishActivity: () => console.log('Finishing activity.'),
+        };
+
+        const params = new URLSearchParams(window.location.search);
+        const callId = params.get('callId');
+        const callerName = params.get('callerName') || 'Unknown Caller';
+        
+        let callStatus = 'calling';
+        let timerInterval;
+
+        function setCallerInfo() {
+            document.getElementById('caller-name').textContent = callerName;
+            // In a real app, you would fetch the avatar URL from Firestore using the callerId
+        }
+
+        function acceptCall() {
+            Android.log(`WebView: User accepted call ${callId}`);
+            Android.acceptCall(callId);
+            updateUiForAnswered();
+        }
+
+        function rejectCall() {
+            Android.log(`WebView: User rejected call ${callId}`);
+            Android.rejectCall(callId);
+            updateUiForEnded('Call rejected');
+        }
+
+        function startTimer() {
+            let seconds = 0;
+            document.getElementById('timer').style.display = 'block';
+            timerInterval = setInterval(() => {
+                seconds++;
+                const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+                const sec = (seconds % 60).toString().padStart(2, '0');
+                document.getElementById('timer').textContent = `${min}:${sec}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+        }
+
+        function updateUiForAnswered() {
+            document.getElementById('call-status').textContent = "On call...";
+            document.getElementById('call-actions').innerHTML = `
+                <button class="action-button" onclick="rejectCall()">
+                    <div class="button-icon reject">
+                        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12.87,11.13,10,8.27V15.73l2.87-2.86,2.87-2.87ZM19,3A1,1,0,0,0,18,4,8,8,0,0,1,10,12,8,8,0,0,1,2,4,1,1,0,0,0,1,3,10,10,0,0,0,9,12.9v1.94a1.51,1.51,0,0,0,.44,1.08l2.25,2.25a1.5,1.5,0,0,0,2.12,0L16.06,16a1.49,1.49,0,0,0,0-2.12L15.1,13v0A10,10,0,0,0,19,3Z"/></svg>
+                    </div>
+                    <span class="action-label">End</span>
+                </button>
+            `;
+            startTimer();
+        }
+
+        function updateUiForEnded(reason) {
+            stopTimer();
+            document.getElementById('call-status').textContent = reason;
+            document.getElementById('call-actions').style.display = 'none';
+            // Close the activity after a short delay
+            setTimeout(() => {
+                Android.finishActivity();
+            }, 2000);
+        }
+
+        // This function will be called by Android when the call status changes in Firestore
+        function onCallStatusChanged(newStatus) {
+            if (callStatus === newStatus) return;
+            callStatus = newStatus;
+            
+            Android.log(`WebView: Call status changed to ${newStatus}`);
+
+            switch(newStatus) {
+                case 'answered':
+                    updateUiForAnswered();
+                    break;
+                case 'rejected':
+                case 'rejected_timeout':
+                case 'ended':
+                    updateUiForEnded(newStatus.startsWith('rejected') ? 'Call rejected' : 'Call ended');
+                    break;
+                case 'error_no_token':
+                case 'error_fcm_failed':
+                     updateUiForEnded('Could not connect');
+                     break;
+            }
+        }
+        
+        // Initial setup
+        window.onload = () => {
+            setCallerInfo();
+            Android.log(`WebView loaded for callId: ${callId}`);
+        };
+
+    </script>
+</body>
+</html>

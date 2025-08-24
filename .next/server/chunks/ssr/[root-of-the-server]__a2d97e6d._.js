@@ -349,16 +349,21 @@ const getInAppMessaging = async ()=>{
 var { g: global, __dirname } = __turbopack_context__;
 {
 // @ts-nocheck
-/* __next_internal_action_entry_do_not_use__ [{"409e93a08092ba11b70da181b8437860f103d7cbfb":"searchGifs","40a8fec7cdefd0ea77a3ee93895583fba2af256290":"getFilteredMessage","40f784cb07841038eb7841f8782797dc636cd57a95":"clearChatHistory","6017f6d2a4ed6ee70bb28fd0a9f062866349785ef9":"markMessagesAsRead","6082a68fb814428b566b32d551d95980da5a0e9c05":"deleteMessage","608b696c67776a7d50b36162282f3f75350d607212":"updateUserFcmToken","702e1c340d1eab2bea22e72f39e9f5e78357cf0ea1":"sendSticker","705394123808f77ae076418e2562d4b6e3695e2f20":"sendGif","705763b4cc11e647e621930ce50f6aa5850bc05850":"editMessage","78aa2447a300bdb474f91bdc8f096d1589fc2797dc":"sendMessage"},"",""] */ __turbopack_context__.s({
+/* __next_internal_action_entry_do_not_use__ [{"400954ad937e6845621f23e8947140041d2412b59b":"answerCall","402f289fcd4a5ff6202bc7a9f7fb3b32020a9a908c":"endCall","405953352ffcdb34830d99e00f3965521e3c860773":"rejectCall","409e93a08092ba11b70da181b8437860f103d7cbfb":"searchGifs","40a8fec7cdefd0ea77a3ee93895583fba2af256290":"getFilteredMessage","40f784cb07841038eb7841f8782797dc636cd57a95":"clearChatHistory","6017f6d2a4ed6ee70bb28fd0a9f062866349785ef9":"markMessagesAsRead","6082a68fb814428b566b32d551d95980da5a0e9c05":"deleteMessage","608b696c67776a7d50b36162282f3f75350d607212":"updateUserFcmToken","60a53473e44b1197fd7e48ac4fbf54d37643f07461":"updateCallStatus","60fb389e04dca841d04740b6dcff4e853ec414c442":"createCall","702e1c340d1eab2bea22e72f39e9f5e78357cf0ea1":"sendSticker","705394123808f77ae076418e2562d4b6e3695e2f20":"sendGif","705763b4cc11e647e621930ce50f6aa5850bc05850":"editMessage","78aa2447a300bdb474f91bdc8f096d1589fc2797dc":"sendMessage"},"",""] */ __turbopack_context__.s({
+    "answerCall": (()=>answerCall),
     "clearChatHistory": (()=>clearChatHistory),
+    "createCall": (()=>createCall),
     "deleteMessage": (()=>deleteMessage),
     "editMessage": (()=>editMessage),
+    "endCall": (()=>endCall),
     "getFilteredMessage": (()=>getFilteredMessage),
     "markMessagesAsRead": (()=>markMessagesAsRead),
+    "rejectCall": (()=>rejectCall),
     "searchGifs": (()=>searchGifs),
     "sendGif": (()=>sendGif),
     "sendMessage": (()=>sendMessage),
     "sendSticker": (()=>sendSticker),
+    "updateCallStatus": (()=>updateCallStatus),
     "updateUserFcmToken": (()=>updateUserFcmToken)
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/build/webpack/loaders/next-flight-loader/server-reference.js [app-rsc] (ecmascript)");
@@ -622,6 +627,60 @@ async function updateUserFcmToken(userId, fcmToken) {
         };
     }
 }
+async function createCall(callerId, receiverId) {
+    if (!callerId || !receiverId) {
+        return {
+            error: "Caller and Receiver IDs are required."
+        };
+    }
+    try {
+        const callDocRef = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["addDoc"])((0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["collection"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], 'calls'), {
+            callerId,
+            receiverId,
+            status: 'calling',
+            timestamp: (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["serverTimestamp"])()
+        });
+        return {
+            success: true,
+            callId: callDocRef.id
+        };
+    } catch (error) {
+        console.error("Error creating call:", error);
+        return {
+            error: "Failed to create call."
+        };
+    }
+}
+async function updateCallStatus(callId, status) {
+    if (!callId || !status) {
+        return {
+            error: "Call ID and status are required."
+        };
+    }
+    try {
+        const callRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["doc"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], 'calls', callId);
+        await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateDoc"])(callRef, {
+            status: status
+        });
+        return {
+            success: true
+        };
+    } catch (error) {
+        console.error(`Error updating call status to ${status}:`, error);
+        return {
+            error: "Failed to update call status."
+        };
+    }
+}
+async function answerCall(callId) {
+    return updateCallStatus(callId, 'answered');
+}
+async function rejectCall(callId) {
+    return updateCallStatus(callId, 'rejected');
+}
+async function endCall(callId) {
+    return updateCallStatus(callId, 'ended');
+}
 ;
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$action$2d$validate$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["ensureServerEntryExports"])([
     getFilteredMessage,
@@ -633,7 +692,12 @@ async function updateUserFcmToken(userId, fcmToken) {
     deleteMessage,
     markMessagesAsRead,
     clearChatHistory,
-    updateUserFcmToken
+    updateUserFcmToken,
+    createCall,
+    updateCallStatus,
+    answerCall,
+    rejectCall,
+    endCall
 ]);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(getFilteredMessage, "40a8fec7cdefd0ea77a3ee93895583fba2af256290", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(sendMessage, "78aa2447a300bdb474f91bdc8f096d1589fc2797dc", null);
@@ -645,6 +709,11 @@ async function updateUserFcmToken(userId, fcmToken) {
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(markMessagesAsRead, "6017f6d2a4ed6ee70bb28fd0a9f062866349785ef9", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(clearChatHistory, "40f784cb07841038eb7841f8782797dc636cd57a95", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(updateUserFcmToken, "608b696c67776a7d50b36162282f3f75350d607212", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(createCall, "60fb389e04dca841d04740b6dcff4e853ec414c442", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(updateCallStatus, "60a53473e44b1197fd7e48ac4fbf54d37643f07461", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(answerCall, "400954ad937e6845621f23e8947140041d2412b59b", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(rejectCall, "405953352ffcdb34830d99e00f3965521e3c860773", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(endCall, "402f289fcd4a5ff6202bc7a9f7fb3b32020a9a908c", null);
 }}),
 "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript) <locals>": ((__turbopack_context__) => {
 "use strict";

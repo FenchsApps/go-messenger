@@ -1,5 +1,4 @@
 
-// @ts-nocheck
 'use server';
 import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
@@ -103,7 +102,7 @@ export async function sendGif(senderId: string, recipientId: string, gifUrl: str
 }
 
 export async function sendVoiceMessage(formData: FormData) {
-    const audioBlob = formData.get('audio') as Blob;
+    const audioBlob = formData.get('audio') as Blob | null;
     const senderId = formData.get('senderId') as string;
     const recipientId = formData.get('recipientId') as string;
     const duration = Number(formData.get('duration'));
@@ -113,17 +112,19 @@ export async function sendVoiceMessage(formData: FormData) {
     }
   
     const chatId = getChatId(senderId, recipientId);
-    // Generate a unique ID for the file
     const audioId = doc(collection(db, 'dummy')).id; 
     const storageRef = ref(storage, `voice_messages/${chatId}/${audioId}.webm`);
   
     try {
-      // Convert Blob to ArrayBuffer, then to Buffer for upload
+      // Convert Blob to ArrayBuffer, then to Buffer for upload.
+      // This is the key step to correctly handle the file on the server.
       const audioBuffer = await audioBlob.arrayBuffer();
       const buffer = Buffer.from(audioBuffer);
 
-      // Upload the file to Firebase Storage
-      const uploadTask = await uploadBytes(storageRef, buffer, { contentType: audioBlob.type || 'audio/webm;codecs=opus' });
+      // Upload the file to Firebase Storage with correct metadata
+      const uploadTask = await uploadBytes(storageRef, buffer, { 
+        contentType: audioBlob.type || 'audio/webm' 
+      });
       const downloadURL = await getDownloadURL(uploadTask.ref);
   
       // Add the message metadata to Firestore

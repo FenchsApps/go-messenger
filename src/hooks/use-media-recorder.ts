@@ -10,7 +10,6 @@ interface UseMediaRecorderOptions {
   video?: boolean;
   onStop?: (blob: Blob, duration: number) => void;
   onError?: (error: MediaRecorderError) => void;
-  mediaStream?: MediaStream | null;
 }
 
 export function useMediaRecorder({
@@ -18,7 +17,6 @@ export function useMediaRecorder({
   video = false,
   onStop = () => {},
   onError = () => {},
-  mediaStream: externalStream,
 }: UseMediaRecorderOptions) {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const mediaStream = useRef<MediaStream | null>(null);
@@ -32,10 +30,6 @@ export function useMediaRecorder({
   const startTimeRef = useRef<number>(0);
 
   const getMediaStream = async () => {
-    if (externalStream) {
-      mediaStream.current = externalStream;
-      return;
-    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio, video });
       mediaStream.current = stream;
@@ -66,7 +60,7 @@ export function useMediaRecorder({
       return;
     }
     
-    mediaRecorder.current = new MediaRecorder(mediaStream.current);
+    mediaRecorder.current = new MediaRecorder(mediaStream.current, { mimeType: 'audio/webm' });
 
     mediaRecorder.current.ondataavailable = (e) => {
       if (e.data.size > 0) {
@@ -76,7 +70,7 @@ export function useMediaRecorder({
     mediaRecorder.current.onstop = () => {
       const duration = (Date.now() - startTimeRef.current) / 1000;
       if (mediaChunks.current.length > 0) {
-        const blob = new Blob(mediaChunks.current, { type: mediaChunks.current[0]?.type || 'audio/webm;codecs=opus' });
+        const blob = new Blob(mediaChunks.current, { type: 'audio/webm' });
         setStatus('stopped');
         onStop(blob, duration);
       } else {
@@ -112,18 +106,14 @@ export function useMediaRecorder({
     }
   };
   
-  const clearBlobUrl = () => {
-    setStatus('idle');
-  };
-  
   useEffect(() => {
     return () => {
       if (timerInterval.current) clearInterval(timerInterval.current);
-      if (mediaStream.current && !externalStream) {
+      if (mediaStream.current) {
         mediaStream.current.getTracks().forEach((track) => track.stop());
       }
     }
-  }, [externalStream]);
+  }, []);
 
-  return { status, error, startRecording, stopRecording, clearBlobUrl, recordingTime };
+  return { status, error, startRecording, stopRecording, recordingTime };
 }

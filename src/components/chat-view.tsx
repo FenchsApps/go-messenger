@@ -154,7 +154,7 @@ export function ChatView({
     formData.append('recipientId', chatPartner.id);
 
     const result = await sendVoiceMessage(formData);
-    if(result.error) {
+    if(result?.error) {
         toast({
             title: "Ошибка отправки аудио",
             description: result.error,
@@ -173,7 +173,7 @@ export function ChatView({
 
   const handleEdit = (message: Message) => {
     setEditingMessage(message);
-    setEditedText(message.text);
+    setEditedText(message.text || '');
   };
 
   const handleSaveEdit = async () => {
@@ -199,7 +199,7 @@ export function ChatView({
   };
 
   const handleConfirmForward = async (recipientId: string) => {
-    if (!forwardingMessage) return;
+    if (!forwardingMessage || !forwardingMessage.text) return;
     const sender = allUsers.find(u => u.id === forwardingMessage.senderId);
     
     await sendMessage(currentUser.id, recipientId, forwardingMessage.text, {

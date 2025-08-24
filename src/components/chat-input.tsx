@@ -41,7 +41,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     startVoiceTransition(async () => {
       try {
         const formData = new FormData();
-        formData.append('audio', blob);
+        formData.append('audio', blob, 'voice-message.webm');
         formData.append('duration', String(duration));
         
         await onSendVoice(formData);
@@ -57,7 +57,6 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     status,
     startRecording,
     stopRecording,
-    clearBlobUrl,
     recordingTime,
   } = useMediaRecorder({
     audio: { deviceId: selectedMicId === 'default' ? undefined : selectedMicId },
@@ -88,14 +87,12 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, onSendVoice
     if (status === 'recording') {
         stopRecording();
     } else {
-        clearBlobUrl(); // Clear any previous recording
         startRecording();
     }
   }
 
   const handleCancelRecording = () => {
       stopRecording(true); // Pass true to indicate cancellation
-      clearBlobUrl();
   }
   
   const formatTime = (seconds: number) => {

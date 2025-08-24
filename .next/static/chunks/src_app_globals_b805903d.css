@@ -548,16 +548,16 @@ body {
   margin-right: .5rem;
 }
 
+.mt-1 {
+  margin-top: .25rem;
+}
+
 .mt-2 {
   margin-top: .5rem;
 }
 
 .mt-4 {
   margin-top: 1rem;
-}
-
-.mt-1 {
-  margin-top: .25rem;
 }
 
 .block {
@@ -1196,12 +1196,12 @@ body {
   border-width: 2px;
 }
 
-.border-\[1\.5px\] {
-  border-width: 1.5px;
-}
-
 .border-4 {
   border-width: 4px;
+}
+
+.border-\[1\.5px\] {
+  border-width: 1.5px;
 }
 
 .border-b {
@@ -1566,6 +1566,11 @@ body {
   line-height: 2rem;
 }
 
+.text-4xl {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+}
+
 .text-\[0\.8rem\] {
   font-size: .8rem;
 }
@@ -1588,11 +1593,6 @@ body {
 .text-xs {
   font-size: .75rem;
   line-height: 1rem;
-}
-
-.text-4xl {
-  font-size: 2.25rem;
-  line-height: 2.5rem;
 }
 
 .font-bold {
@@ -2736,10 +2736,6 @@ body {
 
   .sm\:flex {
     display: flex;
-  }
-
-  .sm\:max-w-\[425px\] {
-    max-width: 425px;
   }
 
   .sm\:max-w-md {

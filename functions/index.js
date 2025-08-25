@@ -3,7 +3,6 @@ require('dotenv').config();
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const webpush = require("web-push");
-const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
 
 admin.initializeApp();
 
@@ -21,32 +20,6 @@ if (vapidKeys.publicKey && vapidKeys.privateKey) {
 } else {
     console.error("VAPID keys are not configured. Push notifications will not work.");
 }
-
-
-exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-
-    const channelName = data.channelName;
-    const appId = data.appId;
-    const appCertificate = data.appCertificate;
-
-    if (!channelName || !appId || !appCertificate) {
-        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with channelName, appId, and appCertificate.');
-    }
-    
-    const uid = context.auth.uid;
-    const role = RtcRole.PUBLISHER;
-    const expirationTimeInSeconds = 3600;
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
-
-    const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channelName, uid, role, privilegeExpiredTs);
-
-    return { token };
-});
-
 
 exports.sendPushNotification = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")

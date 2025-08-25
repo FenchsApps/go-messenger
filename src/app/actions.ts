@@ -1,9 +1,9 @@
 
 'use server';
-import { db, storage, functions } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { httpsCallable } from 'firebase/functions';
+import { RtcTokenBuilder, RtcRole } from 'agora-access-token';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
@@ -11,10 +11,8 @@ function getChatId(userId1: string, userId2: string) {
 
 export async function initiateCall(callerId: string, receiverId: string) {
   try {
-    const channelName = [callerId, receiverId].sort().join('_');
-    const callDocRef = doc(db, 'calls', channelName);
-
-    await setDoc(callDocRef, {
+    const channelName = getChatId(callerId, receiverId);
+    await setDoc(doc(db, 'calls', channelName), {
       initiator: callerId,
       receiver: receiverId,
       channelName: channelName,
@@ -22,23 +20,22 @@ export async function initiateCall(callerId: string, receiverId: string) {
       createdAt: serverTimestamp(),
     });
 
-    const generateAgoraToken = httpsCallable(functions, 'generateAgoraToken');
     const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
 
     if (!appId || !appCertificate) {
-        console.error("Agora credentials not found in environment variables.");
-        return { error: 'Agora service is not configured correctly on the server.' };
+        console.error("Agora App ID or Certificate is not configured on the server.");
+        return { error: 'Call service is not configured correctly on the server.' };
     }
 
-    const result = await generateAgoraToken({ 
-        channelName,
-        appId,
-        appCertificate
-    });
-    
-    // @ts-ignore
-    const token = result.data.token;
+    const role = RtcRole.PUBLISHER;
+    const expirationTimeInSeconds = 3600;
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+    const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channelName, 0, role, privilegeExpiredTs);
+
+    await updateDoc(doc(db, 'calls', channelName), { token });
 
     return {
       success: true,
@@ -59,7 +56,6 @@ export async function endCall(callId: string) {
       const callDocRef = doc(db, 'calls', callId);
       const callDoc = await getDoc(callDocRef);
       if (callDoc.exists()) {
-          const callData = callDoc.data();
           await updateDoc(callDocRef, {
               status: 'ended'
           });
@@ -70,6 +66,7 @@ export async function endCall(callId: string) {
       return { error: 'Failed to end call' };
   }
 }
+
 
 export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }) {
     if (!text.trim()) {

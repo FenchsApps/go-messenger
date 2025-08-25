@@ -9,6 +9,7 @@ import { MessageMenu } from './message-menu';
 import { stickers } from '@/lib/data';
 import { Check, CheckCheck } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
+import { VoiceMessagePlayer } from './chat/voice-message-player';
 
 
 interface ChatMessagesProps {
@@ -95,7 +96,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                         },
                         message.type === 'sticker' && 'p-1 bg-transparent shadow-none',
                         message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden shadow-none',
-                        message.type === 'audio' && 'w-64'
+                        message.type === 'audio' && 'w-64 p-2'
                     )}
                     >
                     {message.forwardedFrom && (
@@ -103,6 +104,9 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                         <p className="font-bold">Переслано от {message.forwardedFrom.name}</p>
                         <p>{message.forwardedFrom.text}</p>
                         </div>
+                    )}
+                    {message.type === 'audio' && message.audioUrl && (
+                        <VoiceMessagePlayer audioUrl={message.audioUrl} duration={message.audioDuration} />
                     )}
                     {message.type === 'gif' && message.gifUrl && (
                         <Image
@@ -131,7 +135,8 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                     )}
                     <div className={cn(
                         "flex items-center justify-end gap-1.5 text-xs text-muted-foreground/80 pt-1",
-                        isCurrentUser && "text-primary-foreground/60"
+                        isCurrentUser && "text-primary-foreground/60",
+                        message.type === 'audio' && (isCurrentUser ? "text-primary-foreground/60" : "dark:text-muted-foreground")
                         )}>
                         {message.edited && <span className="text-xs italic">(изм.)</span>}
                         <span className="opacity-0 group-hover:opacity-100 transition-opacity">

@@ -63,15 +63,26 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif }: ChatInput
             rows={1}
             disabled={isPending}
             />
-            <Button
+            {hasContent ? (
+                <Button
+                        type="button"
+                        size="icon"
+                        onClick={handleSendMessage}
+                        className="h-9 w-9 shrink-0 rounded-full"
+                        disabled={!hasContent || isPending}
+                    >
+                    {isPending ? <Loader2 className="animate-spin" /> : <Send className="h-5 w-5" />}
+                </Button>
+            ) : (
+                <Button
                     type="button"
                     size="icon"
-                    onClick={handleSendMessage}
                     className="h-9 w-9 shrink-0 rounded-full"
-                    disabled={!hasContent || isPending}
+                    variant="ghost"
                 >
-                {isPending ? <Loader2 className="animate-spin" /> : <Send className="h-5 w-5" />}
-            </Button>
+                    <Mic className="h-5 w-5" />
+                </Button>
+            )}
       </div>
     </div>
   );

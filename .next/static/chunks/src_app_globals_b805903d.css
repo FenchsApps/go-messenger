@@ -1440,10 +1440,6 @@ body {
   fill: currentColor;
 }
 
-.object-cover {
-  object-fit: cover;
-}
-
 .p-0 {
   padding: 0;
 }
@@ -2940,6 +2936,14 @@ body {
 
 .\[\&\>button\]\:hidden > button {
   display: none;
+}
+
+.\[\&\>div\]\:h-full > div {
+  height: 100%;
+}
+
+.\[\&\>div\]\:w-full > div {
+  width: 100%;
 }
 
 .\[\&\>span\:last-child\]\:truncate > span:last-child {

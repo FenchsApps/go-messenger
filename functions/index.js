@@ -17,6 +17,11 @@ exports.sendPushNotification = functions.region('us-central1').firestore
         return null;
     }
     
+    // VAPID keys should be stored as Firebase functions config variables.
+    // Use the Firebase CLI to set them:
+    // firebase functions:config:set vapid.public_key="YOUR_PUBLIC_KEY"
+    // firebase functions:config:set vapid.private_key="YOUR_PRIVATE_KEY"
+    // firebase functions:config:set vapid.subject="mailto:your-email@example.com"
     const vapidKeys = {
         publicKey: functions.config().vapid.public_key,
         privateKey: functions.config().vapid.private_key,

@@ -39,18 +39,6 @@ exports.sendPushNotification = functions.region('us-central1').firestore
       return null;
     }
     const sender = senderDoc.data();
-    const senderName = sender.name || "Someone";
-
-    let notificationBody = "";
-    if (message.type === 'text' && message.text) {
-        notificationBody = message.text;
-    } else if (message.type === 'sticker') {
-        notificationBody = 'Стикер';
-    } else if (message.type === 'gif') {
-        notificationBody = 'GIF';
-    } else {
-        notificationBody = 'Новое сообщение';
-    }
 
     const subscriptionSnap = await admin.firestore().collection("subscriptions").doc(recipientId).get();
     if (!subscriptionSnap.exists) {
@@ -67,8 +55,8 @@ exports.sendPushNotification = functions.region('us-central1').firestore
     }
 
     const payload = JSON.stringify({
-        title: `Новое сообщение от ${senderName}`,
-        body: notificationBody,
+        title: `Новое сообщение`,
+        body: 'Вам кто-то написал, проверьте сообщения!',
         icon: sender.avatar || '/icons/icon-192x192.png',
         data: {
           url: `/?chatWith=${senderId}`

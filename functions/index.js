@@ -7,13 +7,13 @@ const webpush = require("web-push");
 admin.initializeApp();
 
 const vapidKeys = {
-    publicKey: process.env.VAPID_PUBLIC_KEY,
+    publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     privateKey: process.env.VAPID_PRIVATE_KEY,
 };
 
 if (vapidKeys.publicKey && vapidKeys.privateKey) {
     webpush.setVapidDetails(
-        `mailto:${process.env.VAPID_SUBJECT}`,
+        process.env.VAPID_SUBJECT || 'mailto:example@example.com',
         vapidKeys.publicKey,
         vapidKeys.privateKey
     );

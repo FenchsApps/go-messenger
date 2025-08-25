@@ -2,7 +2,7 @@
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Crown, MoreVertical, Settings, Trash2, Info } from 'lucide-react';
+import { ArrowLeft, Crown, MoreVertical, Settings, Trash2, Info, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -17,14 +17,21 @@ import {
 interface ChatHeaderProps {
   user: User; // chatPartner
   isMobile: boolean;
+  isPartnerTyping: boolean;
   onBack: () => void;
   onClearChat: () => void;
   onOpenSettings: () => void;
   onOpenContactInfo: () => void;
 }
 
-export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings, onOpenContactInfo }: ChatHeaderProps) {
+export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings, onOpenContactInfo, isPartnerTyping }: ChatHeaderProps) {
   
+  const statusText = isPartnerTyping 
+    ? 'печатает...' 
+    : (user.status === 'Online' 
+        ? 'В сети' 
+        : (user.lastSeen ? `Был(а) в сети ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети'));
+
   return (
     <div className="flex items-center justify-between p-2 md:p-4 border-b bg-card">
       <div className="flex items-center gap-3">
@@ -48,15 +55,22 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings
                 )}
             </div>
           <div className="flex items-center gap-1.5">
-            <span
-              className={cn('h-2 w-2 rounded-full', {
-                'bg-green-500': user.status === 'Online',
-                'bg-gray-400': user.status === 'Offline',
-              })}
-            />
-            <span className="text-xs text-muted-foreground">
-               {user.status === 'Online' ? 'В сети' : 
-                    user.lastSeen ? `Был(а) в сети ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети'}
+            {!isPartnerTyping && (
+                <span
+                className={cn('h-2 w-2 rounded-full', {
+                    'bg-green-500': user.status === 'Online',
+                    'bg-gray-400': user.status === 'Offline',
+                })}
+                />
+            )}
+            {isPartnerTyping && (
+                <Pencil className="h-3 w-3 animate-pulse text-primary" />
+            )}
+            <span className={cn(
+                "text-xs text-muted-foreground",
+                isPartnerTyping && "text-primary italic"
+            )}>
+               {statusText}
             </span>
           </div>
         </div>

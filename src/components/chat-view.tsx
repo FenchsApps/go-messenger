@@ -28,7 +28,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { sendMessage, sendSticker, editMessage, deleteMessage, sendGif, markMessagesAsRead, clearChatHistory } from '@/app/actions';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, doc } from 'firebase/firestore';
 import { ForwardMessageDialog } from './forward-message-dialog';
 import { useRouter } from 'next/navigation';
 import { ChatSettings } from './chat/chat-settings';
@@ -60,6 +60,7 @@ export function ChatView({
   const [isChatSettingsOpen, setIsChatSettingsOpen] = useState(false);
   const [isContactInfoOpen, setIsContactInfoOpen] = useState(false);
   const [chatBackground, setChatBackground] = useState('');
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -123,8 +124,18 @@ export function ChatView({
         markMessagesAsRead(chatId, currentUser.id);
       }
     });
+    
+    const unsubTypingStatus = onSnapshot(doc(db, 'chats', chatId), (doc) => {
+        if(doc.exists()) {
+            const typingStatus = doc.data()?.typing || {};
+            setIsPartnerTyping(typingStatus[chatPartner.id] || false);
+        }
+    });
 
-    return () => unsubscribeMessages();
+    return () => {
+        unsubscribeMessages();
+        unsubTypingStatus();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, currentUser.id, chatPartner.name, chatPartner.avatar, isWindowFocused]);
 
@@ -215,6 +226,7 @@ export function ChatView({
         onClearChat={() => setIsClearingChat(true)}
         onOpenSettings={() => setIsChatSettingsOpen(true)}
         onOpenContactInfo={() => setIsContactInfoOpen(true)}
+        isPartnerTyping={isPartnerTyping}
       />
        <div className="flex-1 min-h-0">
           <ChatMessages
@@ -228,6 +240,8 @@ export function ChatView({
           />
       </div>
       <ChatInput 
+        chatId={chatId}
+        currentUserId={currentUser.id}
         onSendMessage={handleSendMessage} 
         onSendSticker={handleSendSticker}
         onSendGif={handleSendGif}

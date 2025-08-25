@@ -1,6 +1,6 @@
 
 'use client';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, Loader2 } from 'lucide-react';
@@ -8,20 +8,44 @@ import { cn } from '@/lib/utils';
 import { useSettings } from '@/context/settings-provider';
 import { StickerPanel } from './sticker-panel';
 import { GifPanel } from './gif-panel';
+import { updateTypingStatus } from '@/app/actions';
 
 interface ChatInputProps {
+  chatId: string;
+  currentUserId: string;
   onSendMessage: (text: string) => Promise<void>;
   onSendSticker: (stickerId: string) => void;
   onSendGif: (gifUrl: string) => void;
 }
 
-export function ChatInput({ onSendMessage, onSendSticker, onSendGif }: ChatInputProps) {
+export function ChatInput({ onSendMessage, onSendSticker, onSendGif, chatId, currentUserId }: ChatInputProps) {
   const [text, setText] = useState('');
   const [isPending, startTransition] = useTransition();
   const { textSize } = useSettings();
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTyping = (isTyping: boolean) => {
+    updateTypingStatus(chatId, currentUserId, isTyping);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedStopTyping = useCallback(
+    debounce(() => handleTyping(false), 1500),
+    [chatId, currentUserId]
+  );
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+    if(typingTimeoutRef.current) {
+        handleTyping(true);
+    }
+    debouncedStopTyping();
+  }
 
   const handleSendMessage = async () => {
     if (!text.trim() || isPending) return;
+    debouncedStopTyping.cancel();
+    handleTyping(false);
     startTransition(async () => {
       await onSendMessage(text);
       setText('');
@@ -42,7 +66,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif }: ChatInput
             <GifPanel onGifSelect={onSendGif} />
             <Textarea
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={handleTextChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Написать сообщение..."
                 className={cn(
@@ -68,4 +92,26 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif }: ChatInput
       </div>
     </div>
   );
+}
+
+// Debounce utility
+function debounce<F extends (...args: any[]) => any>(func: F, wait: number): F & { cancel: () => void } {
+  let timeout: NodeJS.Timeout | null = null;
+  const debounced = function(this: any, ...args: any[]) {
+    const context = this;
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(() => {
+      timeout = null;
+      func.apply(context, args);
+    }, wait);
+  };
+  debounced.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+  };
+  return debounced as F & { cancel: () => void };
 }

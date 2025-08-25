@@ -211,3 +211,28 @@ export async function saveSubscription(userId: string, subscription: object) {
     return { error: "Failed to save push notification subscription." };
   }
 }
+
+export async function updateTypingStatus(chatId: string, userId: string, isTyping: boolean) {
+    try {
+        const chatRef = doc(db, 'chats', chatId);
+        const chatDoc = await getDoc(chatRef);
+
+        if (!chatDoc.exists()) {
+             // Create the chat document if it doesn't exist
+            await setDoc(chatRef, {
+                typing: {
+                    [userId]: isTyping
+                }
+            });
+        } else {
+            await updateDoc(chatRef, {
+                [`typing.${userId}`]: isTyping
+            });
+        }
+        
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating typing status:", error);
+        return { error: 'Failed to update typing status' };
+    }
+}

@@ -73,8 +73,14 @@ export function CallView({ callId }: CallViewProps) {
     const handleUserPublished = async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
         await client.current?.subscribe(user, mediaType);
         if (mediaType === 'video') {
+            const remoteVideoTrack = user.videoTrack;
+            if (remoteVideoTrack) {
+                const remoteVideoContainer = document.getElementById('remote-video');
+                if (remoteVideoContainer) {
+                    remoteVideoTrack.play(remoteVideoContainer);
+                }
+            }
             setRemoteUser(user);
-            user.videoTrack?.play(`remote-video`);
         }
         if (mediaType === 'audio') {
             user.audioTrack?.play();
@@ -110,7 +116,10 @@ export function CallView({ callId }: CallViewProps) {
         const videoTrack = await AgoraRTC.createCameraVideoTrack();
         localVideoTrack.current = videoTrack;
         
-        videoTrack.play('local-video');
+        const localVideoContainer = document.getElementById('local-video');
+        if (localVideoContainer) {
+             videoTrack.play(localVideoContainer);
+        }
 
         await client.current.publish([audioTrack, videoTrack]);
         setCallStatus('answered');
@@ -165,14 +174,14 @@ export function CallView({ callId }: CallViewProps) {
   return (
     <div className="relative flex flex-col items-center justify-center w-full h-screen bg-gray-900 text-white">
       {/* Remote Video */}
-      <div id="remote-video" className="absolute top-0 left-0 w-full h-full object-cover">
-        {/* The remote video is now played directly in handleUserPublished */}
+      <div id="remote-video" className="absolute top-0 left-0 w-full h-full [&>div]:w-full [&>div]:h-full">
+        {/* The remote video is played here by the SDK */}
       </div>
       <div className="absolute top-0 left-0 w-full h-full bg-black/50" />
 
       {/* Local Video Preview */}
       <div className="absolute top-4 right-4 w-48 h-auto border-2 border-gray-600 rounded-md overflow-hidden z-10">
-        <div id="local-video" className="w-full aspect-video rounded-md" />
+        <div id="local-video" className="w-full h-auto aspect-video rounded-md" />
       </div>
 
       <div className="z-10 text-center">

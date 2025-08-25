@@ -1,4 +1,3 @@
-
 'use client';
 
 import { saveSubscription } from "@/app/actions";
@@ -33,12 +32,10 @@ export async function setupPushNotifications(userId: string) {
 
   try {
     const registration = await navigator.serviceWorker.register('/sw.js');
-    console.log("Service Worker registered successfully");
 
     let subscription = await registration.pushManager.getSubscription();
 
     if (subscription) {
-        // Already subscribed, just make sure it's saved on our server
         await saveSubscription(userId, subscription);
         return;
     }
@@ -55,9 +52,7 @@ export async function setupPushNotifications(userId: string) {
         applicationServerKey,
     });
     
-    console.log("New subscription created:", subscription);
     await saveSubscription(userId, subscription);
-    console.log("Subscription saved to server.");
 
   } catch(error) {
     console.error("Error setting up push notifications:", error);

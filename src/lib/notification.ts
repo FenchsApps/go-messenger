@@ -56,6 +56,14 @@ export async function setupPushNotifications(userId: string) {
     await saveSubscription(userId, JSON.parse(JSON.stringify(subscription)));
     console.log("New subscription created and saved.");
 
+    // Send a welcome notification
+    if (registration.showNotification) {
+      registration.showNotification('Добро пожаловать в Мессенджер Go', {
+        body: 'Теперь вы будете получать уведомления о новых сообщениях.',
+        icon: '/icons/icon-192x192.png',
+      });
+    }
+
   } catch(error) {
     console.error("Error setting up push notifications:", error);
   }

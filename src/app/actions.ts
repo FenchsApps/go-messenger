@@ -204,7 +204,8 @@ export async function saveSubscription(userId: string, subscription: object) {
   }
   try {
     const subscriptionRef = doc(db, 'subscriptions', userId);
-    await setDoc(subscriptionRef, { subscription: subscription }, { merge: true });
+    // Store the subscription object directly
+    await setDoc(subscriptionRef, JSON.parse(JSON.stringify(subscription)));
     return { success: true };
   } catch (error) {
     console.error("Error saving push subscription:", error);

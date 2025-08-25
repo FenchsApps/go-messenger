@@ -11,7 +11,6 @@ import { PigeonIcon } from './icons';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-provider';
-import { setupPushNotifications } from '@/lib/notification';
 import { useToast } from '@/hooks/use-toast';
 
 interface MessengerProps {
@@ -33,19 +32,6 @@ export function Messenger({ onLogout }: MessengerProps) {
         </div>
       )
   }
-
-  useEffect(() => {
-    // Setup push notifications
-    if ('serviceWorker' in navigator && 'PushManager' in window && currentUser) {
-      setupPushNotifications(currentUser.id, (error) => {
-        toast({
-          title: "Ошибка уведомлений",
-          description: error,
-          variant: "destructive",
-        })
-      });
-    }
-  }, [currentUser, toast]);
 
   useEffect(() => {
     const unsubCurrentUser = onSnapshot(doc(db, "users", currentUser.id), (doc) => {});

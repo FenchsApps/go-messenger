@@ -1,8 +1,8 @@
 
-import type { User } from '@/lib/types';
+import type { Chat, User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Crown, MoreVertical, Settings, Trash2, Info, Pencil } from 'lucide-react';
+import { ArrowLeft, Crown, MoreVertical, Settings, Trash2, Info, Pencil, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -15,22 +15,41 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface ChatHeaderProps {
-  user: User; // chatPartner
+  chat: Chat;
   isMobile: boolean;
-  isPartnerTyping: boolean;
+  typingUsers: User[];
   onBack: () => void;
   onClearChat: () => void;
   onOpenSettings: () => void;
   onOpenContactInfo: () => void;
 }
 
-export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings, onOpenContactInfo, isPartnerTyping }: ChatHeaderProps) {
+export function ChatHeader({ chat, isMobile, onBack, onClearChat, onOpenSettings, onOpenContactInfo, typingUsers }: ChatHeaderProps) {
   
-  const statusText = isPartnerTyping 
-    ? 'печатает...' 
-    : (user.status === 'Online' 
+  const getStatusText = () => {
+    if (typingUsers.length > 0) {
+      if (typingUsers.length === 1) {
+        return `${typingUsers[0].name} печатает...`
+      }
+      return `${typingUsers.length} пользователя печатают...`
+    }
+
+    if (chat.type === 'private') {
+      const user = chat.members[0];
+       return user.status === 'Online' 
         ? 'В сети' 
-        : (user.lastSeen ? `Был(а) в сети ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети'));
+        : (user.lastSeen ? `Был(а) в сети ${formatDistanceToNow(new Date(user.lastSeen), { addSuffix: true, locale: ru })}` : 'Не в сети');
+    }
+
+    if (chat.type === 'group') {
+        return `${chat.members.length} участников`
+    }
+
+    return '';
+  }
+
+  const statusText = getStatusText();
+  const isTyping = typingUsers.length > 0;
 
   return (
     <div className="flex items-center justify-between p-2 md:p-4 border-b bg-card">
@@ -41,13 +60,13 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings
           </Button>
         )}
         <Avatar className="h-10 w-10 border-2 border-background">
-          <AvatarImage src={user.avatar} alt={user.name} />
-          <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+          <AvatarImage src={chat.avatar} alt={chat.name} />
+          <AvatarFallback>{chat.name.charAt(0)}</AvatarFallback>
         </Avatar>
         <div className="flex flex-col">
             <div className="flex items-center gap-2">
-                <span className="font-bold text-lg">{user.name}</span>
-                {user.isCreator && (
+                <span className="font-bold text-lg">{chat.name}</span>
+                {chat.type === 'private' && chat.isCreator && (
                     <Badge variant="secondary" className="h-5 text-xs px-1.5">
                         <Crown className="w-3 h-3 mr-1" />
                         Создатель
@@ -55,20 +74,23 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings
                 )}
             </div>
           <div className="flex items-center gap-1.5">
-            {!isPartnerTyping && (
+            {!isTyping && chat.type === 'private' && (
                 <span
                 className={cn('h-2 w-2 rounded-full', {
-                    'bg-green-500': user.status === 'Online',
-                    'bg-gray-400': user.status === 'Offline',
+                    'bg-green-500': chat.status === 'Online',
+                    'bg-gray-400': chat.status === 'Offline',
                 })}
                 />
             )}
-            {isPartnerTyping && (
+            {isTyping && (
                 <Pencil className="h-3 w-3 animate-pulse text-primary" />
+            )}
+            {!isTyping && chat.type === 'group' && (
+                <Users className="h-3 w-3 text-muted-foreground" />
             )}
             <span className={cn(
                 "text-xs text-muted-foreground",
-                isPartnerTyping && "text-primary italic"
+                isTyping && "text-primary italic"
             )}>
                {statusText}
             </span>
@@ -101,3 +123,5 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings
     </div>
   );
 }
+
+    

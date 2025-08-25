@@ -1499,6 +1499,14 @@ body {
   padding-top: 2rem;
 }
 
+.pb-1 {
+  padding-bottom: .25rem;
+}
+
+.pt-2 {
+  padding-top: .5rem;
+}
+
 .text-left {
   text-align: left;
 }

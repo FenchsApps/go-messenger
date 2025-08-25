@@ -1,7 +1,7 @@
 
 'use client';
 import { useState, useEffect } from 'react';
-import type { Message, User } from '@/lib/types';
+import type { Message, User, Chat } from '@/lib/types';
 import { allUsers } from '@/lib/data';
 import { ChatHeader } from './chat-header';
 import { ChatMessages } from './chat-messages';
@@ -35,18 +35,17 @@ import { ChatSettings } from './chat/chat-settings';
 import { ContactInfoSheet } from './chat/contact-info-sheet';
 import { useAuth } from '@/context/auth-provider';
 
-
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
 }
 interface ChatViewProps {
-  chatPartner: User;
+  chat: Chat;
   isMobile: boolean;
   onBack: () => void;
 }
 
 export function ChatView({
-  chatPartner,
+  chat,
   isMobile,
   onBack,
 }: ChatViewProps) {
@@ -60,12 +59,11 @@ export function ChatView({
   const [isChatSettingsOpen, setIsChatSettingsOpen] = useState(false);
   const [isContactInfoOpen, setIsContactInfoOpen] = useState(false);
   const [chatBackground, setChatBackground] = useState('');
-  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<User[]>([]);
 
   const router = useRouter();
   const { toast } = useToast();
   
-  // This should not happen if the app logic is correct
   if (!currentUser) {
     useEffect(() => {
       router.push('/');
@@ -73,7 +71,9 @@ export function ChatView({
     return null; 
   }
   
-  const chatId = getChatId(currentUser.id, chatPartner.id);
+  const chatId = chat.type === 'private' ? getChatId(currentUser.id, chat.id) : chat.id;
+
+  const chatPartner = chat.type === 'private' ? chat.members[0] : null;
 
   useEffect(() => {
     const savedBg = localStorage.getItem(`chat-background-${chatId}`);
@@ -87,7 +87,6 @@ export function ChatView({
     window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);
 
-    // Mark messages as read when chat becomes visible
     if (isWindowFocused) {
         markMessagesAsRead(chatId, currentUser.id);
     }
@@ -99,7 +98,6 @@ export function ChatView({
   }, [isWindowFocused, chatId, currentUser.id]);
 
   useEffect(() => {
-    // Mark messages as read when component mounts or chatPartner changes
     markMessagesAsRead(chatId, currentUser.id);
   }, [chatId, currentUser.id]);
   
@@ -128,7 +126,13 @@ export function ChatView({
     const unsubTypingStatus = onSnapshot(doc(db, 'chats', chatId), (doc) => {
         if(doc.exists()) {
             const typingStatus = doc.data()?.typing || {};
-            setIsPartnerTyping(typingStatus[chatPartner.id] || false);
+            const currentlyTyping = Object.entries(typingStatus)
+                .filter(([userId, isTyping]) => isTyping && userId !== currentUser.id)
+                .map(([userId]) => {
+                    const user = allUsers.find(u => u.id === userId);
+                    return user;
+                }).filter((u): u is User => !!u);
+            setTypingUsers(currentlyTyping);
         }
     });
 
@@ -137,10 +141,11 @@ export function ChatView({
         unsubTypingStatus();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, currentUser.id, chatPartner.name, chatPartner.avatar, isWindowFocused]);
+  }, [chatId, currentUser.id, isWindowFocused]);
 
   const handleSendMessage = async (text: string) => {
-    const result = await sendMessage(currentUser.id, chatPartner.id, text);
+    const recipientIds = chat.members.map(m => m.id).filter(id => id !== currentUser.id);
+    const result = await sendMessage(currentUser.id, chatId, text, recipientIds);
     if(result.error) {
         toast({
             title: "Ошибка отправки",
@@ -151,11 +156,11 @@ export function ChatView({
   };
 
   const handleSendSticker = async (stickerId: string) => {
-    await sendSticker(currentUser.id, chatPartner.id, stickerId);
+     // await sendSticker(currentUser.id, chatPartner.id, stickerId);
   };
   
   const handleSendGif = async (gifUrl: string) => {
-    await sendGif(currentUser.id, chatPartner.id, gifUrl);
+    // await sendGif(currentUser.id, chatPartner.id, gifUrl);
   };
 
   const handleEdit = (message: Message) => {
@@ -189,10 +194,10 @@ export function ChatView({
     if (!forwardingMessage || !forwardingMessage.text) return;
     const sender = allUsers.find(u => u.id === forwardingMessage.senderId);
     
-    await sendMessage(currentUser.id, recipientId, forwardingMessage.text, {
-      name: sender?.name || 'Unknown User',
-      text: forwardingMessage.text,
-    });
+    // await sendMessage(currentUser.id, recipientId, forwardingMessage.text, {
+    //   name: sender?.name || 'Unknown User',
+    //   text: forwardingMessage.text,
+    // });
     
     toast({
         title: "Сообщение переслано",
@@ -220,19 +225,19 @@ export function ChatView({
   return (
     <div className="flex flex-col h-full bg-background">
       <ChatHeader 
-        user={chatPartner} 
+        chat={chat} 
         isMobile={isMobile} 
         onBack={onBack}
         onClearChat={() => setIsClearingChat(true)}
         onOpenSettings={() => setIsChatSettingsOpen(true)}
         onOpenContactInfo={() => setIsContactInfoOpen(true)}
-        isPartnerTyping={isPartnerTyping}
+        typingUsers={typingUsers}
       />
        <div className="flex-1 min-h-0">
           <ChatMessages
             messages={messages}
             currentUser={currentUser}
-            chatPartner={chatPartner}
+            chatMembers={chat.members}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onForward={handleForward}
@@ -254,11 +259,14 @@ export function ChatView({
         currentBackground={chatBackground}
       />
 
-      <ContactInfoSheet
-        isOpen={isContactInfoOpen}
-        onOpenChange={setIsContactInfoOpen}
-        user={chatPartner}
-      />
+       {chat.type === 'private' && chatPartner && (
+        <ContactInfoSheet
+          isOpen={isContactInfoOpen}
+          onOpenChange={setIsContactInfoOpen}
+          user={chatPartner}
+        />
+       )}
+       {/* TODO: Add group info sheet */}
 
       <Dialog open={!!editingMessage} onOpenChange={() => setEditingMessage(null)}>
         <DialogContent>
@@ -295,3 +303,5 @@ export function ChatView({
     </div>
   );
 }
+
+    

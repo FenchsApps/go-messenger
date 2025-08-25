@@ -11,12 +11,24 @@ export type User = {
   description?: string;
 };
 
+export type Chat = {
+  id: string;
+  type: 'private' | 'group';
+  name: string;
+  avatar: string;
+  members: User[];
+  isCreator?: boolean;
+  status?: 'Online' | 'Offline';
+  lastSeen?: number;
+};
+
 export type Message = {
   id:string;
+  chatId: string;
   senderId: string;
-  recipientId: string;
+  recipientIds: string[];
   timestamp: number;
-  type: 'text' | 'sticker' | 'gif';
+  type: 'text' | 'sticker' | 'gif' | 'system';
   text?: string;
   stickerId?: string;
   gifUrl?: string;
@@ -25,5 +37,8 @@ export type Message = {
     name: string;
     text: string;
   } | null;
-  read?: boolean;
+  readBy: { [userId: string]: boolean };
 };
+
+
+    

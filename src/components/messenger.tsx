@@ -2,18 +2,18 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { User } from '@/lib/types';
+import type { User, Chat } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { ContactList } from './contact-list';
 import { ChatView } from './chat-view';
 import { PigeonIcon } from './icons';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-provider';
-import { useToast } from '@/hooks/use-toast';
 import { setupPushNotifications } from '@/lib/notification';
 import { updateUserStatus } from '@/app/actions';
+import { allChats as staticChats, allUsers as staticUsers } from '@/lib/data';
 
 interface MessengerProps {
   onLogout: () => void;
@@ -23,11 +23,10 @@ const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 export function Messenger({ onLogout }: MessengerProps) {
   const { currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
-  const { toast } = useToast();
   const inactivityTimerRef = useRef<NodeJS.Timeout>();
   
   if (!currentUser) {
@@ -60,11 +59,10 @@ export function Messenger({ onLogout }: MessengerProps) {
     const unsubCurrentUser = onSnapshot(doc(db, "users", currentUser.id), (doc) => {});
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const usersData: User[] = [];
-      let currentUserOnlineStatus = 'Offline';
+      const usersData: { [id: string]: User } = {};
       snapshot.forEach((doc) => {
         const data = doc.data();
-        const user = {
+        usersData[doc.id] = {
             id: doc.id,
             name: data.name,
             avatar: data.avatar,
@@ -73,25 +71,42 @@ export function Messenger({ onLogout }: MessengerProps) {
             lastSeen: data.lastSeen?.toDate().getTime(),
             isCreator: data.isCreator,
             description: data.description,
-        }
-        if (doc.id !== currentUser.id) {
-            usersData.push(user);
-        } else {
-            currentUserOnlineStatus = data.status;
-        }
+        };
       });
-      usersData.sort((a, b) => {
-        if (a.isCreator) return -1;
-        if (b.isCreator) return 1;
-        return 0;
-      })
 
-      setUsers(usersData);
-      const urlParams = new URLSearchParams(window.location.search);
-      const chatWithId = urlParams.get('chatWith');
-      if (!chatWithId && usersData.length > 0) {
-        setSelectedUserId(currentSelectedId => currentSelectedId ?? usersData[0].id)
+      const updatedChats: Chat[] = staticChats.map(chat => {
+        if (chat.type === 'private') {
+          const user = usersData[chat.id];
+          return user ? { ...chat, ...user, members: [user] } : chat;
+        }
+        if (chat.type === 'group') {
+            return {
+                ...chat,
+                members: chat.members.map(member => usersData[member.id] || member)
+            };
+        }
+        return chat;
+      }).sort((a,b) => {
+          if (a.type === 'group' && b.type !== 'group') return -1;
+          if (b.type === 'group' && a.type !== 'group') return 1;
+          if (a.type === 'private' && b.type === 'private' && a.isCreator) return -1;
+          if (a.type === 'private' && b.type === 'private' && b.isCreator) return 1;
+          return 0;
+      });
+
+      setChats(updatedChats);
+      
+      if (!selectedChatId) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const chatWithId = urlParams.get('chatWith');
+        if (chatWithId && updatedChats.some(c => c.id === chatWithId)) {
+          setSelectedChatId(chatWithId);
+        } else if (updatedChats.length > 0) {
+            const firstChat = updatedChats.find(c => c.id !== currentUser.id);
+            if(firstChat) setSelectedChatId(firstChat.id)
+        }
       }
+      
       setIsLoading(false);
     });
 
@@ -135,31 +150,30 @@ export function Messenger({ onLogout }: MessengerProps) {
             clearTimeout(inactivityTimerRef.current);
         }
     }
-  }, [currentUser.id]);
+  }, [currentUser.id, selectedChatId]);
 
   useEffect(() => {
-    if (users.length > 0 && !selectedUserId) {
+    if (chats.length > 0 && !selectedChatId) {
       const urlParams = new URLSearchParams(window.location.search);
       const chatWithId = urlParams.get('chatWith');
       if (chatWithId) {
-        const userExists = users.some(user => user.id === chatWithId);
-        if (userExists) {
-          setSelectedUserId(chatWithId);
-          // Clean the URL more reliably
+        const chatExists = chats.some(chat => chat.id === chatWithId);
+        if (chatExists) {
+          setSelectedChatId(chatWithId);
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       }
     }
-  }, [users, selectedUserId]);
+  }, [chats, selectedChatId]);
   
-  const selectedUser = users.find((user) => user.id === selectedUserId);
+  const selectedChat = chats.find((chat) => chat.id === selectedChatId);
 
-  const handleSelectUser = (userId: string) => {
-    setSelectedUserId(userId);
+  const handleSelectChat = (chatId: string) => {
+    setSelectedChatId(chatId);
   };
   
   const handleBack = () => {
-    setSelectedUserId(null);
+    setSelectedChatId(null);
   }
 
   return (
@@ -167,29 +181,29 @@ export function Messenger({ onLogout }: MessengerProps) {
       <div className="h-full w-full max-w-7xl md:rounded-2xl shadow-2xl flex overflow-hidden border">
         <div
           className={cn('w-full md:w-1/3 md:flex flex-col', {
-            'hidden md:flex': isMobile && selectedUserId,
-            'flex': !isMobile || !selectedUserId,
+            'hidden md:flex': isMobile && selectedChatId,
+            'flex': !isMobile || !selectedChatId,
           })}
         >
           <ContactList
-            users={users}
+            chats={chats}
             currentUser={currentUser}
-            selectedUserId={selectedUserId}
-            onSelectUser={handleSelectUser}
+            selectedChatId={selectedChatId}
+            onSelectChat={handleSelectChat}
             onLogout={onLogout}
             isLoading={isLoading}
           />
         </div>
         <div
           className={cn('w-full md:w-2/3 flex-col bg-background', {
-            'flex': selectedUserId,
-            'hidden md:flex': !selectedUserId,
+            'flex': selectedChatId,
+            'hidden md:flex': !selectedChatId,
           })}
         >
-          {selectedUser ? (
+          {selectedChat ? (
             <ChatView
-              key={selectedUserId}
-              chatPartner={selectedUser}
+              key={selectedChatId}
+              chat={selectedChat}
               isMobile={isMobile}
               onBack={handleBack}
             />
@@ -211,3 +225,5 @@ export function Messenger({ onLogout }: MessengerProps) {
     </main>
   );
 }
+
+    

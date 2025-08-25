@@ -1,4 +1,5 @@
-import type { User, Message } from './types';
+
+import type { User, Message, Chat } from './types';
 import { HeartSticker, HomeSticker, SchoolSticker, ShopSticker, SleepSticker, ThumbsUpSticker, WorkSticker, YummySticker } from '@/components/stickers';
 
 export const allUsers: User[] = [
@@ -37,6 +38,28 @@ export const allUsers: User[] = [
   },
 ];
 
+const familyChat: Chat = {
+    id: 'family_chat',
+    type: 'group',
+    name: 'Семья',
+    avatar: 'https://placehold.co/100x100/C2E0C6/000000?text=F',
+    members: allUsers,
+};
+
+export const allChats: Chat[] = [
+    familyChat,
+    ...allUsers.map(user => ({
+        id: user.id,
+        type: 'private' as const,
+        name: user.name,
+        avatar: user.avatar,
+        members: [user],
+        status: user.status,
+        lastSeen: user.lastSeen,
+        isCreator: user.isCreator,
+    }))
+];
+
 export const messages: Message[] = [];
 
 export const stickers = [
@@ -49,3 +72,6 @@ export const stickers = [
   { id: 'yummy', component: YummySticker, hint: 'yummy' },
   { id: 'sleep', component: SleepSticker, hint: 'sleeping' },
 ];
+
+
+    

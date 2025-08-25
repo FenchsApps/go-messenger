@@ -8,23 +8,30 @@ function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
 }
 
-export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }) {
+export async function sendMessage(senderId: string, chatId: string, text: string, recipientIds: string[], forwardedFrom?: { name: string, text: string }) {
     if (!text.trim()) {
         return { error: 'Message cannot be empty' };
     }
     
-    const chatId = getChatId(senderId, recipientId);
-    
     try {
+        const initialReadBy = recipientIds.reduce((acc, id) => {
+            acc[id] = false;
+            return acc;
+        }, {} as {[key: string]: boolean});
+        
         const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            chatId,
             senderId,
-            recipientId,
+            recipientIds,
             text,
             timestamp: serverTimestamp(),
             type: 'text',
             edited: false,
             forwardedFrom: forwardedFrom || null,
-            read: false,
+            readBy: {
+                ...initialReadBy,
+                [senderId]: true
+            },
         });
         return { error: null, data: { id: docRef.id, text } };
     } catch (error) {
@@ -133,7 +140,10 @@ export async function deleteMessage(chatId: string, messageId: string) {
 
 export async function markMessagesAsRead(chatId: string, currentUserId: string) {
     const messagesRef = collection(db, 'chats', chatId, 'messages');
-    const q = query(messagesRef, where('recipientId', '==', currentUserId), where('read', '==', false));
+    // We need to fetch all messages where the current user is a recipient and has not read the message yet.
+    // This query is a bit more complex with the new data model.
+    // We'll fetch messages where `readBy.[currentUserId]` is `false`.
+    const q = query(messagesRef, where(`readBy.${currentUserId}`, '==', false));
     
     try {
         const querySnapshot = await getDocs(q);
@@ -143,7 +153,7 @@ export async function markMessagesAsRead(chatId: string, currentUserId: string) 
         
         const batch = writeBatch(db);
         querySnapshot.forEach(doc => {
-            batch.update(doc.ref, { read: true });
+            batch.update(doc.ref, { [`readBy.${currentUserId}`]: true });
         });
         await batch.commit();
     } catch (error) {
@@ -205,7 +215,6 @@ export async function saveSubscription(userId: string, subscription: PushSubscri
   
   const subscriptionsRef = collection(db, 'subscriptions');
   
-  // Query to check if a subscription with the same endpoint already exists for this user
   const q = query(subscriptionsRef, 
       where("userId", "==", userId), 
       where("endpoint", "==", subscription.endpoint)
@@ -215,7 +224,6 @@ export async function saveSubscription(userId: string, subscription: PushSubscri
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
-      // No existing subscription found, so add a new one.
       await addDoc(subscriptionsRef, {
         userId,
         ...subscription
@@ -223,7 +231,6 @@ export async function saveSubscription(userId: string, subscription: PushSubscri
       console.log('New subscription added for user:', userId);
       return { success: true, message: "New subscription added." };
     } else {
-      // Subscription already exists.
       console.log('Subscription already exists for this user and device.');
       return { success: true, message: "Subscription already exists." };
     }
@@ -239,7 +246,6 @@ export async function updateTypingStatus(chatId: string, userId: string, isTypin
         const chatDoc = await getDoc(chatRef);
 
         if (!chatDoc.exists()) {
-             // Create the chat document if it doesn't exist
             await setDoc(chatRef, {
                 typing: {
                     [userId]: isTyping
@@ -257,3 +263,5 @@ export async function updateTypingStatus(chatId: string, userId: string, isTypin
         return { error: 'Failed to update typing status' };
     }
 }
+
+    

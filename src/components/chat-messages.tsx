@@ -14,7 +14,7 @@ import { useSettings } from '@/context/settings-provider';
 interface ChatMessagesProps {
   messages: Message[];
   currentUser: User;
-  chatPartner: User;
+  chatMembers: User[];
   onEdit: (message: Message) => void;
   onDelete: (messageId: string) => void;
   onForward: (message: Message) => void;
@@ -23,7 +23,7 @@ interface ChatMessagesProps {
 
 const defaultBackgroundClass = 'chat-background';
 
-export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDelete, onForward, background }: ChatMessagesProps) {
+export function ChatMessages({ messages, currentUser, chatMembers, onEdit, onDelete, onForward, background }: ChatMessagesProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { textSize } = useSettings();
 
@@ -32,6 +32,10 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const findSender = (senderId: string) => {
+    return chatMembers.find(m => m.id === senderId) || currentUser;
+  }
 
   return (
     <div className="relative h-full bg-background">
@@ -53,10 +57,13 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
         
             {messages.map((message, index) => {
                 const isCurrentUser = message.senderId === currentUser.id;
-                const sender = isCurrentUser ? currentUser : chatPartner;
+                const sender = findSender(message.senderId);
                 const showAvatar = !isCurrentUser && (index === 0 || messages[index - 1].senderId !== message.senderId);
+                const isGroupMessage = chatMembers.length > 2;
 
                 const StickerComponent = message.stickerId ? stickers.find(s => s.id === message.stickerId)?.component : null;
+
+                const hasBeenReadAll = message.recipientIds.every(id => message.readBy[id]);
 
                 return (
                 <div
@@ -80,8 +87,8 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                     <div className="w-8">
                         {showAvatar && (
                         <Avatar className="h-8 w-8">
-                            <AvatarImage src={sender.avatar} alt={sender.name} />
-                            <AvatarFallback>{sender.name.charAt(0)}</AvatarFallback>
+                            <AvatarImage src={sender?.avatar} alt={sender?.name} />
+                            <AvatarFallback>{sender?.name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         )}
                     </div>
@@ -97,6 +104,9 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                         message.type === 'gif' && 'p-0 bg-transparent rounded-lg overflow-hidden shadow-none'
                     )}
                     >
+                    {isGroupMessage && !isCurrentUser && showAvatar && (
+                       <p className="text-xs font-bold text-primary mb-1">{sender?.name}</p>
+                    )}
                     {message.forwardedFrom && (
                         <div className="border-l-2 border-blue-300 pl-2 mb-1 text-xs opacity-80">
                         <p className="font-bold">Переслано от {message.forwardedFrom.name}</p>
@@ -137,7 +147,7 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
                             {message.timestamp && format(new Date(message.timestamp), 'HH:mm')}
                         </span>
                         {isCurrentUser && (
-                        message.read ? <CheckCheck className="h-4 w-4 text-blue-400" /> : <Check className="h-4 w-4" />
+                          hasBeenReadAll ? <CheckCheck className="h-4 w-4 text-blue-400" /> : <Check className="h-4 w-4" />
                         )}
                     </div>
                     </div>
@@ -157,3 +167,5 @@ export function ChatMessages({ messages, currentUser, chatPartner, onEdit, onDel
     </div>
   );
 }
+
+    

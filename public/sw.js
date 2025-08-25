@@ -1,53 +1,47 @@
 
-self.addEventListener('push', (event) => {
-  if (!event.data) {
-    console.log('Push event but no data');
-    return;
-  }
-
+self.addEventListener('push', function(event) {
   const data = event.data.json();
-  const title = data.title || 'Новое сообщение';
+  const { title, body, icon, url } = data;
+
   const options = {
-    body: data.body,
-    icon: data.icon || '/favicon.ico',
-    badge: '/badge.png',
+    body: body,
+    icon: icon,
+    badge: '/favicon.ico', // A small badge icon
     data: {
-      url: data.data.url,
-    },
+      url: url // URL to open when notification is clicked
+    }
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
 });
 
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close(); // Close the notification
 
-  const urlToOpen = new URL(event.notification.data.url, self.location.origin).href;
+  const urlToOpen = event.notification.data.url || '/';
 
   event.waitUntil(
     clients.matchAll({
       type: 'window',
-      includeUncontrolled: true,
-    }).then((clientList) => {
-      if (clientList.length > 0) {
-        let client = clientList[0];
-        for (let i = 0; i < clientList.length; i++) {
-          if (clientList[i].focused) {
-            client = clientList[i];
+      includeUncontrolled: true
+    }).then(function(clientList) {
+      // If a window for the app is already open, focus it
+      for (let i = 0; i < clientList.length; i++) {
+        let client = clientList[i];
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          // Check if the client is at the target URL already
+          if (client.url !== new URL(urlToOpen, self.location.origin).href) {
+            return client.navigate(urlToOpen).then(client => client.focus());
           }
+          return client.focus();
         }
-        return client.focus().then(client => client.navigate(urlToOpen));
       }
-      return clients.openWindow(urlToOpen);
+      // Otherwise, open a new window
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
     })
   );
-});
-
-self.addEventListener('install', (event) => {
-  // Perform install steps
-  console.log('Service Worker installing.');
-});
-
-self.addEventListener('activate', (event) => {
-  console.log('Service Worker activating.');
 });

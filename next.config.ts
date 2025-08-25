@@ -84,6 +84,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/sw.js',
+        destination: '/_next/static/sw.js',
+      },
+    ]
+  }
 };
 
 export default nextConfig;

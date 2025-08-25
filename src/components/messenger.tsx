@@ -11,6 +11,8 @@ import { PigeonIcon } from './icons';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-provider';
+import { setupPushNotifications } from '@/lib/notification';
+import { useToast } from '@/hooks/use-toast';
 
 interface MessengerProps {
   onLogout: () => void;
@@ -22,8 +24,8 @@ export function Messenger({ onLogout }: MessengerProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
+  const { toast } = useToast();
   
-  // This should not happen if the app logic is correct
   if (!currentUser) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-background">
@@ -33,11 +35,20 @@ export function Messenger({ onLogout }: MessengerProps) {
   }
 
   useEffect(() => {
-    // Listen for changes to the current user's document
-    const unsubCurrentUser = onSnapshot(doc(db, "users", currentUser.id), (doc) => {
-        // This can be used to update local user state if needed
-        // For now, we rely on the AuthProvider to hold the latest user state
-    });
+    // Setup push notifications
+    if ('serviceWorker' in navigator && 'PushManager' in window && currentUser) {
+      setupPushNotifications(currentUser.id, (error) => {
+        toast({
+          title: "Ошибка уведомлений",
+          description: error,
+          variant: "destructive",
+        })
+      });
+    }
+  }, [currentUser, toast]);
+
+  useEffect(() => {
+    const unsubCurrentUser = onSnapshot(doc(db, "users", currentUser.id), (doc) => {});
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData: User[] = [];
@@ -56,7 +67,6 @@ export function Messenger({ onLogout }: MessengerProps) {
           });
         }
       });
-      // Ensure the creator is always at the top of the list
       usersData.sort((a, b) => {
         if (a.isCreator) return -1;
         if (b.isCreator) return 1;
@@ -64,7 +74,6 @@ export function Messenger({ onLogout }: MessengerProps) {
       })
 
       setUsers(usersData);
-      // Don't auto-select a user if a chat is being opened from a notification
       const urlParams = new URLSearchParams(window.location.search);
       const chatWithId = urlParams.get('chatWith');
       if (!chatWithId && usersData.length > 0) {
@@ -87,7 +96,6 @@ export function Messenger({ onLogout }: MessengerProps) {
     }
   }, [currentUser.id]);
 
-  // Handle opening chat from notification
   useEffect(() => {
     if (users.length > 0) {
       const urlParams = new URLSearchParams(window.location.search);
@@ -96,6 +104,8 @@ export function Messenger({ onLogout }: MessengerProps) {
         const userExists = users.some(user => user.id === chatWithId);
         if (userExists) {
           setSelectedUserId(chatWithId);
+          // Clean the URL
+          window.history.replaceState({}, document.title, "/");
         }
       }
     }

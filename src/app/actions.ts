@@ -183,3 +183,27 @@ export async function updateUserProfile(userId: string, name: string, descriptio
         return { error: "Failed to update profile." };
     }
 }
+
+export async function saveSubscription(userId: string, subscription: any) {
+    if (!userId || !subscription) return { error: "User ID and subscription are required." };
+    try {
+        const subscriptionRef = doc(db, 'subscriptions', userId);
+        await setDoc(subscriptionRef, subscription);
+        return { success: true };
+    } catch (error) {
+        console.error("Error saving subscription:", error);
+        return { error: "Failed to save subscription." };
+    }
+}
+
+export async function removeSubscription(userId: string) {
+    if (!userId) return { error: "User ID is required." };
+    try {
+        const subscriptionRef = doc(db, 'subscriptions', userId);
+        await deleteDoc(subscriptionRef);
+        return { success: true };
+    } catch (error) {
+        console.error("Error removing subscription:", error);
+        return { error: "Failed to remove subscription." };
+    }
+}

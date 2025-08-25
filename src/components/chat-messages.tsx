@@ -63,7 +63,9 @@ export function ChatMessages({ messages, currentUser, chatMembers, onEdit, onDel
 
                 const StickerComponent = message.stickerId ? stickers.find(s => s.id === message.stickerId)?.component : null;
 
-                const hasBeenReadAll = message.recipientIds.every(id => message.readBy[id]);
+                const hasBeenReadAll = Array.isArray(message.recipientIds) && message.readBy
+                    ? message.recipientIds.every(id => message.readBy[id])
+                    : true;
 
                 return (
                 <div
@@ -168,4 +170,3 @@ export function ChatMessages({ messages, currentUser, chatMembers, onEdit, onDel
   );
 }
 
-    

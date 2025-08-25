@@ -37,18 +37,25 @@ export function CallView({ callId }: CallViewProps) {
   const [isJoined, setIsJoined] = useState(false);
   
   const leaveChannel = async () => {
-      localAudioTrack.current?.stop();
-      localAudioTrack.current?.close();
-      localVideoTrack.current?.stop();
-      localVideoTrack.current?.close();
-      if(client.current?.connectionState === 'CONNECTED') {
+      if(localAudioTrack.current) {
+        localAudioTrack.current.stop();
+        localAudioTrack.current.close();
+        localAudioTrack.current = null;
+      }
+      if (localVideoTrack.current) {
+        localVideoTrack.current.stop();
+        localVideoTrack.current.close();
+        localVideoTrack.current = null;
+      }
+
+      if(client.current?.connectionState === 'CONNECTED' || client.current?.connectionState === 'CONNECTING') {
          await client.current?.leave();
       }
       setIsJoined(false);
       setRemoteUser(null);
   }
 
-  // Effect for initializing and joining the call
+  // Effect for initializing client and fetching token
   useEffect(() => {
     if (!currentUser || !callId) return;
 
@@ -69,12 +76,10 @@ export function CallView({ callId }: CallViewProps) {
         setToken(callData.token);
         setCallStatus(callData.status);
 
-        await joinChannel(callData.token, callId, currentUser.id);
-
+        // If the current user is the receiver and the call is 'calling', answer it.
         if(callData.status === 'calling' && callData.receiver === currentUser.id){
             await updateDoc(doc(db, 'calls', callId), { status: 'answered' });
         }
-
 
       } catch (error: any) {
         console.error("Initialization failed:", error);
@@ -120,6 +125,15 @@ export function CallView({ callId }: CallViewProps) {
   }, [callId, currentUser?.id]);
 
 
+  // Effect for joining the channel once token is available
+  useEffect(() => {
+    if (token && currentUser && !isJoined) {
+        joinChannel(token, callId, currentUser.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, currentUser, isJoined]);
+
+
   const joinChannel = async (joinToken: string, channel: string, uid: UID) => {
     if (!client.current) return;
     try {
@@ -141,8 +155,12 @@ export function CallView({ callId }: CallViewProps) {
         await client.current.publish([audioTrack, videoTrack]);
     } catch (error) {
         console.error('Failed to join channel or publish tracks', error);
-        toast({ variant: "destructive", title: "Ошибка подключения", description: "Не удалось подключиться к каналу." });
-        handleHangUp();
+        if (error instanceof Error && error.message.includes('INVALID_OPERATION')) {
+            // Already joined or joining, ignore.
+        } else {
+            toast({ variant: "destructive", title: "Ошибка подключения", description: "Не удалось подключиться к каналу." });
+            handleHangUp();
+        }
     }
   }
 

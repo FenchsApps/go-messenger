@@ -12,28 +12,13 @@ exports.sendPushNotification = functions.region('us-central1').firestore
     const recipientId = message.recipientId;
     const senderId = message.senderId;
 
+    // 1. Не отправлять уведомление, если пользователь пишет сам себе
     if (senderId === recipientId) {
         console.log("User sent a message to themselves, no notification needed.");
         return null;
     }
 
-    const recipientDoc = await admin.firestore().collection("users").doc(recipientId).get();
-    if (!recipientDoc.exists) {
-        console.log(`Recipient with ID ${recipientId} not found.`);
-        return null;
-    }
-    
-    const vapidKeys = {
-        publicKey: functions.config().vapid.public_key,
-        privateKey: functions.config().vapid.private_key,
-    };
-    
-    webpush.setVapidDetails(
-        `mailto:${functions.config().vapid.subject}`,
-        vapidKeys.publicKey,
-        vapidKeys.privateKey
-    );
-
+    // 2. Получить данные отправителя для персонализации уведомления
     const senderDoc = await admin.firestore().collection("users").doc(senderId).get();
     if (!senderDoc.exists) {
       console.log(`Sender with ID ${senderId} not found.`);
@@ -41,7 +26,8 @@ exports.sendPushNotification = functions.region('us-central1').firestore
     }
     const sender = senderDoc.data();
     const senderName = sender.name || "Кто-то";
-
+    
+    // 3. Получить подписку получателя
     const subscriptionSnap = await admin.firestore().collection("subscriptions").doc(recipientId).get();
     if (!subscriptionSnap.exists) {
         console.log(`No push subscription found for user ${recipientId}`);
@@ -56,6 +42,19 @@ exports.sendPushNotification = functions.region('us-central1').firestore
         return null;
     }
 
+    // 4. Настроить VAPID ключи для web-push
+    const vapidKeys = {
+        publicKey: functions.config().vapid.public_key,
+        privateKey: functions.config().vapid.private_key,
+    };
+    
+    webpush.setVapidDetails(
+        `mailto:${functions.config().vapid.subject}`,
+        vapidKeys.publicKey,
+        vapidKeys.privateKey
+    );
+
+    // 5. Сформировать тело уведомления
     let notificationBody = "";
     if (message.type === 'text' && message.text) {
         notificationBody = message.text;
@@ -74,11 +73,13 @@ exports.sendPushNotification = functions.region('us-central1').firestore
         }
     });
 
+    // 6. Отправить уведомление
     try {
         await webpush.sendNotification(subscription, payload);
-        console.log("Successfully sent web push notification.");
+        console.log(`Successfully sent web push notification to ${recipientId}.`);
     } catch (error) {
         console.error("Error sending web push notification:", error);
+        // Если подписка истекла или недействительна, удалить ее из Firestore
         if (error.statusCode === 404 || error.statusCode === 410) {
             console.log("Subscription has expired or is no longer valid. Removing it.");
             await admin.firestore().collection("subscriptions").doc(recipientId).delete();

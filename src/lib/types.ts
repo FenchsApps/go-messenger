@@ -16,12 +16,10 @@ export type Message = {
   senderId: string;
   recipientId: string;
   timestamp: number;
-  type: 'text' | 'sticker' | 'gif' | 'audio';
+  type: 'text' | 'sticker' | 'gif';
   text?: string;
   stickerId?: string;
   gifUrl?: string;
-  audioUrl?: string;
-  audioDuration?: number;
   edited?: boolean;
   forwardedFrom?: {
     name: string;

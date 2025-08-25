@@ -2,7 +2,7 @@
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Crown, MoreVertical, Phone, Settings, Trash2, Info } from 'lucide-react';
+import { ArrowLeft, Crown, MoreVertical, Settings, Trash2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -13,10 +13,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { initiateCall } from '@/app/actions';
-import { useAuth } from '@/context/auth-provider';
-import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-toast';
 
 interface ChatHeaderProps {
   user: User; // chatPartner
@@ -28,21 +24,7 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings, onOpenContactInfo }: ChatHeaderProps) {
-  const { currentUser } = useAuth();
-  const router = useRouter();
-  const { toast } = useToast();
-
-  const handleCall = async () => {
-    if (!currentUser) return;
-    toast({ title: "Начинаем звонок..." });
-    const result = await initiateCall(currentUser.id, user.id);
-    if(result.error || !result.data) {
-      toast({ variant: "destructive", title: "Ошибка", description: result.error || "Не удалось начать звонок" });
-    } else {
-      router.push(`/call/${result.data.callId}`);
-    }
-  }
-
+  
   return (
     <div className="flex items-center justify-between p-2 md:p-4 border-b bg-card">
       <div className="flex items-center gap-3">
@@ -80,9 +62,6 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings
         </div>
       </div>
        <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" onClick={handleCall}>
-            <Phone className="h-5 w-5" />
-        </Button>
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">

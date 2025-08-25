@@ -13,77 +13,10 @@ import type { User } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
-import { saveSubscription, removeSubscription } from '@/app/actions';
 import { useAuth } from '@/context/auth-provider';
 
 
 const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
-
-async function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('Service Worker registered with scope:', registration.scope);
-      return registration;
-    } catch (error) {
-      console.error('Service Worker registration failed:', error);
-    }
-  }
-  return undefined;
-}
-
-async function getPushSubscription(registration: ServiceWorkerRegistration) {
-  if (!('pushManager' in window)) {
-    console.error('Push messaging is not supported');
-    return null;
-  }
-  
-  let subscription = await registration.pushManager.getSubscription();
-  if (subscription === null) {
-    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if(!publicKey) {
-      console.error("VAPID public key is not defined in environment variables.");
-      return null;
-    }
-    try {
-        subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: publicKey,
-        });
-    } catch(err) {
-        console.error("Failed to subscribe the user: ", err);
-        return null;
-    }
-  }
-  return subscription;
-}
-
-export async function setupPushNotifications(userId: string) {
-  if (!('Notification' in window)) {
-    console.log("This browser does not support desktop notification");
-    return;
-  }
-
-  if (Notification.permission === 'denied') {
-    console.warn("Notification permission was previously denied.");
-    return;
-  }
-  
-  if (Notification.permission === 'default') {
-      await Notification.requestPermission();
-  }
-
-  const registration = await registerServiceWorker();
-  if (!registration) return;
-
-  if (Notification.permission === 'granted') {
-    const subscription = await getPushSubscription(registration);
-    if(subscription) {
-      await saveSubscription(userId, subscription);
-    }
-  }
-}
-
 
 export function Login() {
   const [phone, setPhone] = useState('');
@@ -105,7 +38,6 @@ export function Login() {
               lastSeen: serverTimestamp()
             }, { merge: true });
             setCurrentUser(user);
-            await setupPushNotifications(user.id);
           }
         }
       } catch (error) {
@@ -141,7 +73,6 @@ export function Login() {
 
       setCookie(LOGGED_IN_USER_COOKIE, user.id, 7);
       setCurrentUser(user);
-      await setupPushNotifications(user.id);
     } else {
       toast({
         title: 'Ошибка входа',
@@ -153,7 +84,6 @@ export function Login() {
 
   const handleLogout = async () => {
     if(currentUser) {
-        await removeSubscription(currentUser.id);
         await updateDoc(doc(db, 'users', currentUser.id), {
             status: 'Offline',
             lastSeen: serverTimestamp(),

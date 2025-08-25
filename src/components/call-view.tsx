@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -74,7 +73,7 @@ export function CallView({ callId }: CallViewProps) {
         }
 
         setToken(callData.token);
-        setCallStatus(callData.status);
+        setCallStatus(callData.status as CallStatus);
 
         // If the current user is the receiver and the call is 'calling', answer it.
         if(callData.status === 'calling' && callData.receiver === currentUser.id){
@@ -140,8 +139,14 @@ export function CallView({ callId }: CallViewProps) {
         await client.current.join(appId, channel, joinToken, uid);
         setIsJoined(true);
 
+        const videoDeviceId = localStorage.getItem('selectedCamId') || undefined;
+        const audioDeviceId = localStorage.getItem('selectedMicId') || undefined;
+
         // Create tracks after successfully joining
-        const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
+        const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
+          { microphoneId: audioDeviceId },
+          { cameraId: videoDeviceId }
+        );
         
         localAudioTrack.current = audioTrack;
         localVideoTrack.current = videoTrack;
@@ -166,6 +171,7 @@ export function CallView({ callId }: CallViewProps) {
 
   // Effect for listening to call status changes from Firestore
   useEffect(() => {
+    if (!callId) return;
     const unsub = onSnapshot(doc(db, 'calls', callId), (doc) => {
         if(doc.exists()) {
             const data = doc.data();
@@ -255,5 +261,3 @@ export function CallView({ callId }: CallViewProps) {
     </div>
   );
 }
-
-    

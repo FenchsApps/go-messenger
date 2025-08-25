@@ -1450,6 +1450,10 @@ body {
   fill: currentColor;
 }
 
+.object-cover {
+  object-fit: cover;
+}
+
 .p-0 {
   padding: 0;
 }
@@ -2825,6 +2829,10 @@ body {
 
   .sm\:max-w-sm {
     max-width: 24rem;
+  }
+
+  .sm\:max-w-lg {
+    max-width: 32rem;
   }
 
   .sm\:flex-row {

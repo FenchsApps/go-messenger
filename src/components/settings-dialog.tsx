@@ -20,7 +20,7 @@ import { updateUserProfile } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
 import { Separator } from './ui/separator';
-import { setupFcm } from './login';
+import { setupPushNotifications } from './login';
 
 interface SettingsDialogProps {
     user: User;
@@ -50,15 +50,24 @@ export function SettingsDialog({ user }: SettingsDialogProps) {
 
   const handleFixApp = async () => {
     try {
-        toast({ title: "Починка...", description: "Запрашиваем разрешения и обновляем токен..."});
-        await setupFcm(user, true);
-        toast({ title: "Готово", description: "Приложение будет перезагружено." });
+        toast({ title: "Починка...", description: "Запрашиваем разрешения и обновляем подписку..."});
+        
+        if (Notification.permission === 'denied') {
+            toast({ title: "Ошибка", description: "Разрешение на уведомления заблокировано. Пожалуйста, измените его в настройках браузера.", variant: 'destructive'});
+            return;
+        }
+
+        await Notification.requestPermission();
+        await setupPushNotifications(user.id);
+
+        toast({ title: "Готово", description: "Настройки уведомлений обновлены. Приложение будет перезагружено." });
 
         setTimeout(() => {
             window.location.reload();
         }, 1500);
 
     } catch(e) {
+        console.error("Error fixing app:", e);
         toast({ title: "Ошибка", description: "Не удалось исправить приложение.", variant: 'destructive'});
     }
   }

@@ -20,24 +20,6 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// Initialize Firebase Cloud Messaging and get a reference to the service
-const getMessagingInstance = () => {
-    if (typeof window !== 'undefined' && getApps().length > 0) {
-        try {
-            return getMessaging(app);
-        } catch(e) {
-            console.error("Could not initialize messaging", e);
-            return null;
-        }
-    }
-    return null;
-}
-
-const messaging = getMessagingInstance();
-
-// NOTE: The onMessage callback is for foreground messages.
-// Background messages are handled by the service worker.
-// This was removed to prevent duplicate notifications when the app is in the foreground.
 
 // This enables offline persistence. It's best to call this only once.
 try {
@@ -56,4 +38,4 @@ try {
 }
 
 
-export { app, db, auth, storage, messaging, getMessaging, onMessage };
+export { app, db, auth, storage };

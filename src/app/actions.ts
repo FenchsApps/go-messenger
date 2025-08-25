@@ -195,20 +195,6 @@ export async function clearChatHistory(chatId: string) {
     }
 }
 
-export async function updateUserFcmToken(userId: string, fcmToken: string) {
-    if (!userId || !fcmToken) {
-        return { error: "User ID and FCM Token are required." };
-    }
-    try {
-        const userRef = doc(db, 'users', userId);
-        await updateDoc(userRef, { fcmToken: fcmToken });
-        return { success: true };
-    } catch (error) {
-        console.error("Error updating FCM token:", error);
-        return { error: "Failed to update FCM token." };
-    }
-}
-
 export async function updateUserProfile(userId: string, name: string, description: string) {
     if (!userId) return { error: "User ID is required." };
     if (!name.trim()) return { error: "Name cannot be empty." };
@@ -223,5 +209,33 @@ export async function updateUserProfile(userId: string, name: string, descriptio
     } catch(error) {
         console.error("Error updating user profile:", error);
         return { error: "Failed to update profile." };
+    }
+}
+
+export async function saveSubscription(userId: string, subscription: PushSubscription) {
+    if (!userId || !subscription) {
+        return { error: "User ID and Subscription are required." };
+    }
+    try {
+        const subscriptionRef = doc(db, 'subscriptions', userId);
+        await setDoc(subscriptionRef, JSON.parse(JSON.stringify(subscription)));
+        return { success: true };
+    } catch (error) {
+        console.error("Error saving subscription:", error);
+        return { error: "Failed to save subscription." };
+    }
+}
+
+export async function removeSubscription(userId: string) {
+    if (!userId) {
+        return { error: "User ID is required." };
+    }
+    try {
+        const subscriptionRef = doc(db, 'subscriptions', userId);
+        await deleteDoc(subscriptionRef);
+        return { success: true };
+    } catch (error) {
+        console.error("Error removing subscription:", error);
+        return { error: "Failed to remove subscription." };
     }
 }

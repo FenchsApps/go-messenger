@@ -1,10 +1,21 @@
 
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const webpush = require("web-push");
 
 admin.initializeApp();
 
-// Existing function for push notifications on new messages
+const vapidKeys = {
+    publicKey: functions.config().webpush.public_key,
+    privateKey: functions.config().webpush.private_key,
+};
+
+webpush.setVapidDetails(
+    "mailto:example@yourdomain.org",
+    vapidKeys.publicKey,
+    vapidKeys.privateKey
+);
+
 exports.sendPushNotification = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
@@ -25,19 +36,6 @@ exports.sendPushNotification = functions.firestore
     const sender = senderDoc.data();
     const senderName = sender.name || "Someone";
 
-    const recipientDoc = await admin.firestore().collection("users").doc(recipientId).get();
-    if (!recipientDoc.exists) {
-      console.log(`Recipient with ID ${recipientId} not found.`);
-      return null;
-    }
-    const recipient = recipientDoc.data();
-    const fcmToken = recipient.fcmToken;
-
-    if (!fcmToken) {
-      console.log(`User ${recipientId} does not have an FCM token.`);
-      return null;
-    }
-
     let notificationBody = "";
     if (message.type === 'text' && message.text) {
         notificationBody = message.text;
@@ -49,29 +47,30 @@ exports.sendPushNotification = functions.firestore
         notificationBody = 'Голосовое сообщение';
     }
 
-    const payload = {
-      token: fcmToken,
-      data: {
+    const subscriptionSnap = await admin.firestore().collection("subscriptions").doc(recipientId).get();
+    if (!subscriptionSnap.exists) {
+        console.log(`No push subscription found for user ${recipientId}`);
+        return null;
+    }
+
+    const subscription = subscriptionSnap.data();
+
+    const payload = JSON.stringify({
         title: `Новое сообщение от ${senderName}`,
         body: notificationBody,
         icon: sender.avatar || '/favicon.ico',
-        url: `/?chatWith=${senderId}` // URL to open on notification click
-      },
-    };
+        url: `/?chatWith=${senderId}`
+    });
 
     try {
-      console.log(`Sending notification to token: ${fcmToken}`);
-      const response = await admin.messaging().send(payload);
-      console.log("Successfully sent message:", response);
+        await webpush.sendNotification(subscription, payload);
+        console.log("Successfully sent web push notification.");
     } catch (error) {
-      console.error("Error sending message:", error);
-      if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-registration-token') {
-        await admin.firestore().collection('users').doc(recipientId).update({ fcmToken: admin.firestore.FieldValue.delete() });
-        console.log(`Removed invalid token for user ${recipientId}`);
-      }
+        console.error("Error sending web push notification:", error);
+        // If subscription is no longer valid, remove it from Firestore
+        if (error.statusCode === 404 || error.statusCode === 410) {
+            console.log("Subscription has expired or is no longer valid. Removing it.");
+            await admin.firestore().collection("subscriptions").doc(recipientId).delete();
+        }
     }
   });
-
-// --- CALL FUNCTIONS REMOVED ---
-// All functions related to call initiation and status updates have been removed
-// to focus on core messaging functionality and eliminate potential sources of instability.

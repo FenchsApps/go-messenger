@@ -1,9 +1,9 @@
+// @ts-nocheck
+importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js");
 
-// Scripts for firebase and firebase messaging
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
-
-// Your web app's Firebase configuration
+// Initialize the Firebase app in the service worker by passing in
+// your app's Firebase config object.
 const firebaseConfig = {
   apiKey: "AIzaSyCJhbJ9Hx4ZzDneeSrPE-W1Hh7ifI1Ydxw",
   authDomain: "coo-messenger-dut4g.firebaseapp.com",
@@ -13,22 +13,20 @@ const firebaseConfig = {
   appId: "1:289105120218:web:0a828e96df9cee3"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
-// Retrieve an instance of Firebase Messaging so that it can handle background
-// messages.
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage((payload) => {
+messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
   
-  const notificationTitle = payload.notification.title;
+  // Customize notification here
+  const notificationTitle = payload.data.title;
   const notificationOptions = {
-    body: payload.notification.body,
-    icon: payload.notification.icon || '/favicon.ico',
+    body: payload.data.body,
+    icon: payload.data.icon,
     data: {
-        url: payload.fcmOptions.link // Use the link from fcmOptions
+        url: payload.data.url // Pass the URL to the click event
     }
   };
 
@@ -36,24 +34,25 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 
-self.addEventListener('notificationclick', (event) => {
-    console.log('[firebase-messaging-sw.js] Notification click Received.', event.notification);
-
+self.addEventListener('notificationclick', function(event) {
     event.notification.close();
-    
+
     const urlToOpen = event.notification.data.url;
 
     event.waitUntil(
         clients.matchAll({
-            type: "window",
+            type: 'window',
             includeUncontrolled: true
-        }).then((clientList) => {
-            for (let i = 0; i < clientList.length; i++) {
-                const client = clientList[i];
-                if (client.url === urlToOpen && 'focus' in client) {
-                    return client.focus();
+        }).then(function(clientList) {
+            // If a window is already open, focus it
+            for (var i = 0; i < clientList.length; i++) {
+                var client = clientList[i];
+                // Check if the client URL matches. If so, focus it.
+                if (client.url === self.location.origin + '/' && 'focus' in client) {
+                    return client.focus().then(client => client.navigate(urlToOpen));
                 }
             }
+            // If no window is open, open a new one
             if (clients.openWindow) {
                 return clients.openWindow(urlToOpen);
             }

@@ -45,28 +45,18 @@ exports.sendPushNotification = functions.firestore
         notificationBody = 'Стикер';
     } else if (message.type === 'gif') {
         notificationBody = 'GIF';
+    } else if (message.type === 'audio') {
+        notificationBody = 'Голосовое сообщение';
     }
 
     const payload = {
       token: fcmToken,
-      notification: {
+      data: {
         title: `Новое сообщение от ${senderName}`,
         body: notificationBody,
-      },
-      data: {
-        chatId: context.params.chatId,
-        chatPartnerId: senderId,
+        icon: sender.avatar || '/favicon.ico',
         url: `/?chatWith=${senderId}` // URL to open on notification click
       },
-      webpush: {
-        fcm_options: {
-            link: `/?chatWith=${senderId}`
-        },
-        notification: {
-            icon: sender.avatar || '/favicon.ico',
-            body: notificationBody,
-        }
-      }
     };
 
     try {

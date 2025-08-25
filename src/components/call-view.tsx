@@ -190,7 +190,7 @@ export function CallView({ callId }: CallViewProps) {
 
     return () => unsub();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callId]);
+  }, [callId, callStatus]);
 
   const handleHangUp = async () => {
     await leaveChannel();
@@ -255,3 +255,5 @@ export function CallView({ callId }: CallViewProps) {
     </div>
   );
 }
+
+    

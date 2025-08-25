@@ -69,7 +69,7 @@ export function ContactList({ chats, currentUser, selectedChatId, onSelectChat, 
                     <AvatarImage src={chat.avatar} alt={chat.name} />
                     <AvatarFallback>{chat.name.charAt(0)}</AvatarFallback>
                   </Avatar>
-                  <div className="flex-1">
+                  <div className="flex-1 truncate">
                       <p className="font-semibold text-base">{chat.name}</p>
                       <p className="text-xs text-muted-foreground truncate flex items-center">
                         <Users className="w-3 h-3 mr-1" />
@@ -105,7 +105,7 @@ export function ContactList({ chats, currentUser, selectedChatId, onSelectChat, 
                     )}
                   />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 truncate">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-base">{chat.name}</p>
                     {chat.isCreator && (

@@ -33,6 +33,7 @@ import { ForwardMessageDialog } from './forward-message-dialog';
 import { useRouter } from 'next/navigation';
 import { ChatSettings } from './chat/chat-settings';
 import { ContactInfoSheet } from './chat/contact-info-sheet';
+import { GroupInfoSheet } from './chat/group-info-sheet';
 import { useAuth } from '@/context/auth-provider';
 
 function getChatId(userId1: string, userId2: string) {
@@ -71,7 +72,7 @@ export function ChatView({
     return null; 
   }
   
-  const chatId = chat.type === 'private' ? getChatId(currentUser.id, chat.id) : chat.id;
+  const chatId = chat.type === 'private' && chat.members.length > 0 ? getChatId(currentUser.id, chat.members[0].id) : chat.id;
 
   const chatPartner = chat.type === 'private' ? chat.members[0] : null;
 
@@ -266,7 +267,13 @@ export function ChatView({
           user={chatPartner}
         />
        )}
-       {/* TODO: Add group info sheet */}
+       {chat.type === 'group' && (
+        <GroupInfoSheet
+            isOpen={isContactInfoOpen}
+            onOpenChange={setIsContactInfoOpen}
+            chat={chat}
+        />
+       )}
 
       <Dialog open={!!editingMessage} onOpenChange={() => setEditingMessage(null)}>
         <DialogContent>

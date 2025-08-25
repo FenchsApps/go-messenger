@@ -63,7 +63,17 @@ export async function getCallDetails(callId: string) {
         if (!callDoc.exists()) {
             return { error: 'Call not found' };
         }
-        return { success: true, data: callDoc.data() };
+        const data = callDoc.data();
+        // Return only serializable data
+        return { 
+            success: true, 
+            data: {
+                token: data.token,
+                status: data.status,
+                initiator: data.initiator,
+                receiver: data.receiver
+            } 
+        };
     } catch (error) {
         console.error('Error getting call details:', error);
         return { error: 'Failed to get call details' };

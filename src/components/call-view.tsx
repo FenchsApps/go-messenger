@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
@@ -34,11 +34,18 @@ export function CallView({ callId }: CallViewProps) {
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [token, setToken] = useState<string | null>(null);
+  const [isJoined, setIsJoined] = useState(false);
   
   const leaveChannel = async () => {
+      localAudioTrack.current?.stop();
       localAudioTrack.current?.close();
+      localVideoTrack.current?.stop();
       localVideoTrack.current?.close();
-      await client.current?.leave();
+      if(client.current?.connectionState === 'CONNECTED') {
+         await client.current?.leave();
+      }
+      setIsJoined(false);
+      setRemoteUser(null);
   }
 
   // Effect for initializing and joining the call
@@ -63,6 +70,11 @@ export function CallView({ callId }: CallViewProps) {
         setCallStatus(callData.status);
 
         await joinChannel(callData.token, callId, currentUser.id);
+
+        if(callData.status === 'calling' && callData.receiver === currentUser.id){
+            await updateDoc(doc(db, 'calls', callId), { status: 'answered' });
+        }
+
 
       } catch (error: any) {
         console.error("Initialization failed:", error);
@@ -112,8 +124,9 @@ export function CallView({ callId }: CallViewProps) {
     if (!client.current) return;
     try {
         await client.current.join(appId, channel, joinToken, uid);
+        setIsJoined(true);
 
-        // Create tracks after joining
+        // Create tracks after successfully joining
         const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
         
         localAudioTrack.current = audioTrack;
@@ -124,6 +137,7 @@ export function CallView({ callId }: CallViewProps) {
             videoTrack.play(localVideoContainer);
         }
 
+        // Publish tracks now that we have joined
         await client.current.publish([audioTrack, videoTrack]);
     } catch (error) {
         console.error('Failed to join channel or publish tracks', error);
@@ -210,10 +224,10 @@ export function CallView({ callId }: CallViewProps) {
       
       {/* Call Controls */}
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 z-10">
-          <Button variant="secondary" size="icon" className="rounded-full h-14 w-14" onClick={toggleMic} disabled={!localAudioTrack.current}>
+          <Button variant="secondary" size="icon" className="rounded-full h-14 w-14" onClick={toggleMic} disabled={!isJoined}>
               {isMicOn ? <Mic className="h-7 w-7" /> : <MicOff className="h-7 w-7" />}
           </Button>
-          <Button variant="secondary" size="icon" className="rounded-full h-14 w-14" onClick={toggleCamera} disabled={!localVideoTrack.current}>
+          <Button variant="secondary" size="icon" className="rounded-full h-14 w-14" onClick={toggleCamera} disabled={!isJoined}>
               {isCameraOn ? <Video className="h-7 w-7" /> : <VideoOff className="h-7 w-7" />}
           </Button>
           <Button variant="destructive" size="icon" className="rounded-full h-14 w-14" onClick={handleHangUp}>

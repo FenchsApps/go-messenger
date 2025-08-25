@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { User } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -9,14 +9,17 @@ import { ContactList } from './contact-list';
 import { ChatView } from './chat-view';
 import { PigeonIcon } from './icons';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-provider';
 import { useToast } from '@/hooks/use-toast';
 import { setupPushNotifications } from '@/lib/notification';
+import { updateUserStatus } from '@/app/actions';
 
 interface MessengerProps {
   onLogout: () => void;
 }
+
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 export function Messenger({ onLogout }: MessengerProps) {
   const { currentUser } = useAuth();
@@ -25,6 +28,7 @@ export function Messenger({ onLogout }: MessengerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const inactivityTimerRef = useRef<NodeJS.Timeout>();
   
   if (!currentUser) {
       return (
@@ -47,7 +51,9 @@ export function Messenger({ onLogout }: MessengerProps) {
   }, []);
 
   useEffect(() => {
-    setupPushNotifications(currentUser.id);
+    if (currentUser.id) {
+        setupPushNotifications(currentUser.id);
+    }
   }, [currentUser.id]);
 
   useEffect(() => {
@@ -55,10 +61,10 @@ export function Messenger({ onLogout }: MessengerProps) {
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData: User[] = [];
+      let currentUserOnlineStatus = 'Offline';
       snapshot.forEach((doc) => {
-        if (doc.id !== currentUser.id) {
-          const data = doc.data();
-          usersData.push({
+        const data = doc.data();
+        const user = {
             id: doc.id,
             name: data.name,
             avatar: data.avatar,
@@ -67,7 +73,11 @@ export function Messenger({ onLogout }: MessengerProps) {
             lastSeen: data.lastSeen?.toDate().getTime(),
             isCreator: data.isCreator,
             description: data.description,
-          });
+        }
+        if (doc.id !== currentUser.id) {
+            usersData.push(user);
+        } else {
+            currentUserOnlineStatus = data.status;
         }
       });
       usersData.sort((a, b) => {
@@ -85,17 +95,45 @@ export function Messenger({ onLogout }: MessengerProps) {
       setIsLoading(false);
     });
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    const handleBeforeUnload = () => {
         if(currentUser) {
-            setDoc(doc(db, 'users', currentUser.id), { status: 'Offline', lastSeen: serverTimestamp() }, { merge: true });
+            updateUserStatus(currentUser.id, 'Offline');
         }
     };
+
+    const resetInactivityTimer = () => {
+        if (inactivityTimerRef.current) {
+            clearTimeout(inactivityTimerRef.current);
+        }
+        
+        const userDocRef = doc(db, 'users', currentUser.id);
+        onSnapshot(userDocRef, (doc) => {
+            if (doc.exists() && doc.data().status === 'Offline') {
+                updateUserStatus(currentUser.id, 'Online');
+            }
+        });
+        
+        inactivityTimerRef.current = setTimeout(() => {
+            updateUserStatus(currentUser.id, 'Offline');
+        }, INACTIVITY_TIMEOUT);
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('mousemove', resetInactivityTimer);
+    window.addEventListener('keydown', resetInactivityTimer);
+    window.addEventListener('click', resetInactivityTimer);
+    resetInactivityTimer();
 
     return () => {
         unsubCurrentUser();
         unsubUsers();
         window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener('mousemove', resetInactivityTimer);
+        window.removeEventListener('keydown', resetInactivityTimer);
+        window.removeEventListener('click', resetInactivityTimer);
+        if (inactivityTimerRef.current) {
+            clearTimeout(inactivityTimerRef.current);
+        }
     }
   }, [currentUser.id]);
 

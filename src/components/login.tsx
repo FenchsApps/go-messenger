@@ -14,6 +14,7 @@ import { db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
 import { useAuth } from '@/context/auth-provider';
+import { updateUserStatus } from '@/app/actions';
 
 
 const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
@@ -66,10 +67,7 @@ export function Login() {
             }
         }
         
-      await setDoc(doc(db, 'users', user.id), {
-        status: 'Online',
-        lastSeen: serverTimestamp()
-      }, { merge: true });
+      await updateUserStatus(user.id, 'Online');
 
       setCookie(LOGGED_IN_USER_COOKIE, user.id, 7);
       setCurrentUser(user);
@@ -84,10 +82,7 @@ export function Login() {
 
   const handleLogout = async () => {
     if(currentUser) {
-        await updateDoc(doc(db, 'users', currentUser.id), {
-            status: 'Offline',
-            lastSeen: serverTimestamp(),
-        });
+        await updateUserStatus(currentUser.id, 'Offline');
     }
     removeCookie(LOGGED_IN_USER_COOKIE);
     logout();

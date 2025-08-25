@@ -184,24 +184,30 @@ export async function updateUserProfile(userId: string, name: string, descriptio
     }
 }
 
-export async function saveSubscription(userId: string, subscription: object) {
+export async function updateUserStatus(userId: string, status: 'Online' | 'Offline') {
+    if (!userId) return;
     try {
-        const subscriptionRef = doc(db, 'subscriptions', userId);
-        await setDoc(subscriptionRef, { subscription: subscription });
-        return { success: true };
-    } catch(error) {
-        console.error("Error saving subscription:", error);
-        return { error: "Failed to save subscription." };
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, {
+            status: status,
+            lastSeen: serverTimestamp()
+        });
+    } catch (error) {
+        console.error(`Error updating status for user ${userId}:`, error);
     }
 }
 
-export async function removeSubscription(userId: string) {
-    try {
-        const subscriptionRef = doc(db, 'subscriptions', userId);
-        await deleteDoc(subscriptionRef);
-        return { success: true };
-    } catch(error) {
-        console.error("Error removing subscription:", error);
-        return { error: "Failed to remove subscription." };
-    }
+export async function saveSubscription(userId: string, subscription: object) {
+  if (!userId || !subscription) {
+    console.error("User ID and subscription object are required.");
+    return { error: "Invalid arguments for saving subscription." };
+  }
+  try {
+    const subscriptionRef = doc(db, 'subscriptions', userId);
+    await setDoc(subscriptionRef, { subscription: subscription }, { merge: true });
+    return { success: true };
+  } catch (error) {
+    console.error("Error saving push subscription:", error);
+    return { error: "Failed to save push notification subscription." };
+  }
 }

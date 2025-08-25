@@ -35,7 +35,7 @@ exports.sendPushNotification = functions.region('us-central1').firestore
     };
     
     webpush.setVapidDetails(
-        functions.config().vapid.subject,
+        `mailto:${functions.config().vapid.subject}`,
         vapidKeys.publicKey,
         vapidKeys.privateKey
     );

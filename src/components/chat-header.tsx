@@ -2,7 +2,7 @@
 import type { User } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Crown, MoreVertical, Settings, Trash2, Info } from 'lucide-react';
+import { ArrowLeft, Crown, MoreVertical, Settings, Trash2, Info, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -62,6 +62,11 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings
         </div>
       </div>
        <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" asChild>
+            <a href="https://goaudio.vercel.app/" target="_blank" rel="noopener noreferrer" aria-label="Call on GoAudio">
+                <Phone className="h-5 w-5" />
+            </a>
+        </Button>
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">

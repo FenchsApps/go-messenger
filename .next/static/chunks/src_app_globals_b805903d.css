@@ -1436,6 +1436,16 @@ body {
   background-color: #0000;
 }
 
+.bg-black {
+  --tw-bg-opacity: 1;
+  background-color: rgb(0 0 0 / var(--tw-bg-opacity, 1));
+}
+
+.bg-gray-800 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(31 41 55 / var(--tw-bg-opacity, 1));
+}
+
 .fill-current {
   fill: currentColor;
 }
@@ -2175,12 +2185,22 @@ body {
   background-color: hsl(var(--primary));
 }
 
+.focus\:bg-red-50:focus {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 242 242 / var(--tw-bg-opacity, 1));
+}
+
 .focus\:text-accent-foreground:focus {
   color: hsl(var(--accent-foreground));
 }
 
 .focus\:text-primary-foreground:focus {
   color: hsl(var(--primary-foreground));
+}
+
+.focus\:text-red-500:focus {
+  --tw-text-opacity: 1;
+  color: rgb(239 68 68 / var(--tw-text-opacity, 1));
 }
 
 .focus\:opacity-100:focus {
@@ -2766,6 +2786,14 @@ body {
   background-color: #00000080;
 }
 
+.dark\:text-muted-foreground:is(.dark *) {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark\:focus\:bg-red-900\/20:focus:is(.dark *) {
+  background-color: #7f1d1d33;
+}
+
 @media (width >= 640px) {
   .sm\:bottom-0 {
     bottom: 0;
@@ -2785,6 +2813,10 @@ body {
 
   .sm\:flex {
     display: flex;
+  }
+
+  .sm\:w-48 {
+    width: 12rem;
   }
 
   .sm\:max-w-md {

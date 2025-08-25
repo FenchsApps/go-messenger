@@ -98,7 +98,7 @@ export function ChatHeader({ user, isMobile, onBack, onClearChat, onOpenSettings
                     <Settings className="mr-2 h-4 w-4" />
                     Настройки чата
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onClearChat} className="text-red-500">
+                <DropdownMenuItem onClick={onClearChat} className="text-red-500 focus:text-red-500 focus:bg-red-50 dark:focus:bg-red-900/20">
                     <Trash2 className="mr-2 h-4 w-4" />
                     Очистить чат
                 </DropdownMenuItem>

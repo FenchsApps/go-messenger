@@ -10,45 +10,64 @@ function getChatId(userId1: string, userId2: string) {
 }
 
 export async function initiateCall(callerId: string, receiverId: string) {
-  try {
     const channelName = getChatId(callerId, receiverId);
-    await setDoc(doc(db, 'calls', channelName), {
-      initiator: callerId,
-      receiver: receiverId,
-      channelName: channelName,
-      status: 'calling',
-      createdAt: serverTimestamp(),
-    });
+    
+    try {
+        const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
+        const appCertificate = process.env.AGORA_APP_CERTIFICATE;
 
-    const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
-    const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+        if (!appId || !appCertificate) {
+            console.error("Agora App ID or Certificate is not configured on the server.");
+            return { error: 'Call service is not configured correctly on the server.' };
+        }
 
-    if (!appId || !appCertificate) {
-        console.error("Agora App ID or Certificate is not configured on the server.");
-        return { error: 'Call service is not configured correctly on the server.' };
+        const role = RtcRole.PUBLISHER;
+        const expirationTimeInSeconds = 3600; // 1 hour
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+        // Generate token
+        const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channelName, 0, role, privilegeExpiredTs);
+
+        // Create or update call document
+        await setDoc(doc(db, 'calls', channelName), {
+            initiator: callerId,
+            receiver: receiverId,
+            channelName: channelName,
+            status: 'calling',
+            createdAt: serverTimestamp(),
+            token: token,
+        }, { merge: true });
+
+        return {
+            success: true,
+            data: {
+                callId: channelName,
+                token: token,
+                appId: appId,
+            },
+        };
+    } catch (error) {
+        console.error('Error initiating call:', error);
+        // Attempt to clean up the call document if token generation failed after doc creation
+        await deleteDoc(doc(db, 'calls', channelName)).catch(e => console.error("Cleanup failed", e));
+        return { error: 'Failed to initiate call' };
     }
+}
 
-    const role = RtcRole.PUBLISHER;
-    const expirationTimeInSeconds = 3600;
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
 
-    const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channelName, 0, role, privilegeExpiredTs);
-
-    await updateDoc(doc(db, 'calls', channelName), { token });
-
-    return {
-      success: true,
-      data: {
-        callId: channelName,
-        token: token,
-        appId: appId,
-      },
-    };
-  } catch (error) {
-    console.error('Error initiating call:', error);
-    return { error: 'Failed to initiate call' };
-  }
+export async function getCallDetails(callId: string) {
+    try {
+        const callDocRef = doc(db, 'calls', callId);
+        const callDoc = await getDoc(callDocRef);
+        if (!callDoc.exists()) {
+            return { error: 'Call not found' };
+        }
+        return { success: true, data: callDoc.data() };
+    } catch (error) {
+        console.error('Error getting call details:', error);
+        return { error: 'Failed to get call details' };
+    }
 }
 
 export async function endCall(callId: string) {
@@ -56,6 +75,7 @@ export async function endCall(callId: string) {
       const callDocRef = doc(db, 'calls', callId);
       const callDoc = await getDoc(callDocRef);
       if (callDoc.exists()) {
+          // Setting status to 'ended'. The call document can be deleted by a cron job later.
           await updateDoc(callDocRef, {
               status: 'ended'
           });
@@ -65,6 +85,27 @@ export async function endCall(callId: string) {
       console.error('Error ending call:', error);
       return { error: 'Failed to end call' };
   }
+}
+
+export async function sendAudioMessage(senderId: string, recipientId: string, audioUrl: string, duration: number) {
+    const chatId = getChatId(senderId, recipientId);
+    
+    try {
+        const docRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
+            senderId,
+            recipientId,
+            text: '',
+            timestamp: serverTimestamp(),
+            type: 'audio',
+            audioUrl,
+            audioDuration: duration,
+            read: false,
+        });
+        return { error: null, data: { id: docRef.id, audioUrl, duration } };
+    } catch (error) {
+        console.error("Error sending audio message:", error);
+        return { error: 'Failed to send audio message' };
+    }
 }
 
 
@@ -269,5 +310,18 @@ export async function removeSubscription(userId: string) {
     } catch (error) {
         console.error("Error removing subscription:", error);
         return { error: "Failed to remove subscription." };
+    }
+}
+
+export async function uploadAudio(userId: string, blob: Blob) {
+    if (!userId) return { error: "User ID is required." };
+    try {
+        const storageRef = ref(storage, `audio/${userId}/${Date.now()}.webm`);
+        const snapshot = await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        return { success: true, data: { url: downloadURL }};
+    } catch (error) {
+        console.error("Error uploading audio:", error);
+        return { error: "Failed to upload audio." };
     }
 }

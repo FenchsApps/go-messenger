@@ -96,14 +96,11 @@ export function Messenger({ onLogout }: MessengerProps) {
 
       setChats(updatedChats);
       
-      if (!selectedChatId) {
+      if (!selectedChatId && !isLoading) { // Prevent re-selection
         const urlParams = new URLSearchParams(window.location.search);
         const chatWithId = urlParams.get('chatWith');
         if (chatWithId && updatedChats.some(c => c.id === chatWithId)) {
           setSelectedChatId(chatWithId);
-        } else if (updatedChats.length > 0) {
-            const firstChat = updatedChats.find(c => c.id !== currentUser.id);
-            if(firstChat) setSelectedChatId(firstChat.id)
         }
       }
       
@@ -150,7 +147,7 @@ export function Messenger({ onLogout }: MessengerProps) {
             clearTimeout(inactivityTimerRef.current);
         }
     }
-  }, [currentUser.id, selectedChatId]);
+  }, [currentUser.id, isLoading]);
 
   useEffect(() => {
     if (chats.length > 0 && !selectedChatId) {

@@ -38,6 +38,14 @@ export async function setupPushNotifications(userId: string) {
     if (subscription) {
         await saveSubscription(userId, JSON.parse(JSON.stringify(subscription)));
         console.log("Existing subscription found and saved.");
+        
+        if (registration.showNotification && Notification.permission === 'granted') {
+          registration.showNotification('С возвращением!', {
+            body: 'Рады видеть вас снова в Go Messenger.',
+            icon: '/icons/icon-192x192.png',
+            silent: true
+          });
+        }
         return;
     }
     

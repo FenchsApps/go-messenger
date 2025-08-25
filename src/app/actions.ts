@@ -1,39 +1,30 @@
 
 'use server';
-import { filterProfanity } from '@/ai/flows/filter-profanity';
 import { db, storage } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-export async function getFilteredMessage(text: string) {
-  if (!text.trim()) {
-    return { error: 'Message cannot be empty', data: null };
-  }
-
-  try {
-    const { filteredText } = await filterProfanity({ text });
-    return {
-      error: null,
-      data: {
-        id: crypto.randomUUID(),
-        text: filteredText,
-      }
-    };
-  } catch (error) {
-    console.error('Error filtering profanity:', error);
-    // Fallback to original text if AI fails
-    return {
-      error: 'Failed to process message with AI',
-      data: {
-        id: crypto.randomUUID(),
-        text: text,
-      }
-    };
-  }
-}
-
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
+}
+
+export async function endCall(callId: string) {
+  try {
+      const callDocRef = doc(db, 'calls', callId);
+      const callDoc = await getDoc(callDocRef);
+      if (callDoc.exists()) {
+          const callData = callDoc.data();
+          // To prevent both users from trying to end the call, only the initiator or receiver can change status.
+          // Let's assume initiator is the one who can change status to "ended"
+          await updateDoc(callDocRef, {
+              status: 'ended'
+          });
+      }
+      return { success: true };
+  } catch (error) {
+      console.error('Error ending call:', error);
+      return { error: 'Failed to end call' };
+  }
 }
 
 export async function sendMessage(senderId: string, recipientId: string, text: string, forwardedFrom?: { name: string, text: string }) {

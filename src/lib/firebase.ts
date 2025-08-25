@@ -31,6 +31,23 @@ const getMessagingInstance = () => {
 
 const messaging = getMessagingInstance();
 
+if (messaging) {
+    onMessage(messaging, (payload) => {
+        console.log('Message received. ', payload);
+        const { title, body, icon, url } = payload.data;
+        const notification = new Notification(title, {
+            body: body,
+            icon: icon
+        });
+
+        notification.onclick = () => {
+             // Use the provided URL or fallback to the origin
+            window.open(url || window.location.origin, '_blank');
+        };
+    });
+}
+
+
 // This enables offline persistence. It's best to call this only once.
 try {
     if (typeof window !== 'undefined') {

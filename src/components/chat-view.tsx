@@ -98,8 +98,6 @@ export function ChatView({
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
 
     const unsubscribeMessages = onSnapshot(q, (querySnapshot) => {
-      const isInitialLoad = messages.length === 0 && querySnapshot.docs.length > 0;
-      
       const newMessages: Message[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -110,23 +108,6 @@ export function ChatView({
         } as Message;
         newMessages.push(newMessage);
       });
-      
-      const lastMessage = newMessages[newMessages.length - 1];
-
-      // Check if there are new messages and window is not focused or it's not an initial load
-      if (!isInitialLoad && lastMessage && lastMessage.senderId !== currentUser.id && (!isWindowFocused || document.hidden) && Notification.permission === 'granted') {
-          const notification = new Notification(chatPartner.name, {
-              body: lastMessage.text || (lastMessage.type === 'sticker' ? 'Стикер' : 'GIF'),
-              icon: chatPartner.avatar,
-              tag: chatId, // Tag to prevent multiple notifications for the same chat
-          });
-          // Optional: close notification on click and focus window
-          notification.onclick = () => {
-              window.focus();
-              router.push(`/?chatWith=${lastMessage.senderId}`);
-              notification.close();
-          };
-      }
       
       setMessages(newMessages);
 

@@ -183,3 +183,25 @@ export async function updateUserProfile(userId: string, name: string, descriptio
         return { error: "Failed to update profile." };
     }
 }
+
+export async function saveSubscription(userId: string, subscription: PushSubscription) {
+    try {
+        const subscriptionRef = doc(db, 'subscriptions', userId);
+        await setDoc(subscriptionRef, { subscription: JSON.parse(JSON.stringify(subscription)) });
+        return { success: true };
+    } catch(error) {
+        console.error("Error saving subscription:", error);
+        return { error: "Failed to save subscription." };
+    }
+}
+
+export async function removeSubscription(userId: string) {
+    try {
+        const subscriptionRef = doc(db, 'subscriptions', userId);
+        await deleteDoc(subscriptionRef);
+        return { success: true };
+    } catch(error) {
+        console.error("Error removing subscription:", error);
+        return { error: "Failed to remove subscription." };
+    }
+}

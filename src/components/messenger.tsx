@@ -12,6 +12,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-provider';
 import { useToast } from '@/hooks/use-toast';
+import { setupPushNotifications } from '@/lib/notification';
 
 interface MessengerProps {
   onLogout: () => void;
@@ -32,6 +33,10 @@ export function Messenger({ onLogout }: MessengerProps) {
         </div>
       )
   }
+
+  useEffect(() => {
+    setupPushNotifications(currentUser.id);
+  }, [currentUser.id]);
 
   useEffect(() => {
     const unsubCurrentUser = onSnapshot(doc(db, "users", currentUser.id), (doc) => {});

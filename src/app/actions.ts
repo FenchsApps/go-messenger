@@ -197,16 +197,36 @@ export async function updateUserStatus(userId: string, status: 'Online' | 'Offli
     }
 }
 
-export async function saveSubscription(userId: string, subscription: object) {
-  if (!userId || !subscription) {
-    console.error("User ID and subscription object are required.");
+export async function saveSubscription(userId: string, subscription: PushSubscriptionJSON) {
+  if (!userId || !subscription || !subscription.endpoint) {
+    console.error("User ID and a valid subscription object are required.");
     return { error: "Invalid arguments for saving subscription." };
   }
+  
+  const subscriptionsRef = collection(db, 'subscriptions');
+  
+  // Query to check if a subscription with the same endpoint already exists for this user
+  const q = query(subscriptionsRef, 
+      where("userId", "==", userId), 
+      where("endpoint", "==", subscription.endpoint)
+  );
+
   try {
-    const subscriptionRef = doc(db, 'subscriptions', userId);
-    // Store the subscription object directly
-    await setDoc(subscriptionRef, JSON.parse(JSON.stringify(subscription)));
-    return { success: true };
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      // No existing subscription found, so add a new one.
+      await addDoc(subscriptionsRef, {
+        userId,
+        ...subscription
+      });
+      console.log('New subscription added for user:', userId);
+      return { success: true, message: "New subscription added." };
+    } else {
+      // Subscription already exists.
+      console.log('Subscription already exists for this user and device.');
+      return { success: true, message: "Subscription already exists." };
+    }
   } catch (error) {
     console.error("Error saving push subscription:", error);
     return { error: "Failed to save push notification subscription." };

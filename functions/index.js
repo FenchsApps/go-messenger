@@ -17,11 +17,6 @@ exports.sendPushNotification = functions.region('us-central1').firestore
         return null;
     }
     
-    // VAPID keys should be stored as Firebase functions config variables.
-    // Use the Firebase CLI to set them:
-    // firebase functions:config:set vapid.public_key="YOUR_PUBLIC_KEY"
-    // firebase functions:config:set vapid.private_key="YOUR_PRIVATE_KEY"
-    // firebase functions:config:set vapid.subject="mailto:your-email@example.com"
     const vapidKeys = {
         publicKey: functions.config().vapid.public_key,
         privateKey: functions.config().vapid.private_key,
@@ -39,6 +34,7 @@ exports.sendPushNotification = functions.region('us-central1').firestore
       return null;
     }
     const sender = senderDoc.data();
+    const senderName = sender.name || "Кто-то";
 
     const subscriptionSnap = await admin.firestore().collection("subscriptions").doc(recipientId).get();
     if (!subscriptionSnap.exists) {
@@ -54,9 +50,18 @@ exports.sendPushNotification = functions.region('us-central1').firestore
         return null;
     }
 
+    let notificationBody = "";
+    if (message.type === 'text' && message.text) {
+        notificationBody = message.text;
+    } else if (message.type === 'sticker') {
+        notificationBody = 'Стикер';
+    } else if (message.type === 'gif') {
+        notificationBody = 'GIF';
+    }
+
     const payload = JSON.stringify({
-        title: `Новое сообщение`,
-        body: 'Вам кто-то написал, проверьте сообщения!',
+        title: `Новое сообщение от ${senderName}`,
+        body: notificationBody,
         icon: sender.avatar || '/icons/icon-192x192.png',
         data: {
           url: `/?chatWith=${senderId}`

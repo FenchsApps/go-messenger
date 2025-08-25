@@ -23,7 +23,19 @@ export async function initiateCall(callerId: string, receiverId: string) {
     });
 
     const generateAgoraToken = httpsCallable(functions, 'generateAgoraToken');
-    const result = await generateAgoraToken({ channelName });
+    const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
+    const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+
+    if (!appId || !appCertificate) {
+        console.error("Agora credentials not found in environment variables.");
+        return { error: 'Agora service is not configured correctly on the server.' };
+    }
+
+    const result = await generateAgoraToken({ 
+        channelName,
+        appId,
+        appCertificate
+    });
     
     // @ts-ignore
     const token = result.data.token;
@@ -33,7 +45,7 @@ export async function initiateCall(callerId: string, receiverId: string) {
       data: {
         callId: channelName,
         token: token,
-        appId: process.env.NEXT_PUBLIC_AGORA_APP_ID,
+        appId: appId,
       },
     };
   } catch (error) {

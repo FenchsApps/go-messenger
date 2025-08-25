@@ -3,7 +3,6 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const webpush = require("web-push");
 const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
-require('dotenv').config();
 
 admin.initializeApp();
 
@@ -24,18 +23,13 @@ exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
     }
 
     const channelName = data.channelName;
-    if (!channelName) {
-        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a channelName.');
+    const appId = data.appId;
+    const appCertificate = data.appCertificate;
+
+    if (!channelName || !appId || !appCertificate) {
+        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with channelName, appId, and appCertificate.');
     }
     
-    const appId = process.env.AGORA_APP_ID;
-    const appCertificate = process.env.AGORA_APP_CERTIFICATE;
-
-    if (!appId || !appCertificate) {
-        console.error("Agora App ID or Certificate is not configured in environment variables.");
-        throw new functions.https.HttpsError('failed-precondition', 'The Agora service is not configured.');
-    }
-
     const uid = context.auth.uid;
     const role = RtcRole.PUBLISHER;
     const expirationTimeInSeconds = 3600;

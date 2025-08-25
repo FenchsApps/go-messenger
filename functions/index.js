@@ -22,12 +22,6 @@ exports.sendPushNotification = functions.region('us-central1').firestore
         console.log(`Recipient with ID ${recipientId} not found.`);
         return null;
     }
-    const recipient = recipientDoc.data();
-
-    if (recipient.status === 'Online') {
-        console.log(`Recipient ${recipientId} is online, no notification needed.`);
-        return null;
-    }
     
     const vapidKeys = {
         publicKey: functions.config().vapid.public_key,

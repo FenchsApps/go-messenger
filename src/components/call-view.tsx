@@ -7,58 +7,120 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
-import { endCall } from '@/app/actions';
+import { endCall, initiateCall } from '@/app/actions';
 import { useRouter } from 'next/navigation';
+import AgoraRTC, { IAgoraRTCClient, IAgoraRTCRemoteUser, IMicrophoneAudioTrack, ICameraVideoTrack } from 'agora-rtc-sdk-ng';
+import { useAuth } from '@/context/auth-provider'; // Assuming you have an auth context
 
 interface CallViewProps {
   callId: string;
 }
 
-type CallStatus = 'calling' | 'answered' | 'rejected' | 'ended' | 'rejected_timeout' | 'error_no_token' | 'error_fcm_failed';
+type CallStatus = 'calling' | 'answered' | 'rejected' | 'ended' | 'rejected_timeout';
+
+const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 
 export function CallView({ callId }: CallViewProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const [hasCameraPermission, setHasCameraPermission] = useState(false);
+  const { currentUser } = useAuth(); // Get current user from context
+
+  const client = useRef<IAgoraRTCClient | null>(null);
+  const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
+  const localVideoTrack = useRef<ICameraVideoTrack | null>(null);
+  
+  const [remoteUser, setRemoteUser] = useState<IAgoraRTCRemoteUser | null>(null);
   const [callStatus, setCallStatus] = useState<CallStatus>('calling');
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
   
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-
   useEffect(() => {
-    const getCameraPermission = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setHasCameraPermission(true);
+    if (!currentUser || !callId) return;
 
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+    // 1. Initialize Agora Client
+    client.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+
+    const initializeCall = async () => {
+        try {
+            // This part would be initiated by the caller before navigating here
+            // For simplicity, we assume the call document and token are ready
+            // In a real app, the caller would call initiateCall and then navigate
+            const callDoc = await getDoc(doc(db, 'calls', callId));
+            if (!callDoc.exists()) throw new Error("Call not found");
+            
+            const receiverId = callDoc.data().receiver;
+
+            const res = await initiateCall(currentUser.id, receiverId);
+            if(res.error || !res.data) {
+                throw new Error(res.error || "Failed to get token");
+            }
+
+            setToken(res.data.token);
+
+            await joinChannel(res.data.token);
+        } catch (error) {
+            console.error("Initialization failed:", error);
+            toast({ variant: 'destructive', title: "Ошибка звонка", description: "Не удалось начать звонок."});
+            router.push('/');
         }
-
-        // Mute/unmute audio track based on state
-        stream.getAudioTracks().forEach(track => {
-            track.enabled = isMicOn;
-        });
-        // Enable/disable video track based on state
-        stream.getVideoTracks().forEach(track => {
-            track.enabled = isCameraOn;
-        });
-
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        setHasCameraPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Доступ к камере запрещен',
-          description: 'Пожалуйста, разрешите доступ к камере в настройках вашего браузера.',
-        });
-      }
+    };
+    
+    initializeCall();
+    
+    const handleUserPublished = async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
+        await client.current?.subscribe(user, mediaType);
+        if (mediaType === 'video') {
+            setRemoteUser(user);
+        }
+        if (mediaType === 'audio') {
+            user.audioTrack?.play();
+        }
     };
 
-    getCameraPermission();
-  }, [isMicOn, isCameraOn, toast]);
+    const handleUserLeft = () => {
+        setRemoteUser(null);
+    };
+
+    client.current.on('user-published', handleUserPublished);
+    client.current.on('user-left', handleUserLeft);
+
+    return () => {
+      // Cleanup on unmount
+      client.current?.off('user-published', handleUserPublished);
+      client.current?.off('user-left', handleUserLeft);
+      leaveChannel();
+    };
+
+  }, [callId, currentUser, router, toast]);
+
+
+  const joinChannel = async (joinToken: string) => {
+    if (!client.current || !currentUser) return;
+    try {
+        await client.current.join(appId, callId, joinToken, currentUser.id);
+
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        localAudioTrack.current = audioTrack;
+
+        const videoTrack = await AgoraRTC.createCameraVideoTrack();
+        localVideoTrack.current = videoTrack;
+        
+        videoTrack.play('local-video');
+
+        await client.current.publish([audioTrack, videoTrack]);
+        setCallStatus('answered');
+
+    } catch (error) {
+        console.error('Failed to join channel', error);
+    }
+  }
+
+  const leaveChannel = async () => {
+      localAudioTrack.current?.close();
+      localVideoTrack.current?.close();
+      await client.current?.leave();
+  }
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'calls', callId), (doc) => {
@@ -66,13 +128,10 @@ export function CallView({ callId }: CallViewProps) {
             const status = doc.data().status as CallStatus;
             setCallStatus(status);
 
-            if (status === 'rejected' || status === 'ended' || status === 'rejected_timeout') {
-                toast({ title: 'Звонок завершен', description: 'Этот звонок был завершен или отклонен.'});
-                // Close streams
-                if(videoRef.current && videoRef.current.srcObject) {
-                    (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-                }
-                setTimeout(() => router.push('/'), 2000);
+            if (status === 'ended') {
+                toast({ title: 'Звонок завершен' });
+                leaveChannel();
+                setTimeout(() => router.push('/'), 1000);
             }
         }
     });
@@ -85,36 +144,46 @@ export function CallView({ callId }: CallViewProps) {
     await endCall(callId);
   }
 
-  const toggleMic = () => {
-      setIsMicOn(prev => !prev);
+  const toggleMic = async () => {
+      if(localAudioTrack.current) {
+          await localAudioTrack.current.setEnabled(!isMicOn);
+          setIsMicOn(!isMicOn);
+      }
   }
 
-  const toggleCamera = () => {
-      setIsCameraOn(prev => !prev);
+  const toggleCamera = async () => {
+      if(localVideoTrack.current) {
+          await localVideoTrack.current.setEnabled(!isCameraOn);
+          setIsCameraOn(!isCameraOn);
+      }
   }
 
   return (
     <div className="relative flex flex-col items-center justify-center w-full h-screen bg-gray-900 text-white">
       {/* Remote Video */}
-      <video ref={remoteVideoRef} className="absolute top-0 left-0 w-full h-full object-cover" autoPlay playsInline />
+      <div id="remote-video" className="absolute top-0 left-0 w-full h-full object-cover">
+        {remoteUser && remoteUser.videoTrack && <RemoteUserPlayer user={remoteUser} />}
+      </div>
       <div className="absolute top-0 left-0 w-full h-full bg-black/50" />
 
       {/* Local Video Preview */}
       <div className="absolute top-4 right-4 w-48 h-auto border-2 border-gray-600 rounded-md overflow-hidden z-10">
-        <video ref={videoRef} className="w-full aspect-video rounded-md" autoPlay muted playsInline />
+        <div id="local-video" className="w-full aspect-video rounded-md" />
       </div>
 
       <div className="z-10 text-center">
         {callStatus === 'calling' && <p className="text-lg animate-pulse">Ожидание ответа...</p>}
-        {callStatus === 'answered' && <p className="text-lg">Звонок...</p>}
+        {callStatus === 'answered' && remoteUser && <p className="text-lg">Звонок...</p>}
+        {callStatus === 'answered' && !remoteUser && <p className="text-lg">Соединение...</p>}
+
       </div>
 
-      {!hasCameraPermission && (
+      {!token && (
         <div className="z-10 absolute inset-0 flex items-center justify-center bg-black/70">
             <Alert variant="destructive" className="max-w-sm">
-                <AlertTitle>Требуется доступ к камере</AlertTitle>
+                <AlertTitle>Ошибка</AlertTitle>
                 <AlertDescription>
-                    Пожалуйста, разрешите доступ к камере и микрофону, чтобы использовать видеозвонки.
+                    Не удалось получить токен для звонка. Попробуйте снова.
                 </AlertDescription>
             </Alert>
         </div>
@@ -135,3 +204,20 @@ export function CallView({ callId }: CallViewProps) {
     </div>
   );
 }
+
+
+// Helper component to play remote user's video
+const RemoteUserPlayer = ({ user }: { user: IAgoraRTCRemoteUser }) => {
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (ref.current && user.videoTrack) {
+            user.videoTrack.play(ref.current);
+        }
+        return () => {
+            user.videoTrack?.stop();
+        };
+    }, [user]);
+
+    return <div ref={ref} className="w-full h-full" />;
+};

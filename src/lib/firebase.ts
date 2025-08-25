@@ -1,9 +1,10 @@
+
 // @ts-nocheck
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-import { getMessaging, onMessage } from 'firebase/messaging';
+import { getFunctions } from 'firebase/functions';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -19,6 +20,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
+const functions = getFunctions(app);
 
 
 // This enables offline persistence. It's best to call this only once.
@@ -38,4 +40,4 @@ try {
 }
 
 
-export { app, db, auth, storage };
+export { app, db, auth, storage, functions };

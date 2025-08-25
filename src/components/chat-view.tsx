@@ -33,24 +33,24 @@ import { ForwardMessageDialog } from './forward-message-dialog';
 import { useRouter } from 'next/navigation';
 import { ChatSettings } from './chat/chat-settings';
 import { ContactInfoSheet } from './chat/contact-info-sheet';
-import { ScrollArea } from './ui/scroll-area';
+import { useAuth } from '@/context/auth-provider';
+
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
 }
 interface ChatViewProps {
-  currentUser: User;
   chatPartner: User;
   isMobile: boolean;
   onBack: () => void;
 }
 
 export function ChatView({
-  currentUser,
   chatPartner,
   isMobile,
   onBack,
 }: ChatViewProps) {
+  const { currentUser } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState('');
@@ -63,6 +63,14 @@ export function ChatView({
 
   const router = useRouter();
   const { toast } = useToast();
+  
+  // This should not happen if the app logic is correct
+  if (!currentUser) {
+    useEffect(() => {
+      router.push('/');
+    }, [router]);
+    return null; 
+  }
   
   const chatId = getChatId(currentUser.id, chatPartner.id);
 

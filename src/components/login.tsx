@@ -14,6 +14,7 @@ import { db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies';
 import { saveSubscription, removeSubscription } from '@/app/actions';
+import { useAuth } from '@/context/auth-provider';
 
 
 const LOGGED_IN_USER_COOKIE = 'loggedInUserId';
@@ -77,16 +78,16 @@ export async function setupPushNotifications(userId: string) {
       await saveSubscription(userId, subscription);
     }
   }
-  // If permission is default, we wait for user interaction to ask.
 }
 
 
 export function Login() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { currentUser, setCurrentUser, logout } = useAuth();
+
 
   useEffect(() => {
     const checkLoggedInUser = async () => {
@@ -110,7 +111,7 @@ export function Login() {
       }
     };
     checkLoggedInUser();
-  }, []);
+  }, [setCurrentUser]);
 
   const handleLogin = async () => {
     const user = allUsers.find(
@@ -155,7 +156,7 @@ export function Login() {
         });
     }
     removeCookie(LOGGED_IN_USER_COOKIE);
-    setCurrentUser(null);
+    logout();
     setPhone('');
     setPassword('');
   };
@@ -170,7 +171,7 @@ export function Login() {
 
 
   if (currentUser) {
-    return <Messenger currentUser={currentUser} onLogout={handleLogout} />;
+    return <Messenger onLogout={handleLogout} />;
   }
 
   return (

@@ -1,11 +1,45 @@
 
 'use server';
-import { db, storage } from '@/lib/firebase';
+import { db, storage, functions } from '@/lib/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
 
 function getChatId(userId1: string, userId2: string) {
     return [userId1, userId2].sort().join('_');
+}
+
+export async function initiateCall(callerId: string, receiverId: string) {
+  try {
+    const channelName = [callerId, receiverId].sort().join('_');
+    const callDocRef = doc(db, 'calls', channelName);
+
+    await setDoc(callDocRef, {
+      initiator: callerId,
+      receiver: receiverId,
+      channelName: channelName,
+      status: 'calling',
+      createdAt: serverTimestamp(),
+    });
+
+    const generateAgoraToken = httpsCallable(functions, 'generateAgoraToken');
+    const result = await generateAgoraToken({ channelName });
+    
+    // @ts-ignore
+    const token = result.data.token;
+
+    return {
+      success: true,
+      data: {
+        callId: channelName,
+        token: token,
+        appId: process.env.NEXT_PUBLIC_AGORA_APP_ID,
+      },
+    };
+  } catch (error) {
+    console.error('Error initiating call:', error);
+    return { error: 'Failed to initiate call' };
+  }
 }
 
 export async function endCall(callId: string) {
@@ -14,8 +48,6 @@ export async function endCall(callId: string) {
       const callDoc = await getDoc(callDocRef);
       if (callDoc.exists()) {
           const callData = callDoc.data();
-          // To prevent both users from trying to end the call, only the initiator or receiver can change status.
-          // Let's assume initiator is the one who can change status to "ended"
           await updateDoc(callDocRef, {
               status: 'ended'
           });

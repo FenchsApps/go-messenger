@@ -2,6 +2,8 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const webpush = require("web-push");
+const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
+require('dotenv').config();
 
 admin.initializeApp();
 
@@ -11,10 +13,40 @@ const vapidKeys = {
 };
 
 webpush.setVapidDetails(
-    "mailto:example@yourdomain.org",
+    `mailto:${process.env.VAPID_SUBJECT}`,
     vapidKeys.publicKey,
     vapidKeys.privateKey
 );
+
+exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    const channelName = data.channelName;
+    if (!channelName) {
+        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a channelName.');
+    }
+    
+    const appId = process.env.AGORA_APP_ID;
+    const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+
+    if (!appId || !appCertificate) {
+        console.error("Agora App ID or Certificate is not configured in environment variables.");
+        throw new functions.https.HttpsError('failed-precondition', 'The Agora service is not configured.');
+    }
+
+    const uid = context.auth.uid;
+    const role = RtcRole.PUBLISHER;
+    const expirationTimeInSeconds = 3600;
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+    const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channelName, uid, role, privilegeExpiredTs);
+
+    return { token };
+});
+
 
 exports.sendPushNotification = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")
@@ -24,13 +56,11 @@ exports.sendPushNotification = functions.firestore
     const senderId = message.senderId;
 
     if (senderId === recipientId) {
-        console.log("User sent a message to themselves, no notification needed.");
         return null;
     }
 
     const senderDoc = await admin.firestore().collection("users").doc(senderId).get();
     if (!senderDoc.exists) {
-      console.log(`Sender with ID ${senderId} not found.`);
       return null;
     }
     const sender = senderDoc.data();
@@ -49,7 +79,6 @@ exports.sendPushNotification = functions.firestore
 
     const subscriptionSnap = await admin.firestore().collection("subscriptions").doc(recipientId).get();
     if (!subscriptionSnap.exists) {
-        console.log(`No push subscription found for user ${recipientId}`);
         return null;
     }
 
@@ -64,13 +93,11 @@ exports.sendPushNotification = functions.firestore
 
     try {
         await webpush.sendNotification(subscription, payload);
-        console.log("Successfully sent web push notification.");
     } catch (error) {
         console.error("Error sending web push notification:", error);
-        // If subscription is no longer valid, remove it from Firestore
         if (error.statusCode === 404 || error.statusCode === 410) {
-            console.log("Subscription has expired or is no longer valid. Removing it.");
             await admin.firestore().collection("subscriptions").doc(recipientId).delete();
         }
     }
   });
+

@@ -10,30 +10,33 @@ import { ChatView } from './chat-view';
 import { PigeonIcon } from './icons';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '@/context/auth-provider';
 
 interface MessengerProps {
-  currentUser: User;
   onLogout: () => void;
 }
 
-export function Messenger({ currentUser, onLogout }: MessengerProps) {
+export function Messenger({ onLogout }: MessengerProps) {
+  const { currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
-  const [localCurrentUser, setLocalCurrentUser] = useState<User>(currentUser);
+  
+  // This should not happen if the app logic is correct
+  if (!currentUser) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-background">
+            <p>Loading user...</p>
+        </div>
+      )
+  }
 
   useEffect(() => {
     // Listen for changes to the current user's document
     const unsubCurrentUser = onSnapshot(doc(db, "users", currentUser.id), (doc) => {
-        if (doc.exists()) {
-            const data = doc.data();
-            setLocalCurrentUser(prev => ({
-                ...prev,
-                name: data.name,
-                description: data.description
-            }));
-        }
+        // This can be used to update local user state if needed
+        // For now, we rely on the AuthProvider to hold the latest user state
     });
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -72,8 +75,6 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
         if(currentUser) {
-            // Note: This is a best-effort attempt and may not always run on all browsers.
-            // A more robust solution involves Cloud Functions or a presence service.
             setDoc(doc(db, 'users', currentUser.id), { status: 'Offline', lastSeen: serverTimestamp() }, { merge: true });
         }
     };
@@ -95,8 +96,6 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
         const userExists = users.some(user => user.id === chatWithId);
         if (userExists) {
           setSelectedUserId(chatWithId);
-          // Optional: clear the query param from URL
-          // window.history.replaceState({}, document.title, window.location.pathname);
         }
       }
     }
@@ -123,7 +122,7 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
         >
           <ContactList
             users={users}
-            currentUser={localCurrentUser}
+            currentUser={currentUser}
             selectedUserId={selectedUserId}
             onSelectUser={handleSelectUser}
             onLogout={onLogout}
@@ -139,7 +138,6 @@ export function Messenger({ currentUser, onLogout }: MessengerProps) {
           {selectedUser ? (
             <ChatView
               key={selectedUserId}
-              currentUser={localCurrentUser}
               chatPartner={selectedUser}
               isMobile={isMobile}
               onBack={handleBack}

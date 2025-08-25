@@ -42,28 +42,14 @@ const registerServiceWorker = () => {
 }
 
 
-export function Login() {
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
-
-  const setupFcm = async (user: User) => {
-    await requestNotificationPermission();
+export async function setupFcm(user: User, forcePermission: boolean = false) {
+    await requestNotificationPermission(forcePermission);
 
     const messaging = getMessaging();
     if (!messaging) return;
 
-    // Handle foreground messages
-    onMessage(messaging, (payload) => {
-        console.log('Foreground message received.', payload);
-        // We can show an in-app notification here if needed,
-        // but ChatView already handles live updates.
-    });
-
     if (Notification.permission !== 'granted') {
-      console.log('Notification permission not granted. Skipping FCM setup.');
+      console.log('Notification permission not granted. Skipping FCM token retrieval.');
       return;
     }
 
@@ -79,7 +65,15 @@ export function Login() {
     } catch (err) {
         console.error('An error occurred while retrieving token. ', err);
     }
-  }
+}
+
+
+export function Login() {
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   const setupFcmTokenReceiver = (user: User) => {
     // This function will be called by the native Android code

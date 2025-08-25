@@ -13,13 +13,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Settings, Moon, Sun, Monitor, CaseSensitive, User as UserIcon, Loader2 } from 'lucide-react';
+import { Settings, Moon, Sun, Monitor, CaseSensitive, User as UserIcon, Loader2, RefreshCw } from 'lucide-react';
 import { useSettings } from '@/context/settings-provider';
 import type { User } from '@/lib/types';
 import { updateUserProfile } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
 import { Separator } from './ui/separator';
+import { setupFcm } from './login';
 
 interface SettingsDialogProps {
     user: User;
@@ -46,6 +47,21 @@ export function SettingsDialog({ user }: SettingsDialogProps) {
       }
     });
   };
+
+  const handleFixApp = async () => {
+    try {
+        toast({ title: "Починка...", description: "Запрашиваем разрешения и обновляем токен..."});
+        await setupFcm(user, true);
+        toast({ title: "Готово", description: "Приложение будет перезагружено." });
+
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
+
+    } catch(e) {
+        toast({ title: "Ошибка", description: "Не удалось исправить приложение.", variant: 'destructive'});
+    }
+  }
 
   return (
     <Dialog>
@@ -76,6 +92,20 @@ export function SettingsDialog({ user }: SettingsDialogProps) {
               {isProfilePending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Сохранить профиль
             </Button>
+          </div>
+
+          <Separator />
+
+           {/* App Fix Button */}
+           <div className="space-y-4">
+            <Label className="font-semibold flex items-center gap-2"><RefreshCw className="h-4 w-4"/>Обслуживание</Label>
+             <div className="grid gap-2">
+              <p className="text-sm text-muted-foreground">Если у вас проблемы с уведомлениями или получением сообщений, попробуйте эту функцию.</p>
+              <Button onClick={handleFixApp} variant="outline">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Починить приложение
+            </Button>
+            </div>
           </div>
 
           <Separator />

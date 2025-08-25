@@ -1,4 +1,3 @@
-
 // @ts-nocheck
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
@@ -24,29 +23,21 @@ const storage = getStorage(app);
 // Initialize Firebase Cloud Messaging and get a reference to the service
 const getMessagingInstance = () => {
     if (typeof window !== 'undefined' && getApps().length > 0) {
-        return getMessaging(app);
+        try {
+            return getMessaging(app);
+        } catch(e) {
+            console.error("Could not initialize messaging", e);
+            return null;
+        }
     }
     return null;
 }
 
 const messaging = getMessagingInstance();
 
-if (messaging) {
-    onMessage(messaging, (payload) => {
-        console.log('Message received. ', payload);
-        const { title, body, icon, url } = payload.data;
-        const notification = new Notification(title, {
-            body: body,
-            icon: icon
-        });
-
-        notification.onclick = () => {
-             // Use the provided URL or fallback to the origin
-            window.open(url || window.location.origin, '_blank');
-        };
-    });
-}
-
+// NOTE: The onMessage callback is for foreground messages.
+// Background messages are handled by the service worker.
+// This was removed to prevent duplicate notifications when the app is in the foreground.
 
 // This enables offline persistence. It's best to call this only once.
 try {

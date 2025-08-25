@@ -36,7 +36,7 @@ export function ChatInput({ onSendMessage, onSendSticker, onSendGif, chatId, cur
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
-    if(typingTimeoutRef.current) {
+    if(typingTimeoutRef.current === null) {
         handleTyping(true);
     }
     debouncedStopTyping();

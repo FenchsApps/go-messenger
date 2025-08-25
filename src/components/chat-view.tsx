@@ -72,9 +72,9 @@ export function ChatView({
     return null; 
   }
   
-  const chatId = chat.type === 'private' && chat.members.length > 0 ? getChatId(currentUser.id, chat.members[0].id) : chat.id;
+  const chatId = chat.id;
 
-  const chatPartner = chat.type === 'private' ? chat.members[0] : null;
+  const chatPartner = chat.type === 'private' ? chat.members.find(m => m.id !== currentUser.id) : null;
 
   useEffect(() => {
     const savedBg = localStorage.getItem(`chat-background-${chatId}`);
@@ -310,5 +310,3 @@ export function ChatView({
     </div>
   );
 }
-
-    

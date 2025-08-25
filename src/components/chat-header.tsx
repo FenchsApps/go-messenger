@@ -34,7 +34,7 @@ export function ChatHeader({ chat, isMobile, onBack, onClearChat, onOpenSettings
       return `${typingUsers.length} пользователя печатают...`
     }
 
-    if (chat.type === 'private') {
+    if (chat.type === 'private' && chat.members[0]) {
       const user = chat.members[0];
        return user.status === 'Online' 
         ? 'В сети' 
@@ -74,7 +74,7 @@ export function ChatHeader({ chat, isMobile, onBack, onClearChat, onOpenSettings
                 )}
             </div>
           <div className="flex items-center gap-1.5">
-            {!isTyping && chat.type === 'private' && (
+            {!isTyping && chat.type === 'private' && chat.members[0] && (
                 <span
                 className={cn('h-2 w-2 rounded-full', {
                     'bg-green-500': chat.status === 'Online',
@@ -123,5 +123,3 @@ export function ChatHeader({ chat, isMobile, onBack, onClearChat, onOpenSettings
     </div>
   );
 }
-
-    

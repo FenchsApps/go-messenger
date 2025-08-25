@@ -110,6 +110,17 @@
         "app/page": "action-browser"
       }
     },
+    "60f47263d714df2649c7290a6cb2b58a4b25b51e3a": {
+      "workers": {
+        "app/page": {
+          "moduleId": "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/page": "action-browser"
+      }
+    },
     "409e93a08092ba11b70da181b8437860f103d7cbfb": {
       "workers": {
         "app/page": {

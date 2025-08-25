@@ -100,4 +100,3 @@ exports.sendPushNotification = functions.firestore
         }
     }
   });
-

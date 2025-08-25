@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
@@ -49,7 +49,9 @@ export function CallView({ callId }: CallViewProps) {
             const callDoc = await getDoc(doc(db, 'calls', callId));
             if (!callDoc.exists()) throw new Error("Call not found");
             
-            const receiverId = callDoc.data().receiver;
+            const callData = callDoc.data();
+            const amICaller = callData.initiator === currentUser.id;
+            const receiverId = amICaller ? callData.receiver : callData.initiator;
 
             const res = await initiateCall(currentUser.id, receiverId);
             if(res.error || !res.data) {
@@ -58,7 +60,7 @@ export function CallView({ callId }: CallViewProps) {
 
             setToken(res.data.token);
 
-            await joinChannel(res.data.token);
+            await joinChannel(res.data.token, res.data.appId, callId, currentUser.id);
         } catch (error) {
             console.error("Initialization failed:", error);
             toast({ variant: 'destructive', title: "Ошибка звонка", description: "Не удалось начать звонок."});
@@ -72,6 +74,7 @@ export function CallView({ callId }: CallViewProps) {
         await client.current?.subscribe(user, mediaType);
         if (mediaType === 'video') {
             setRemoteUser(user);
+            user.videoTrack?.play(`remote-video`);
         }
         if (mediaType === 'audio') {
             user.audioTrack?.play();
@@ -80,6 +83,7 @@ export function CallView({ callId }: CallViewProps) {
 
     const handleUserLeft = () => {
         setRemoteUser(null);
+        handleHangUp();
     };
 
     client.current.on('user-published', handleUserPublished);
@@ -92,13 +96,13 @@ export function CallView({ callId }: CallViewProps) {
       leaveChannel();
     };
 
-  }, [callId, currentUser, router, toast]);
+  }, [callId, currentUser?.id, router, toast]);
 
 
-  const joinChannel = async (joinToken: string) => {
-    if (!client.current || !currentUser) return;
+  const joinChannel = async (joinToken: string, appId: string, channel: string, uid: string) => {
+    if (!client.current) return;
     try {
-        await client.current.join(appId, callId, joinToken, currentUser.id);
+        await client.current.join(appId, channel, joinToken, uid);
 
         const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
         localAudioTrack.current = audioTrack;
@@ -162,7 +166,7 @@ export function CallView({ callId }: CallViewProps) {
     <div className="relative flex flex-col items-center justify-center w-full h-screen bg-gray-900 text-white">
       {/* Remote Video */}
       <div id="remote-video" className="absolute top-0 left-0 w-full h-full object-cover">
-        {remoteUser && remoteUser.videoTrack && <RemoteUserPlayer user={remoteUser} />}
+        {/* The remote video is now played directly in handleUserPublished */}
       </div>
       <div className="absolute top-0 left-0 w-full h-full bg-black/50" />
 
@@ -204,20 +208,3 @@ export function CallView({ callId }: CallViewProps) {
     </div>
   );
 }
-
-
-// Helper component to play remote user's video
-const RemoteUserPlayer = ({ user }: { user: IAgoraRTCRemoteUser }) => {
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (ref.current && user.videoTrack) {
-            user.videoTrack.play(ref.current);
-        }
-        return () => {
-            user.videoTrack?.stop();
-        };
-    }, [user]);
-
-    return <div ref={ref} className="w-full h-full" />;
-};

@@ -190,11 +190,11 @@ export function CallView({ callId }: CallViewProps) {
 
     return () => unsub();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callId, router, toast]);
+  }, [callId]);
 
   const handleHangUp = async () => {
     await leaveChannel();
-    await endCall(callId);
+    await endCall(callId, true); // End and delete call document
     // The snapshot listener will handle the redirect
   }
 

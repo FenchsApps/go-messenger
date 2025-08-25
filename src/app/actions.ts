@@ -80,15 +80,20 @@ export async function getCallDetails(callId: string) {
     }
 }
 
-export async function endCall(callId: string) {
+export async function endCall(callId: string, deleteDocument: boolean = false) {
   try {
       const callDocRef = doc(db, 'calls', callId);
       const callDoc = await getDoc(callDocRef);
+
       if (callDoc.exists()) {
-          // Setting status to 'ended'. The call document can be deleted by a cron job later.
-          await updateDoc(callDocRef, {
-              status: 'ended'
-          });
+          if (deleteDocument) {
+              await deleteDoc(callDocRef);
+          } else {
+              // Setting status to 'ended'. The call document can be deleted by a cron job later.
+              await updateDoc(callDocRef, {
+                  status: 'ended'
+              });
+          }
       }
       return { success: true };
   } catch (error) {

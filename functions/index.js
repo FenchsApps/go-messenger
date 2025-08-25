@@ -1,4 +1,5 @@
 
+require('dotenv').config();
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const webpush = require("web-push");
@@ -7,15 +8,20 @@ const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
 admin.initializeApp();
 
 const vapidKeys = {
-    publicKey: functions.config().webpush.public_key,
-    privateKey: functions.config().webpush.private_key,
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
 };
 
-webpush.setVapidDetails(
-    `mailto:${process.env.VAPID_SUBJECT}`,
-    vapidKeys.publicKey,
-    vapidKeys.privateKey
-);
+if (vapidKeys.publicKey && vapidKeys.privateKey) {
+    webpush.setVapidDetails(
+        `mailto:${process.env.VAPID_SUBJECT}`,
+        vapidKeys.publicKey,
+        vapidKeys.privateKey
+    );
+} else {
+    console.error("VAPID keys are not configured. Push notifications will not work.");
+}
+
 
 exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -45,6 +51,10 @@ exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
 exports.sendPushNotification = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
+    if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
+        console.log("VAPID keys not set, skipping push notification.");
+        return null;
+    }
     const message = snap.data();
     const recipientId = message.recipientId;
     const senderId = message.senderId;
@@ -82,7 +92,9 @@ exports.sendPushNotification = functions.firestore
         title: `Новое сообщение от ${senderName}`,
         body: notificationBody,
         icon: sender.avatar || '/favicon.ico',
-        url: `/?chatWith=${senderId}`
+        data: {
+            url: `/?chatWith=${senderId}`
+        }
     });
 
     try {

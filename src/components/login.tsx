@@ -68,6 +68,10 @@ export async function setupPushNotifications(userId: string) {
     console.warn("Notification permission was previously denied.");
     return;
   }
+  
+  if (Notification.permission === 'default') {
+      await Notification.requestPermission();
+  }
 
   const registration = await registerServiceWorker();
   if (!registration) return;

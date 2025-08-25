@@ -184,10 +184,10 @@ export async function updateUserProfile(userId: string, name: string, descriptio
     }
 }
 
-export async function saveSubscription(userId: string, subscription: PushSubscription) {
+export async function saveSubscription(userId: string, subscription: object) {
     try {
         const subscriptionRef = doc(db, 'subscriptions', userId);
-        await setDoc(subscriptionRef, { subscription: JSON.parse(JSON.stringify(subscription)) });
+        await setDoc(subscriptionRef, { subscription: subscription });
         return { success: true };
     } catch(error) {
         console.error("Error saving subscription:", error);

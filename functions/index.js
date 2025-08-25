@@ -53,7 +53,13 @@ exports.sendPushNotification = functions.region('us-central1').firestore
         return null;
     }
 
-    const subscription = subscriptionSnap.data();
+    const subscriptionData = subscriptionSnap.data();
+    const subscription = subscriptionData.subscription;
+
+    if (!subscription) {
+        console.log(`Subscription data is missing for user ${recipientId}`);
+        return null;
+    }
 
     const payload = JSON.stringify({
         title: `Новое сообщение от ${senderName}`,
@@ -65,7 +71,7 @@ exports.sendPushNotification = functions.region('us-central1').firestore
     });
 
     try {
-        await webpush.sendNotification(subscription.subscription, payload);
+        await webpush.sendNotification(subscription, payload);
         console.log("Successfully sent web push notification.");
     } catch (error) {
         console.error("Error sending web push notification:", error);

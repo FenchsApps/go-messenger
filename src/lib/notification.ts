@@ -31,12 +31,13 @@ export async function setupPushNotifications(userId: string) {
   }
 
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js');
+    const registration = await navigator.serviceWorker.ready;
 
     let subscription = await registration.pushManager.getSubscription();
 
     if (subscription) {
-        await saveSubscription(userId, subscription);
+        await saveSubscription(userId, JSON.parse(JSON.stringify(subscription)));
+        console.log("Existing subscription found and saved.");
         return;
     }
     
@@ -52,7 +53,8 @@ export async function setupPushNotifications(userId: string) {
         applicationServerKey,
     });
     
-    await saveSubscription(userId, subscription);
+    await saveSubscription(userId, JSON.parse(JSON.stringify(subscription)));
+    console.log("New subscription created and saved.");
 
   } catch(error) {
     console.error("Error setting up push notifications:", error);

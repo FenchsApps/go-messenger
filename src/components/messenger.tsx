@@ -138,19 +138,19 @@ export function Messenger({ onLogout }: MessengerProps) {
   }, [currentUser.id]);
 
   useEffect(() => {
-    if (users.length > 0) {
+    if (users.length > 0 && !selectedUserId) {
       const urlParams = new URLSearchParams(window.location.search);
       const chatWithId = urlParams.get('chatWith');
       if (chatWithId) {
         const userExists = users.some(user => user.id === chatWithId);
         if (userExists) {
           setSelectedUserId(chatWithId);
-          // Clean the URL
-          window.history.replaceState({}, document.title, "/");
+          // Clean the URL more reliably
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
       }
     }
-  }, [users]);
+  }, [users, selectedUserId]);
   
   const selectedUser = users.find((user) => user.id === selectedUserId);
 
